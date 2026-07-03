@@ -24,6 +24,8 @@ const log = new Logger({ prefix: 'CLI' });
 
 const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
+const GREEN = '\x1b[32m';
+const GRAY = '\x1b[90m';
 
 function showHelp(): void {
   console.log(`PaCode CLI - Claude Code-like AI Assistant v0.1.0
@@ -48,6 +50,7 @@ CC-Switch Commands:
   pacode cc-switch remove <name>     Remove a provider
   pacode cc-switch import            Import from ~/.claude/settings.json
   pacode cc-switch status            Show current active provider
+  pacode cc-switch detect            Detect available config sources
 
 Environment:
   ANTHROPIC_API_KEY       Your Anthropic API key
@@ -155,6 +158,17 @@ async function handleCCSwitch(
         console.log('\nNo active provider. Use: pacode cc-switch use <name>');
       }
       console.log('');
+      return true;
+    }
+
+    case 'detect': {
+      const sources = cc.detectSources();
+      const configPath = cc.getConfigPath();
+      console.log('\nCC-Switch detection:');
+      console.log(`  CC-Switch app:     ${sources.ccswitch ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`);
+      console.log(`  Claude Code:       ${sources.claudeCode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`);
+      console.log(`  PaCode:            ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`);
+      console.log(`\n  Config: ${configPath}\n`);
       return true;
     }
 

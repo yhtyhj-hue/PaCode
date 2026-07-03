@@ -1,12 +1,16 @@
 /**
  * CC-Switch Integration
  *
- * Connects to Claude Code Switch (ccswitch) for unified API provider management.
+ * Connects to Claude Code Switch (ccswitch.io / farion1231/cc-switch) for unified
+ * API provider management. Reads configs from both:
+ * 1. CC-Switch app's own SQLite database location
+ * 2. ~/.claude/settings.json (Claude Code's standard config)
+ * 3. PaCode's own ~/.paude/providers.json
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -23,6 +27,7 @@ export interface Provider {
   baseUrl?: string;
   model?: string;
   active?: boolean;
+  source?: 'ccswitch' | 'claude-code' | 'pacode';
 }
 
 export interface CCSwitchConfig {
@@ -35,20 +40,85 @@ export class CCSwitchClient {
   private config: CCSwitchConfig;
 
   constructor(configPath?: string) {
-    this.configPath = configPath ?? join(homedir(), '.paude', 'providers.json');
+    // Try CC-Switch's default locations first, fallback to PaCode's
+    this.configPath = configPath ?? this.findCCSwitchConfig();
     this.config = this.load();
+  }
+
+  /**
+   * Find CC-Switch configuration file based on platform
+   * CC-Switch (farion1231/cc-switch) stores its database here:
+   * - macOS: ~/Library/Application Support/cc-switch/config.json
+   * - Linux: ~/.config/cc-switch/config.json
+   * - Windows: %APPDATA%/cc-switch/config.json
+   */
+  private findCCSwitchConfig(): string {
+    const home = homedir();
+    const plat = platform();
+    const candidates: string[] = [];
+
+    // CC-Switch's own config
+    if (plat === 'darwin') {
+      candidates.push(join(home, 'Library/Application Support/cc-switch/config.json'));
+    } else if (plat === 'linux') {
+      candidates.push(join(home, '.config/cc-switch/config.json'));
+    } else if (plat === 'win32') {
+      candidates.push(join(process.env['APPDATA'] ?? '', 'cc-switch/config.json'));
+    }
+
+    // Claude Code's standard config
+    candidates.push(join(home, '.claude', 'settings.json'));
+
+    // PaCode's own config
+    candidates.push(join(home, '.paude', 'providers.json'));
+
+    for (const path of candidates) {
+      if (existsSync(path)) {
+        return path;
+      }
+    }
+
+    // Default to PaCode's path
+    return join(home, '.paude', 'providers.json');
   }
 
   private load(): CCSwitchConfig {
     if (existsSync(this.configPath)) {
       try {
         const content = readFileSync(this.configPath, 'utf-8');
-        return JSON.parse(content);
+        const parsed = JSON.parse(content);
+        return this.normalize(parsed);
       } catch {
         // ignore
       }
     }
     return { providers: [] };
+  }
+
+  private normalize(config: CCSwitchConfig): CCSwitchConfig {
+    // Normalize various CC-Switch config formats
+    const providers: Provider[] = [];
+
+    // Handle different config schemas
+    if (Array.isArray(config.providers)) {
+      for (const p of config.providers) {
+        const raw = p as unknown as Record<string, unknown>;
+        providers.push({
+          name: (p.name ?? raw['name'] as string ?? 'unnamed') as string,
+          apiKey: (p.apiKey ?? raw['api_key'] as string ?? '') as string,
+          baseUrl: p.baseUrl ?? raw['base_url'] as string ?? raw['endpoint'] as string,
+          model: p.model ?? raw['model_id'] as string,
+          active: p.active,
+          source: p.source ?? 'ccswitch',
+        });
+      }
+    }
+
+    const raw = config as unknown as Record<string, unknown>;
+    return {
+      providers,
+      activeProvider: config.activeProvider ?? raw['current_provider'] as string,
+    };
   }
 
   private save(): void {
@@ -73,9 +143,9 @@ export class CCSwitchClient {
   addProvider(provider: Provider): void {
     const idx = this.config.providers.findIndex((p) => p.name === provider.name);
     if (idx >= 0) {
-      this.config.providers[idx] = provider;
+      this.config.providers[idx] = { ...provider, source: 'pacode' };
     } else {
-      this.config.providers.push(provider);
+      this.config.providers.push({ ...provider, source: 'pacode' });
     }
     this.save();
   }
@@ -91,6 +161,7 @@ export class CCSwitchClient {
     this.config.activeProvider = name;
     this.save();
 
+    // Apply to current process environment
     if (provider.apiKey) process.env['ANTHROPIC_API_KEY'] = provider.apiKey;
     if (provider.baseUrl) process.env['ANTHROPIC_BASE_URL'] = provider.baseUrl;
     if (provider.model) process.env['CLAUDE_MODEL'] = provider.model;
@@ -101,7 +172,11 @@ export class CCSwitchClient {
   getCredentials(): { apiKey?: string; baseUrl?: string; model?: string } {
     const active = this.getActive();
     if (!active) {
-      return { apiKey: process.env['ANTHROPIC_API_KEY'] };
+      return {
+        apiKey: process.env['ANTHROPIC_API_KEY'],
+        baseUrl: process.env['ANTHROPIC_BASE_URL'],
+        model: process.env['CLAUDE_MODEL'],
+      };
     }
     return {
       apiKey: active.apiKey ?? process.env['ANTHROPIC_API_KEY'],
@@ -110,6 +185,9 @@ export class CCSwitchClient {
     };
   }
 
+  /**
+   * Import providers from Claude Code's standard config (~/.claude/settings.json)
+   */
   importFromClaudeCode(): number {
     const claudeConfigPath = join(homedir(), '.claude', 'settings.json');
     if (!existsSync(claudeConfigPath)) return 0;
@@ -120,13 +198,14 @@ export class CCSwitchClient {
       let imported = 0;
 
       if (settings.env?.ANTHROPIC_API_KEY) {
-        const name = settings.env.ANTHROPIC_MODEL || 'claude-code-default';
+        const name = settings.env.ANTHROPIC_MODEL || 'claude-code';
         this.addProvider({
           name,
           apiKey: settings.env.ANTHROPIC_API_KEY,
           baseUrl: settings.env.ANTHROPIC_BASE_URL,
           model: settings.env.ANTHROPIC_MODEL,
           active: true,
+          source: 'claude-code',
         });
         this.config.activeProvider = name;
         imported++;
@@ -139,11 +218,37 @@ export class CCSwitchClient {
     }
   }
 
+  /**
+   * Get the config path being used (for debugging)
+   */
+  getConfigPath(): string {
+    return this.configPath;
+  }
+
+  /**
+   * Detect which sources are available
+   */
+  detectSources(): { ccswitch: boolean; claudeCode: boolean; pacode: boolean } {
+    const home = homedir();
+    const plat = platform();
+
+    let ccswitchPath = '';
+    if (plat === 'darwin') ccswitchPath = join(home, 'Library/Application Support/cc-switch/config.json');
+    else if (plat === 'linux') ccswitchPath = join(home, '.config/cc-switch/config.json');
+    else if (plat === 'win32') ccswitchPath = join(process.env['APPDATA'] ?? '', 'cc-switch/config.json');
+
+    return {
+      ccswitch: existsSync(ccswitchPath),
+      claudeCode: existsSync(join(home, '.claude', 'settings.json')),
+      pacode: existsSync(join(home, '.paude', 'providers.json')),
+    };
+  }
+
   async interactiveSwitch(): Promise<Provider | null> {
     const providers = this.list();
     if (providers.length === 0) {
       console.log(`\n${YELLOW}⚠  No providers configured${RESET}`);
-      console.log(`${DIM}Add one: pacode cc-switch add <name> --api-key <key>${RESET}\n`);
+      console.log(`${DIM}Add one: pacode cc-switch add <name> --api-key=<key>${RESET}\n`);
       return null;
     }
 
@@ -155,7 +260,8 @@ export class CCSwitchClient {
       const marker = isActive ? `${GREEN}●${RESET}` : `${GRAY}○${RESET}`;
       const label = isActive ? `${BOLD}${p.name}${RESET}` : p.name;
       const model = p.model ? `${DIM}${p.model}${RESET}` : '';
-      console.log(`  ${marker} ${CYAN}${i + 1}${RESET}) ${label} ${model}`);
+      const sourceTag = p.source && p.source !== 'pacode' ? `${YELLOW}[${p.source}]${RESET}` : '';
+      console.log(`  ${marker} ${CYAN}${i + 1}${RESET}) ${label} ${model} ${sourceTag}`);
     });
 
     console.log(`\n${DIM}Enter number (1-${providers.length}):${RESET} `);
