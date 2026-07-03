@@ -195,9 +195,16 @@ export class REPL {
     const width = 120;
     const modeLabel = this.mode === PermissionMode.DEFAULT ? 'normal' : this.mode;
     const leftText = `⏵⏵ ${modeLabel} mode (shift+tab to cycle) · esc to interrupt · ← for agents`;
+
+    // Calculate approximate context usage based on token count
     const tokenCount = this.tokenUsage.input + this.tokenUsage.output;
-    const totalTokens = tokenCount > 0 ? `${tokenCount} tokens` : '0% context used';
-    const rightText = `${totalTokens} · /model opus[1m]`;
+    const maxContext = 200000; // 200K context window
+    const usagePercent = Math.min(100, Math.round((tokenCount / maxContext) * 100));
+    const contextText = tokenCount > 0
+      ? `${usagePercent}% context used`
+      : '0% context used';
+
+    const rightText = `${contextText} · /model ${this.model}`;
 
     const pad = width - leftText.length - rightText.length;
     const padding = ' '.repeat(Math.max(2, pad));
@@ -592,7 +599,11 @@ Focus on breaking down the work into atomic, verifiable steps.`;
             }
             break;
           case 'message_stop':
-            // Done - show final status
+            // Capture usage info
+            if (event.usage) {
+              this.tokenUsage.input += event.usage.inputTokens ?? 0;
+              this.tokenUsage.output += event.usage.outputTokens ?? 0;
+            }
             break;
           case 'error':
             if (event.error) {
@@ -645,9 +656,12 @@ Focus on breaking down the work into atomic, verifiable steps.`;
     console.log(`${CYAN}⏺ ${tool.name}${RESET} ${DIM}${summary}${RESET}`);
   }
 
-  private renderToolResultClaude(_toolName: string, result: { isError?: boolean; content: Array<{ type: string; text?: string }> }): void {
-    const text = result.content[0]?.type === 'text' ? result.content[0].text ?? '' : '';
-    const lines = text.split('\n').filter(l => l.trim()).length;
+  private renderToolResultClaude(
+    _toolName: string,
+    result: { isError?: boolean; content: Array<{ type: string; text?: string }> }
+  ): void {
+    const text = result.content[0]?.type === 'text' ? (result.content[0].text ?? '') : '';
+    const lines = text.split('\n').filter((l) => l.trim()).length;
 
     if (result.isError) {
       console.log(`  ${RED}⎿  Error${RESET}`);

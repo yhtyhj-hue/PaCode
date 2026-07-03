@@ -63,7 +63,17 @@ export class QueryEngine {
               yield { type: 'content_block_delta', delta: { index: 0, text: block.text ?? '' } };
             }
           }
-          yield { type: 'message_stop', stopReason: response.stopReason };
+          yield {
+            type: 'message_stop',
+            stopReason: response.stopReason,
+            usage: response.usage
+              ? {
+                  inputTokens: response.usage.input_tokens,
+                  outputTokens: response.usage.output_tokens,
+                  totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+                }
+              : undefined,
+          };
           break;
         }
 
@@ -154,6 +164,7 @@ export class QueryEngine {
     });
 
     let stopReason: StopReason = 'end_turn';
+    let usage: { input_tokens: number; output_tokens: number } | null = null;
     const content: Array<
       | { type: 'text'; text: string }
       | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
@@ -189,10 +200,18 @@ export class QueryEngine {
         }
       }
 
-      if (event.type === 'message_delta' && event.delta.stop_reason) {
+      if (event.type === 'message_delta') {
         if (event.delta.stop_reason === 'tool_use') stopReason = 'tool_use';
         else if (event.delta.stop_reason === 'end_turn') stopReason = 'end_turn';
         else if (event.delta.stop_reason === 'max_tokens') stopReason = 'max_tokens';
+      }
+
+      // Capture usage info
+      if (event.type === 'message_start' && event.message?.usage) {
+        usage = {
+          input_tokens: event.message.usage.input_tokens,
+          output_tokens: event.message.usage.output_tokens,
+        };
       }
     }
 
@@ -202,7 +221,20 @@ export class QueryEngine {
       }
     }
 
-    return { stopReason, content, toolCalls };
+    // Get final usage from stream
+    try {
+      const finalMessage = await stream.finalMessage();
+      if (finalMessage.usage) {
+        usage = {
+          input_tokens: finalMessage.usage.input_tokens,
+          output_tokens: finalMessage.usage.output_tokens,
+        };
+      }
+    } catch {
+      // Ignore - usage will be null
+    }
+
+    return { stopReason, content, toolCalls, usage };
   }
 
   private async executeTool(toolCall: ToolCall, state: SessionState): Promise<ToolResult> {
@@ -246,5 +278,6 @@ interface QueryEvent {
   tool?: ToolCall;
   result?: ToolResult;
   stopReason?: StopReason;
+  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
   error?: { code: string; message: string };
 }
