@@ -19,6 +19,7 @@ import { Logger } from '../pkg/logger/index.js';
 import { PermissionMode } from '../pkg/types.js';
 import { bootAnimation } from './animation.js';
 import { getCCSwitch } from '../pkg/ccswitch/index.js';
+import { REPL } from './repl.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -225,7 +226,9 @@ async function main() {
   if (cc.list().length === 0) {
     const imported = cc.autoImportFromClaudeCode();
     if (imported) {
-      console.log(`${DIM}Auto-imported provider from ~/.claude/settings.json: ${imported.name}${RESET}\n`);
+      console.log(
+        `${DIM}Auto-imported provider from ~/.claude/settings.json: ${imported.name}${RESET}\n`
+      );
     }
   }
 
@@ -251,6 +254,32 @@ Get a key at: https://console.anthropic.com/
     process.exit(1);
   }
 
+  const activeProvider = cc.getActive();
+  const mode = resolveMode(values.mode as string);
+
+  // Show active provider info
+  if (activeProvider) {
+    console.log(
+      `\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
+    );
+  }
+
+  const message = positionals.join(' ');
+
+  // If no message, start REPL mode
+  if (!message) {
+    const repl = new REPL({
+      apiKey,
+      baseUrl,
+      model,
+      mode,
+      provider: activeProvider ?? { name: 'default', apiKey },
+    });
+    await repl.start();
+    return;
+  }
+
+  // Single message mode
   const toolRegistry = getToolRegistry();
   registerBashTool(toolRegistry);
   registerReadTool(toolRegistry);
@@ -262,21 +291,11 @@ Get a key at: https://console.anthropic.com/
   registerTodoWriteTool(toolRegistry);
 
   const sessionManager = new SessionManager();
-  const mode = resolveMode(values.mode as string);
   const session = sessionManager.createSession({ mode });
 
-  const message = positionals.join(' ') || 'Hello';
   session.messages.push({ role: 'user', content: message, timestamp: Date.now() });
 
   const engine = new QueryEngine({ apiKey, baseUrl });
-
-  // Show active provider info
-  const activeProvider = cc.getActive();
-  if (activeProvider) {
-    console.log(
-      `\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
-    );
-  }
 
   console.log('\nPaCode:\n');
 

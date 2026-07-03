@@ -202,7 +202,8 @@ export class CCSwitchClient {
       // Both are supported
       const apiKey = env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY;
       if (apiKey) {
-        const model = env.ANTHROPIC_MODEL ?? env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? 'claude-sonnet-4-0';
+        const model =
+          env.ANTHROPIC_MODEL ?? env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? 'claude-sonnet-4-0';
         const name = `claude-code-${model.split('-').slice(0, 2).join('-')}`;
         this.addProvider({
           name,
@@ -238,7 +239,8 @@ export class CCSwitchClient {
       const apiKey = env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY;
       if (!apiKey) return null;
 
-      const model = env.ANTHROPIC_MODEL ?? env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? 'claude-sonnet-4-0';
+      const model =
+        env.ANTHROPIC_MODEL ?? env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? 'claude-sonnet-4-0';
       const name = `claude-code-${model.split('-').slice(0, 2).join('-')}`;
 
       // Add and switch
