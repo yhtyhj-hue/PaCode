@@ -1,8 +1,19 @@
 /**
  * Claude Code Style Boot Animation
  *
- * Capybara mascot + PACODE ASCII text
+ * Capybara mascot + Figlet PACODE logo
  */
+
+import figlet from 'figlet';
+
+const figletAsync = (text: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    figlet.text(text, (err, result) => {
+      if (err) reject(err);
+      else resolve(result ?? '');
+    });
+  });
+};
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -15,6 +26,7 @@ const MAGENTA = '\x1b[35m';
 const BROWN = '\x1b[38;5;130m';
 const DARK_BROWN = '\x1b[38;5;94m';
 const PINK = '\x1b[38;5;218m';
+const RED = '\x1b[31m';
 
 export class BootAnimation {
   constructor() {}
@@ -23,8 +35,8 @@ export class BootAnimation {
     this.clearScreen();
     await this.delay(100);
     this.printCapybara();
-    await this.delay(300);
-    this.printLogo();
+    await this.delay(400);
+    await this.printLogo();
     await this.delay(300);
     this.printInfo();
     await this.delay(200);
@@ -38,47 +50,51 @@ export class BootAnimation {
   }
 
   private printCapybara(): void {
-    // Use unicode characters that work in terminals
-    const ear = '▲';  // ▲ triangle ear
-    const eye = '•';  // • dot eye
-    const nose = '▼'; // ▼ nose
-    const line = '─'; // ─ line
-
-    const capybara = [
+    // Detailed capybara with clear features
+    const lines = [
       '',
-      `       ${BROWN}(${DARK_BROWN}${'  '.padEnd(8)}${BROWN})${RESET}`,
-      `      ${DARK_BROWN}/${BROWN}(        )${DARK_BROWN}\\${RESET}`,
-      `      ${DARK_BROWN}|${BROWN}(${ear}    ${ear})${DARK_BROWN}|${RESET}`,
-      `      ${DARK_BROWN}|${BROWN}(  ${PINK}${eye}  ${eye}${BROWN}  )${DARK_BROWN}|${RESET}`,
-      `      ${DARK_BROWN}|${BROWN}(    ${nose}    )${DARK_BROWN}|${RESET}`,
-      `      ${DARK_BROWN}|${BROWN}( ${line}${line}${line} )${DARK_BROWN}|${RESET}`,
-      `      ${DARK_BROWN}\\__________/${RESET}`,
-      `     /            \\${RESET}`,
-      `    /              \\${RESET}`,
-      `   /                \\${RESET}`,
-      `  ${DARK_BROWN}/________________\\${RESET}`,
+      `          ${BROWN}__${RESET}`,
+      `        ${BROWN}.--${DARK_BROWN}||${BROWN}--.${RESET}`,
+      `       ${BROWN}/${DARK_BROWN}  ${PINK}__  __  ${DARK_BROWN}\\${BROWN}\\${RESET}`,
+      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${PINK}\\/_\\/_\\/${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}`,
+      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${PINK}|${BROWN}    ${PINK}|${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}  <- ears + eyes`,
+      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${RED}o${BROWN}  ${RED}o${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}  <- nose + mouth`,
+      `      ${BROWN}| ${DARK_BROWN}|${BROWN}   ${RED}<${BROWN}   ${DARK_BROWN}|${BROWN} |${RESET}`,
+      `      ${BROWN}| ${DARK_BROWN}|${BROWN}  ${RED}-${BROWN}  ${DARK_BROWN}|${BROWN} |${RESET}`,
+      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${RED}~~~${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}`,
+      `      ${BROWN} \\__________/${RESET}`,
+      `       ${BROWN}/          \\${RESET}`,
+      `      ${BROWN} /            \\${RESET}`,
+      `      ${BROWN}/              \\${RESET}`,
+      `     ${BROWN}/________________\\${RESET}`,
+      `     ${DARK_BROWN}|________________|${RESET}`,
       '',
-    ].join('\n');
-    console.log(capybara);
+      `     ${BROWN}    🦫 PACODE 🦫${RESET}`,
+      '',
+    ];
+    console.log(lines.join('\n'));
   }
 
-  private printLogo(): void {
-    // Standard PACODE block letters
-    const logo = [
-      '',
-      `${CYAN}${BOLD}   ██████╗${RESET} ${GREEN}${BOLD}█████╗${RESET} ${YELLOW}${BOLD}██████╗${RESET} ${BLUE}${BOLD}█████╗${RESET} ${MAGENTA}${BOLD}█████╗${RESET} ${CYAN}${BOLD}██████╗${RESET}`,
-      `${CYAN}${BOLD}   ██╔══██╗${RESET}${GREEN}${BOLD}██╔══██╗${RESET}${YELLOW}${BOLD}██╔══██╗${RESET}${BLUE}${BOLD}██╔══██╗${RESET}${MAGENTA}${BOLD}██╔══██╗${RESET}${CYAN}${BOLD}██╔════╝${RESET}`,
-      `${CYAN}${BOLD}   ██████╔╝${RESET}${GREEN}${BOLD}██████╔╝${RESET}${YELLOW}${BOLD}██████╔╝${RESET}${BLUE}${BOLD}██████╔╝${RESET}${MAGENTA}${BOLD}██║   ██║${RESET}${CYAN}${BOLD}█████╗${RESET}`,
-      `${CYAN}${BOLD}   ██╔═══╝ ${RESET}${GREEN}${BOLD}██╔══██╗${RESET}${YELLOW}${BOLD}██╔══██╗${RESET}${BLUE}${BOLD}██╔══██╗${RESET}${MAGENTA}${BOLD}██║   ██║${RESET}${CYAN}${BOLD}██╔══╝${RESET}`,
-      `${CYAN}${BOLD}   ██║     ${RESET}${GREEN}${BOLD}██║  ██║${RESET}${YELLOW}${BOLD}██║  ██║${RESET}${BLUE}${BOLD}██║  ██║${RESET}${MAGENTA}${BOLD}╚██████╔╝${RESET}${CYAN}${BOLD}███████╗${RESET}`,
-      `${CYAN}${BOLD}   ╚═╝     ${RESET}${GREEN}${BOLD}╚═╝  ╚═╝${RESET}${YELLOW}${BOLD}╚═╝  ╚═╝${RESET}${BLUE}${BOLD}╚═╝  ╚═╝${RESET}${MAGENTA}${BOLD} ╚═════╝ ${RESET}${CYAN}${BOLD}╚══════╝${RESET}`,
-      '',
-    ].join('\n');
-    console.log(logo);
+  private async printLogo(): Promise<void> {
+    try {
+      const logo = await figletAsync('PACODE');
+
+      // Color each line of the logo
+      const colors = [CYAN, GREEN, YELLOW, BLUE, MAGENTA];
+      const logoLines = logo.split('\n');
+      const coloredLines = logoLines.map((line, idx) => {
+        const color = colors[idx % colors.length] ?? CYAN;
+        return `${BOLD}${color}${line}${RESET}`;
+      });
+      console.log(coloredLines.join('\n'));
+    } catch (e) {
+      // Fallback to simple ASCII
+      console.log(`${CYAN}${BOLD}PACODE${RESET}`);
+    }
   }
 
   private printInfo(): void {
-    const dash = '─';
+    const dash = '-';
     const info = [
       '',
       `+${dash.repeat(60)}+`,
@@ -110,7 +126,7 @@ export class BootAnimation {
   }
 
   private printReady(): void {
-    const dash = '─';
+    const dash = '-';
     const ready = [
       '',
       `${GREEN}${BOLD}  ✓ Ready${RESET} ${DIM}— Type your message to begin${RESET}`,
