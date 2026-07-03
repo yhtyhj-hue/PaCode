@@ -220,7 +220,7 @@ export class REPL {
         ['/context', 'Show context usage'],
         ['/exit', 'Exit REPL'],
       ],
-      'Information': [
+      Information: [
         ['/status', 'Show session info'],
         ['/cost', 'Show token usage and cost'],
         ['/memory', 'Show memory file locations'],
@@ -228,7 +228,7 @@ export class REPL {
         ['/permissions', 'Show permission rules'],
         ['/providers', 'List API providers'],
       ],
-      'Configuration': [
+      Configuration: [
         ['/mode [name]', 'Change permission mode'],
         ['/model [name]', 'Show or change model'],
         ['/effort', 'Show effort level'],
@@ -243,7 +243,9 @@ export class REPL {
       }
       console.log('');
     }
-    console.log(`${DIM}Permission modes: plan, default, acceptEdits, auto, dontAsk, bypass${RESET}`);
+    console.log(
+      `${DIM}Permission modes: plan, default, acceptEdits, auto, dontAsk, bypass${RESET}`
+    );
     console.log('');
   }
 
@@ -256,7 +258,9 @@ export class REPL {
     if (this.baseUrl) console.log(`  ${DIM}Base URL:${RESET} ${this.baseUrl}`);
     console.log(`  ${DIM}Mode:${RESET}     ${this.mode}`);
     console.log(`  ${DIM}Duration:${RESET} ${elapsed}s`);
-    console.log(`  ${DIM}Tokens:${RESET}   in=${this.tokenUsage.input} out=${this.tokenUsage.output}`);
+    console.log(
+      `  ${DIM}Tokens:${RESET}   in=${this.tokenUsage.input} out=${this.tokenUsage.output}`
+    );
     console.log('');
   }
 
@@ -274,7 +278,9 @@ export class REPL {
       return;
     }
     console.log(`${GREEN}✓${RESET} Conversation compacted (simulated)`);
-    console.log(`${DIM}  Note: Full compaction requires API call (configured in future version)${RESET}`);
+    console.log(
+      `${DIM}  Note: Full compaction requires API call (configured in future version)${RESET}`
+    );
   }
 
   private showContext(): void {
@@ -461,7 +467,9 @@ Project-specific instructions for PaCode/Claude Code.
       console.log('\n');
       this.sessionManager.saveSession(session);
     } catch (error) {
-      console.log(`\n${YELLOW}Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`);
+      console.log(
+        `\n${YELLOW}Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`
+      );
     }
   }
 }

@@ -27,6 +27,140 @@ const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
 const GREEN = '\x1b[32m';
 const GRAY = '\x1b[90m';
+const YELLOW = '\x1b[33m';
+const CYAN = '\x1b[36m';
+
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
+async function handleMcp(
+  positionals: string[],
+  _options: Record<string, unknown>
+): Promise<boolean> {
+  const subCmd = positionals[0];
+  const args = positionals.slice(1);
+
+  const configDir = join(homedir(), '.paude');
+  const configPath = join(configDir, 'mcp.json');
+
+  function loadConfig(): { servers: Record<string, unknown> } {
+    if (!existsSync(configPath)) return { servers: {} };
+    try {
+      return JSON.parse(readFileSync(configPath, 'utf-8'));
+    } catch {
+      return { servers: {} };
+    }
+  }
+
+  function saveConfig(config: { servers: Record<string, unknown> }): void {
+    if (!existsSync(configDir)) {
+      require('node:fs').mkdirSync(configDir, { recursive: true });
+    }
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+  }
+
+  switch (subCmd) {
+    case 'list': {
+      const config = loadConfig();
+      console.log('\nMCP Servers:');
+      if (Object.keys(config.servers).length === 0) {
+        console.log(`  ${DIM}No servers configured${RESET}`);
+      }
+      for (const [name, conf] of Object.entries(config.servers)) {
+        const cmd = (conf as { command?: string }).command || 'unknown';
+        console.log(`  ${CYAN}${name}${RESET}: ${cmd}`);
+      }
+      console.log(`\n  Config: ${configPath}\n`);
+      return true;
+    }
+
+    case 'add': {
+      const name = args[0];
+      if (!name) {
+        console.error('Usage: pacode mcp add <name> <command> [args...]');
+        process.exit(1);
+      }
+      const command = args[1];
+      if (!command) {
+        console.error('Usage: pacode mcp add <name> <command> [args...]');
+        process.exit(1);
+      }
+      const cmdArgs = args.slice(2);
+      const config = loadConfig();
+      config.servers[name] = { type: 'stdio', command, args: cmdArgs };
+      saveConfig(config);
+      console.log(`${GREEN}✓${RESET} Added MCP server: ${name}`);
+      return true;
+    }
+
+    case 'remove': {
+      const name = args[0];
+      if (!name) {
+        console.error('Usage: pacode mcp remove <name>');
+        process.exit(1);
+      }
+      const config = loadConfig();
+      if (config.servers[name]) {
+        delete config.servers[name];
+        saveConfig(config);
+        console.log(`${GREEN}✓${RESET} Removed: ${name}`);
+      } else {
+        console.log(`${YELLOW}⚠${RESET} Not found: ${name}`);
+      }
+      return true;
+    }
+
+    default:
+      console.error(`Unknown mcp command: ${subCmd}`);
+      console.error('Commands: list, add <name> <command>, remove <name>');
+      return true;
+  }
+}
+
+async function handleInit(_positionals: string[]): Promise<boolean> {
+  const claudeMdPath = join(process.cwd(), 'CLAUDE.md');
+  if (existsSync(claudeMdPath)) {
+    console.log(`${YELLOW}⚠${RESET} CLAUDE.md already exists at ${claudeMdPath}`);
+    return true;
+  }
+
+  const template = `# CLAUDE.md
+
+Project-specific instructions for PaCode/Claude Code.
+
+## Project Overview
+
+[Briefly describe your project here]
+
+## Architecture
+
+[Describe the high-level architecture]
+
+## Key Files
+
+- [\`src/\`](src/) - Source code
+- [\`docs/\`](docs/) - Documentation
+- [\`tests/\`](tests/) - Test files
+
+## Development Workflow
+
+1. Read the relevant code first
+2. Make focused changes
+3. Run tests before committing
+4. Update documentation if needed
+
+## Conventions
+
+- Use TypeScript for all new code
+- Follow existing code style
+- Write tests for new features
+- Update CLAUDE.md when patterns change
+`;
+  writeFileSync(claudeMdPath, template, 'utf-8');
+  console.log(`${GREEN}✓${RESET} Created CLAUDE.md`);
+  return true;
+}
 
 function showHelp(): void {
   console.log(`PaCode CLI - Claude Code-like AI Assistant v0.1.0
@@ -213,6 +347,18 @@ async function main() {
   // Handle cc-switch subcommand
   if (positionals[0] === 'cc-switch' || positionals[0] === 'ccs') {
     await handleCCSwitch(positionals.slice(1), values);
+    process.exit(0);
+  }
+
+  // Handle mcp subcommand
+  if (positionals[0] === 'mcp') {
+    await handleMcp(positionals.slice(1), values);
+    process.exit(0);
+  }
+
+  // Handle /init in REPL (or standalone)
+  if (positionals[0] === 'init') {
+    await handleInit(positionals.slice(1));
     process.exit(0);
   }
 
