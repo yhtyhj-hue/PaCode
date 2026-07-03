@@ -17,6 +17,7 @@ import { registerTaskTool } from '../tools/task.js';
 import { registerTodoWriteTool } from '../tools/todowrite.js';
 import { Logger } from '../pkg/logger/index.js';
 import { PermissionMode } from '../pkg/types.js';
+import { bootAnimation } from './animation.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -59,6 +60,9 @@ Examples:
     console.log('PaCode v0.1.0');
     process.exit(0);
   }
+
+  // Show boot animation
+  await bootAnimation.show();
 
   // Check for API key
   const apiKey = (values['api-key'] as string) || process.env['ANTHROPIC_API_KEY'];
