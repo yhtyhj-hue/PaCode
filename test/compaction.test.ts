@@ -34,11 +34,13 @@ describe('CompactionPipeline', () => {
   });
 
   it('snips messages when over 88%', async () => {
-    const messages: Message[] = Array(30).fill(null).map((_, i) => ({
-      role: 'user' as const,
-      content: `message ${i}`,
-      timestamp: Date.now(),
-    }));
+    const messages: Message[] = Array(30)
+      .fill(null)
+      .map((_, i) => ({
+        role: 'user' as const,
+        content: `message ${i}`,
+        timestamp: Date.now(),
+      }));
     const ctx = {
       systemPrompt: 'test',
       messages,

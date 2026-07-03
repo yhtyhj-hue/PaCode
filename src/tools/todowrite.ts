@@ -38,15 +38,18 @@ export function registerTodoWriteTool(registry: { register: (t: ToolDefinition) 
 
       switch (action) {
         case 'create':
-          if (!content) return { content: [{ type: 'text', text: 'Content required' }], isError: true };
+          if (!content)
+            return { content: [{ type: 'text', text: 'Content required' }], isError: true };
           const newId = `todo-${Date.now()}`;
           todos.set(newId, { content, status: 'pending', created: Date.now() });
           return { content: [{ type: 'text', text: `Created: ${newId}` }] };
 
         case 'update':
-          if (!id || !status) return { content: [{ type: 'text', text: 'ID and status required' }], isError: true };
+          if (!id || !status)
+            return { content: [{ type: 'text', text: 'ID and status required' }], isError: true };
           const todo = todos.get(id);
-          if (!todo) return { content: [{ type: 'text', text: `Not found: ${id}` }], isError: true };
+          if (!todo)
+            return { content: [{ type: 'text', text: `Not found: ${id}` }], isError: true };
           todo.status = status as TodoItem['status'];
           return { content: [{ type: 'text', text: `Updated: ${id}` }] };
 

@@ -60,7 +60,9 @@ export function checkBashSecurity(command: string): SecurityCheck {
 }
 
 export function createSecureBashExecutor(timeoutMs = 60000) {
-  return function secureBash(command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return function secureBash(
+    command: string
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve) => {
       const security = checkBashSecurity(command);
       if (!security.safe) {
