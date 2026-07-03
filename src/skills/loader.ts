@@ -126,10 +126,11 @@ export class SkillsLoader {
   match(query: string): Skill[] {
     const lower = query.toLowerCase();
     const skills = Array.from(this.skills.values());
-    return skills.filter(s =>
-      s.name.toLowerCase().includes(lower) ||
-      s.description.toLowerCase().includes(lower) ||
-      s.whenToUse.some(w => w.toLowerCase().includes(lower))
+    return skills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(lower) ||
+        s.description.toLowerCase().includes(lower) ||
+        s.whenToUse.some((w) => w.toLowerCase().includes(lower))
     );
   }
 }
