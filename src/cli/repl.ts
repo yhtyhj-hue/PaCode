@@ -90,6 +90,9 @@ export class REPL {
       prompt: this.getPrompt(),
     });
 
+    // Draw top border of input box
+    this.drawInputBox();
+
     this.rl.prompt();
 
     this.rl.on('line', (input) => {
@@ -101,7 +104,6 @@ export class REPL {
       }
 
       if (trimmed.startsWith('/')) {
-        // Check if it's a custom slash command from .claude/commands/
         const cmdName = trimmed.split(/\s+/)[0]!.slice(1);
         const customCmd = this.skillsLoader?.getSlashCommand(cmdName);
         if (customCmd) {
@@ -111,6 +113,7 @@ export class REPL {
             if (this.exitRequested) {
               this.rl?.close();
             } else {
+              this.drawInputBox();
               this.rl?.prompt();
             }
           });
@@ -121,6 +124,7 @@ export class REPL {
           if (this.exitRequested || !this.rl) {
             this.rl?.close();
           } else {
+            this.drawInputBox();
             this.rl?.prompt();
           }
         });
@@ -128,6 +132,7 @@ export class REPL {
       }
 
       if (!trimmed) {
+        this.drawInputBox();
         this.rl.prompt();
         return;
       }
@@ -142,6 +147,8 @@ export class REPL {
         if (this.exitRequested) {
           this.rl?.close();
         } else {
+          this.drawStatusBar();
+          this.drawInputBox();
           this.rl?.prompt();
         }
       });
@@ -172,7 +179,30 @@ export class REPL {
   }
 
   private getPrompt(): string {
-    return `${CYAN}❯${RESET} `;
+    return `${CYAN}${BOLD}❯${RESET} `;
+  }
+
+  private drawInputBox(): void {
+    // Claude Code style: top border, then prompt line, then bottom status bar
+    const width = 120;
+    const border = '-'.repeat(width);
+
+    // Draw top border
+    process.stdout.write(`${DIM}${border}${RESET}\r\n`);
+  }
+
+  private drawStatusBar(): void {
+    // Bottom status bar with mode info and tokens
+    const width = 120;
+    const modeLabel = this.mode === PermissionMode.DEFAULT ? 'normal' : this.mode;
+    const leftText = `⏵⏵ ${modeLabel} mode (shift+tab to cycle) · esc to interrupt · ← for agents`;
+    const tokenCount = this.tokenUsage.input + this.tokenUsage.output;
+    const totalTokens = tokenCount > 0 ? `${tokenCount} tokens` : '0% context used';
+    const rightText = `${totalTokens} · /model opus[1m]`;
+
+    const pad = width - leftText.length - rightText.length;
+    const padding = ' '.repeat(Math.max(2, pad));
+    console.log(`${DIM}${leftText}${padding}${rightText}${RESET}`);
   }
 
   private async handleSlashCommand(cmd: string): Promise<void> {
