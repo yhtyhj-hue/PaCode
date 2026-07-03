@@ -244,7 +244,9 @@ Get a key at: https://console.anthropic.com/
   // Show active provider info
   const activeProvider = cc.getActive();
   if (activeProvider) {
-    console.log(`\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`);
+    console.log(
+      `\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
+    );
   }
 
   console.log('\nPaCode:\n');
@@ -259,7 +261,11 @@ Get a key at: https://console.anthropic.com/
       console.log('\n');
     } else if (event.type === 'error' && event.error) {
       log.error(event.error.message);
-      if (event.error.message.includes('401') || event.error.message.includes('Invalid token') || event.error.message.includes('authentication')) {
+      if (
+        event.error.message.includes('401') ||
+        event.error.message.includes('Invalid token') ||
+        event.error.message.includes('authentication')
+      ) {
         hasAuthError = true;
       }
     }
