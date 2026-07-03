@@ -2,10 +2,12 @@
  * Skills System
  *
  * Markdown-defined skills that LLM decides when to use.
+ * Also supports custom slash commands from .claude/commands/
  */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { Logger } from '../pkg/logger/index.js';
 
 export interface Skill {
@@ -15,12 +17,22 @@ export interface Skill {
   tools: string[];
   workflow?: string[];
   content: string;
+  source?: string;
+}
+
+export interface SlashCommand {
+  name: string;       // e.g., "review" -> /review
+  description: string;
+  prompt: string;      // Markdown content
+  argumentHint?: string;
+  source: string;
 }
 
 export class SkillsLoader {
   private log: Logger;
   private skillsDir: string;
   private skills: Map<string, Skill> = new Map();
+  private slashCommands: Map<string, SlashCommand> = new Map();
 
   constructor(skillsDir?: string) {
     this.log = new Logger({ prefix: 'SkillsLoader' });
@@ -56,6 +68,101 @@ export class SkillsLoader {
     }
 
     return this.skills;
+  }
+
+  /**
+   * Load custom slash commands from .claude/commands/*.md
+   * Also check ~/.claude/commands/*.md (user-level)
+   */
+  async loadSlashCommands(): Promise<Map<string, SlashCommand>> {
+    await this._loadSlashCommands();
+    return this.slashCommands;
+  }
+
+  private async _loadSlashCommands(): Promise<void> {
+    const dirs = [
+      resolve(process.cwd(), '.claude/commands'),
+      join(homedir(), '.claude/commands'),
+    ];
+
+    for (const dir of dirs) {
+      if (!existsSync(dir)) continue;
+
+      try {
+        const files = readdirSync(dir).filter((f) => f.endsWith('.md'));
+        for (const file of files) {
+          const name = file.replace(/\.md$/, '');
+          const path = join(dir, file);
+          const cmd = this.loadSlashCommand(name, path);
+          if (cmd) {
+            // User-level commands don't override project-level
+            if (!this.slashCommands.has(cmd.name)) {
+              this.slashCommands.set(cmd.name, cmd);
+            }
+          }
+        }
+      } catch (e) {
+        this.log.error(`Failed to load commands from ${dir}:`, e);
+      }
+    }
+
+    this.log.info(`Loaded ${this.slashCommands.size} custom commands`);
+  }
+
+  private loadSlashCommand(name: string, path: string): SlashCommand | null {
+    try {
+      const content = readFileSync(path, 'utf-8');
+      const lines = content.split('\n');
+
+      let description = '';
+      let argumentHint: string | undefined;
+      let promptBody = '';
+      let inFrontmatter = false;
+      let frontmatterEnd = false;
+
+      for (const line of lines) {
+        if (line.trim() === '---') {
+          if (!inFrontmatter) {
+            inFrontmatter = true;
+          } else {
+            frontmatterEnd = true;
+            continue;
+          }
+          continue;
+        }
+
+        if (inFrontmatter && !frontmatterEnd) {
+          const match = line.match(/^(\w+):\s*(.*)$/);
+          if (match) {
+            const [, key, value] = match;
+            if (key === 'description') description = value ?? '';
+            if (key === 'argument-hint') argumentHint = value ?? undefined;
+          }
+          continue;
+        }
+
+        promptBody += line + '\n';
+      }
+
+      return {
+        name,
+        description: description || `Custom command: ${name}`,
+        prompt: promptBody.trim(),
+        argumentHint,
+        source: path,
+      };
+    } catch (e) {
+      this.log.error(`Failed to load command ${name}:`, e);
+      return null;
+    }
+  }
+
+  getSlashCommand(name: string): SlashCommand | undefined {
+    return this.slashCommands.get(name);
+  }
+
+  listSlashCommands(): SlashCommand[] {
+    return Array.from(this.slashCommands.values());
   }
 
   private async loadSkill(name: string, path: string): Promise<Skill | null> {

@@ -22,6 +22,7 @@ import { registerTodoWriteTool } from '../tools/todowrite.js';
 import { PermissionMode } from '../pkg/types.js';
 import { Provider } from '../pkg/ccswitch/index.js';
 import { CCSwitchClient } from '../pkg/ccswitch/index.js';
+import { SkillsLoader } from '../skills/loader.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -45,6 +46,7 @@ export class REPL {
   private exitRequested = false;
   private tokenUsage = { input: 0, output: 0 };
   private startTime = Date.now();
+  private skillsLoader!: SkillsLoader;
 
   constructor(options: REPLOptions) {
     this.apiKey = options.apiKey;
@@ -67,9 +69,16 @@ export class REPL {
     registerGrepTool(registry);
     registerTaskTool(registry);
     registerTodoWriteTool(registry);
+
+    // Load skills and custom slash commands
+    this.skillsLoader = new SkillsLoader();
   }
 
   async start(): Promise<void> {
+    // Load skills and custom commands first (synchronous file I/O)
+    await this.skillsLoader.loadAll();
+    await this.skillsLoader.loadSlashCommands();
+
     this.printWelcome();
 
     this.rl = createInterface({
@@ -89,6 +98,22 @@ export class REPL {
       }
 
       if (trimmed.startsWith('/')) {
+        // Check if it's a custom slash command from .claude/commands/
+        const cmdName = trimmed.split(/\s+/)[0]!.slice(1);
+        const customCmd = this.skillsLoader?.getSlashCommand(cmdName);
+        if (customCmd) {
+          const arg = trimmed.slice(trimmed.indexOf(' ') + 1).trim();
+          const prompt = customCmd.prompt.replace(/\$ARGUMENTS/g, arg);
+          this.processMessage(prompt).then(() => {
+            if (this.exitRequested) {
+              this.rl?.close();
+            } else {
+              this.rl?.prompt();
+            }
+          });
+          return;
+        }
+
         this.handleSlashCommand(trimmed).then(() => {
           if (this.exitRequested || !this.rl) {
             this.rl?.close();
@@ -243,6 +268,19 @@ export class REPL {
       }
       console.log('');
     }
+
+    // Custom slash commands from .claude/commands/*.md
+    const customCommands = this.skillsLoader.listSlashCommands();
+    if (customCommands.length > 0) {
+      console.log(`  ${MAGENTA}Custom Commands${RESET}`);
+      for (const cmd of customCommands) {
+        const hint = cmd.argumentHint ? ` ${cmd.argumentHint}` : '';
+        const fullCmd = `/${cmd.name}${hint}`;
+        console.log(`    ${CYAN}${fullCmd.padEnd(22)}${RESET}${cmd.description}`);
+      }
+      console.log('');
+    }
+
     console.log(
       `${DIM}Permission modes: plan, default, acceptEdits, auto, dontAsk, bypass${RESET}`
     );
