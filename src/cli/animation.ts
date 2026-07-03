@@ -1,7 +1,7 @@
 /**
  * Claude Code Style Boot Animation
  *
- * Capybara mascot logo + ASCII art text
+ * Capybara mascot + ASCII art text
  */
 
 const RESET = '\x1b[0m';
@@ -14,6 +14,7 @@ const BLUE = '\x1b[34m';
 const MAGENTA = '\x1b[35m';
 const BROWN = '\x1b[38;5;130m';
 const DARK_BROWN = '\x1b[38;5;94m';
+const PINK = '\x1b[38;5;218m';
 const GRAY = '\x1b[90m';
 
 export class BootAnimation {
@@ -23,7 +24,7 @@ export class BootAnimation {
     this.clearScreen();
     await this.delay(100);
     this.printCapybara();
-    await this.delay(200);
+    await this.delay(300);
     this.printLogo();
     await this.delay(300);
     this.printInfo();
@@ -38,27 +39,22 @@ export class BootAnimation {
   }
 
   private printCapybara(): void {
-    // Capybara ASCII art - cute friendly mascot
+    // Simple cartoon capybara - clean line drawing
+    const cb = String.fromCharCode(92);  // backslash
     const capybara = `
-${BROWN}        ░░░░░░░░░░░░░░░░░░░░░░░
-      ░░░${DARK_BROWN}░░░░░░░░░░░░░░░░░${BROWN}░░░
-    ░░${DARK_BROWN}░░░░░░░░░░░░░░░░░░░░░░${BROWN}░░░░
-   ░░${DARK_BROWN}░░░░░░░░░░░░░░░░░░░░░░░░${BROWN}░░░
-   ░${DARK_BROWN}░░░░${BROWN}██${DARK_BROWN}░░░░░░░░░${BROWN}██${DARK_BROWN}░░░░░${BROWN}░░
-   ░${DARK_BROWN}░░${BROWN}██████${DARK_BROWN}░${BROWN}██████${DARK_BROWN}░${BROWN}████${DARK_BROWN}░░${BROWN}░
-   ░░${DARK_BROWN}░${BROWN}████████████████████${DARK_BROWN}░${BROWN}░
-   ░░${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}████${DARK_BROWN}░░${BROWN}░
-   ░░░${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}██${DARK_BROWN}░░░${BROWN}░
-   ░░░░${DARK_BROWN}░░░░░░░░░░░░░░░░░░░${BROWN}░░░░
-    ░░░░${DARK_BROWN}░░░░░░░░░░░░░░░░${BROWN}░░░░░
-      ░░░░░░░░░░░░░░░░░░░░
-            ░░░░░░░░░░░
-${RESET}`;
+${BROWN}        .--""--.
+       /        ${cb}
+      |  ${PINK}o  o${BROWN}   |
+      |    <     |
+      |  ${DARK_BROWN}${cb}${cb}. .${BROWN}  |
+       ${cb}${cb}  ____ /
+        ${cb}${cb}'  /
+${DARK_BROWN}        '----'${RESET}
+`;
     console.log(capybara);
   }
 
   private printLogo(): void {
-    // Cleaner block letters with proper C (not closed)
     const logo = `
 ${CYAN}${BOLD}    ██████╗ ${GREEN}█████╗ ${YELLOW}█████╗ ${BLUE}█████╗ ${MAGENTA}█████╗ ${CYAN}██████╗
    ██╔════╝${GREEN}██╔═══██╗${YELLOW}██╔══██╗${BLUE}██╔══██╗${MAGENTA}██╔═══██╗${CYAN}██╔════╝
