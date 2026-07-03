@@ -22,6 +22,9 @@ import { getCCSwitch } from '../pkg/ccswitch/index.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
+const RESET = '\x1b[0m';
+const DIM = '\x1b[2m';
+
 function showHelp(): void {
   console.log(`PaCode CLI - Claude Code-like AI Assistant v0.1.0
 
@@ -59,7 +62,10 @@ Examples:
 `);
 }
 
-async function handleCCSwitch(positionals: string[], options: Record<string, unknown>): Promise<boolean> {
+async function handleCCSwitch(
+  positionals: string[],
+  options: Record<string, unknown>
+): Promise<boolean> {
   const subCmd = positionals[0];
   const args = positionals.slice(1);
   const cc = getCCSwitch();
@@ -73,7 +79,7 @@ async function handleCCSwitch(positionals: string[], options: Record<string, unk
       }
       const active = cc.getActive();
       console.log('\nProviders:');
-      providers.forEach(p => {
+      providers.forEach((p) => {
         const marker = active?.name === p.name ? '●' : '○';
         const model = p.model ? ` (${p.model})` : '';
         const url = p.baseUrl ? ` → ${p.baseUrl}` : '';
@@ -102,7 +108,9 @@ async function handleCCSwitch(positionals: string[], options: Record<string, unk
     case 'add': {
       const name = args[0] || (options.name as string);
       if (!name) {
-        console.error('Usage: pacode cc-switch add <name> --api-key=<key> [--base-url=<url>] [--model=<model>]');
+        console.error(
+          'Usage: pacode cc-switch add <name> --api-key=<key> [--base-url=<url>] [--model=<model>]'
+        );
         process.exit(1);
       }
       const apiKey = (options['api-key'] as string) || process.env['ANTHROPIC_API_KEY'];
@@ -233,8 +241,15 @@ Get a key at: https://console.anthropic.com/
 
   const engine = new QueryEngine({ apiKey, baseUrl });
 
+  // Show active provider info
+  const activeProvider = cc.getActive();
+  if (activeProvider) {
+    console.log(`\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`);
+  }
+
   console.log('\nPaCode:\n');
 
+  let hasAuthError = false;
   for await (const event of engine.query({ message, options: { model } }, session)) {
     if (event.type === 'content_block_delta' && event.delta) {
       process.stdout.write(event.delta.text);
@@ -244,7 +259,16 @@ Get a key at: https://console.anthropic.com/
       console.log('\n');
     } else if (event.type === 'error' && event.error) {
       log.error(event.error.message);
+      if (event.error.message.includes('401') || event.error.message.includes('Invalid token') || event.error.message.includes('authentication')) {
+        hasAuthError = true;
+      }
     }
+  }
+
+  if (hasAuthError) {
+    console.log(`\n${DIM}💡 Tip: Switch to a different provider with:${RESET}`);
+    console.log(`  pacode cc-switch list`);
+    console.log(`  pacode cc-switch use <name>`);
   }
 
   sessionManager.saveSession(session);

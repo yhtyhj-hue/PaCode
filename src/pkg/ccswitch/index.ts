@@ -65,13 +65,13 @@ export class CCSwitchClient {
 
   getActive(): Provider | undefined {
     if (this.config.activeProvider) {
-      return this.config.providers.find(p => p.name === this.config.activeProvider);
+      return this.config.providers.find((p) => p.name === this.config.activeProvider);
     }
-    return this.config.providers.find(p => p.active);
+    return this.config.providers.find((p) => p.active);
   }
 
   addProvider(provider: Provider): void {
-    const idx = this.config.providers.findIndex(p => p.name === provider.name);
+    const idx = this.config.providers.findIndex((p) => p.name === provider.name);
     if (idx >= 0) {
       this.config.providers[idx] = provider;
     } else {
@@ -81,10 +81,12 @@ export class CCSwitchClient {
   }
 
   switchTo(name: string): Provider | null {
-    const provider = this.config.providers.find(p => p.name === name);
+    const provider = this.config.providers.find((p) => p.name === name);
     if (!provider) return null;
 
-    this.config.providers.forEach(p => { p.active = false; });
+    this.config.providers.forEach((p) => {
+      p.active = false;
+    });
     provider.active = true;
     this.config.activeProvider = name;
     this.save();
