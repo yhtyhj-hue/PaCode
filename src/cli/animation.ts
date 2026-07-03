@@ -1,7 +1,7 @@
 /**
  * Claude Code Style Boot Animation
  *
- * Animated startup screen inspired by Claude Code CLI.
+ * Capybara mascot logo + ASCII art text
  */
 
 const RESET = '\x1b[0m';
@@ -12,6 +12,8 @@ const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const BLUE = '\x1b[34m';
 const MAGENTA = '\x1b[35m';
+const BROWN = '\x1b[38;5;130m';
+const DARK_BROWN = '\x1b[38;5;94m';
 const GRAY = '\x1b[90m';
 
 export class BootAnimation {
@@ -20,10 +22,12 @@ export class BootAnimation {
   async show(): Promise<void> {
     this.clearScreen();
     await this.delay(100);
-    this.printLogo();
+    this.printCapybara();
     await this.delay(200);
-    this.printInfo();
+    this.printLogo();
     await this.delay(300);
+    this.printInfo();
+    await this.delay(200);
     this.printStatus();
     await this.delay(200);
     this.printReady();
@@ -33,18 +37,35 @@ export class BootAnimation {
     process.stdout.write('\x1b[2J\x1b[H');
   }
 
+  private printCapybara(): void {
+    // Capybara ASCII art - cute friendly mascot
+    const capybara = `
+${BROWN}        ░░░░░░░░░░░░░░░░░░░░░░░
+      ░░░${DARK_BROWN}░░░░░░░░░░░░░░░░░${BROWN}░░░
+    ░░${DARK_BROWN}░░░░░░░░░░░░░░░░░░░░░░${BROWN}░░░░
+   ░░${DARK_BROWN}░░░░░░░░░░░░░░░░░░░░░░░░${BROWN}░░░
+   ░${DARK_BROWN}░░░░${BROWN}██${DARK_BROWN}░░░░░░░░░${BROWN}██${DARK_BROWN}░░░░░${BROWN}░░
+   ░${DARK_BROWN}░░${BROWN}██████${DARK_BROWN}░${BROWN}██████${DARK_BROWN}░${BROWN}████${DARK_BROWN}░░${BROWN}░
+   ░░${DARK_BROWN}░${BROWN}████████████████████${DARK_BROWN}░${BROWN}░
+   ░░${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}████${DARK_BROWN}░░${BROWN}░
+   ░░░${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}██${DIM}██${BROWN}██${DARK_BROWN}░${BROWN}██${DARK_BROWN}░░░${BROWN}░
+   ░░░░${DARK_BROWN}░░░░░░░░░░░░░░░░░░░${BROWN}░░░░
+    ░░░░${DARK_BROWN}░░░░░░░░░░░░░░░░${BROWN}░░░░░
+      ░░░░░░░░░░░░░░░░░░░░
+            ░░░░░░░░░░░
+${RESET}`;
+    console.log(capybara);
+  }
+
   private printLogo(): void {
+    // Cleaner block letters with proper C (not closed)
     const logo = `
-${CYAN}${BOLD}   ╔══════════════════════════════════════════════════════════════╗
-   ║                                                              ║
-   ║  ${MAGENTA}██████╗${CYAN} █████╗ ${GREEN}██████╗${CYAN}  ██████╗ ${YELLOW}██████╗ ${BLUE}███████╗${CYAN}        ║
-   ║  ${MAGENTA}██╔══██╗${CYAN}██╔══██╗${GREEN}██╔══██╗${CYAN}██╔═══██╗${YELLOW}██╔══██╗${BLUE}██╔════╝${CYAN}        ║
-   ║  ${MAGENTA}██████╔╝${CYAN}███████║${GREEN}██║  ██║${CYAN}██║   ██║${YELLOW}██║  ██║${BLUE}█████╗  ${CYAN}          ║
-   ║  ${MAGENTA}██╔═══╝ ${CYAN}██╔══██║${GREEN}██║  ██║${CYAN}██║   ██║${YELLOW}██║  ██║${BLUE}██╔══╝  ${CYAN}          ║
-   ║  ${MAGENTA}██║     ${CYAN}██║  ██║${GREEN}██████╔╝${CYAN}╚██████╔╝${YELLOW}██████╔╝${BLUE}███████╗${CYAN}        ║
-   ║  ${CYAN}╚═╝     ╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚═════╝ ╚══════╝        ║
-   ║                                                              ║
-   ╚══════════════════════════════════════════════════════════════╝${RESET}
+${CYAN}${BOLD}    ██████╗ ${GREEN}█████╗ ${YELLOW}█████╗ ${BLUE}█████╗ ${MAGENTA}█████╗ ${CYAN}██████╗
+   ██╔════╝${GREEN}██╔═══██╗${YELLOW}██╔══██╗${BLUE}██╔══██╗${MAGENTA}██╔═══██╗${CYAN}██╔════╝
+   ██║     ${GREEN}██║   ██║${YELLOW}██████╔╝${BLUE}██████╔╝${MAGENTA}██║   ██║${CYAN}██║
+   ██║     ${GREEN}██║   ██║${YELLOW}██╔══██╗${BLUE}██╔══██╗${MAGENTA}██║   ██║${CYAN}██║
+   ╚██████╗${GREEN}╚██████╔╝${YELLOW}██║  ██║${BLUE}██║  ██║${MAGENTA}╚██████╔╝${CYAN}╚██████╗
+    ╚═════╝ ${GREEN}╚═════╝ ${YELLOW}╚═╝  ╚═╝${BLUE}╚═╝  ╚═╝${MAGENTA}╚═════╝ ${CYAN}╚═════╝${RESET}
 `;
     console.log(logo);
   }
