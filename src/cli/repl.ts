@@ -23,6 +23,8 @@ import { PermissionMode } from '../pkg/types.js';
 import { Provider } from '../pkg/ccswitch/index.js';
 import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
+import { getSubagentManager } from '../agent/subagent.js';
+import { getPlanManager } from '../agent/plan-mode.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -214,6 +216,12 @@ export class REPL {
         break;
       case '/mode':
         this.handleMode(args);
+        break;
+      case '/agents':
+        this.showAgents();
+        break;
+      case '/plan':
+        await this.handlePlan(arg);
         break;
       case '/providers':
         this.showProviders();
@@ -463,6 +471,55 @@ Project-specific instructions for PaCode/Claude Code.
       console.log(`  ${marker} ${p.name}${p.model ? ` (${p.model})` : ''}`);
     }
     console.log('');
+  }
+
+  private showAgents(): void {
+    const agents = getSubagentManager().list();
+    console.log('');
+    console.log(`${CYAN}${BOLD}Available Subagents${RESET}`);
+    for (const agent of agents) {
+      console.log(`  ${CYAN}${agent.name}${RESET}`);
+      console.log(`    ${DIM}${agent.description}${RESET}`);
+      if (agent.tools && agent.tools.length > 0) {
+        console.log(`    ${DIM}Tools: ${agent.tools.join(', ')}${RESET}`);
+      }
+    }
+    console.log('');
+  }
+
+  private async handlePlan(description: string): Promise<void> {
+    if (!description) {
+      const plan = getPlanManager().getActive();
+      if (plan) {
+        console.log(getPlanManager().formatPlanMessage(plan));
+      } else {
+        console.log(`${DIM}Usage: /plan <task description>${RESET}`);
+        console.log(`${DIM}Current mode: ${this.mode}${RESET}`);
+        if (this.mode === PermissionMode.PLAN) {
+          console.log(`${YELLOW}⚠${RESET}  Plan mode is active. Tools are disabled.`);
+        }
+      }
+      return;
+    }
+
+    // Switch to plan mode
+    if (this.mode !== PermissionMode.PLAN) {
+      this.mode = PermissionMode.PLAN;
+      console.log(`${GREEN}✓${RESET} Switched to plan mode (tools disabled)`);
+    }
+
+    // Generate plan via AI
+    const planPrompt = `Create a detailed implementation plan for: ${description}
+
+Format your response as a structured plan with:
+- Title and description
+- Numbered steps with action descriptions
+- For each step, specify the tool (Read/Edit/Bash/etc) and risk level (low/medium/high)
+- Use markdown formatting
+
+Focus on breaking down the work into atomic, verifiable steps.`;
+
+    await this.processMessage(planPrompt);
   }
 
   private async processMessage(message: string): Promise<void> {
