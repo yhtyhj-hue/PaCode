@@ -21,9 +21,9 @@ export interface Skill {
 }
 
 export interface SlashCommand {
-  name: string;       // e.g., "review" -> /review
+  name: string; // e.g., "review" -> /review
   description: string;
-  prompt: string;      // Markdown content
+  prompt: string; // Markdown content
   argumentHint?: string;
   source: string;
 }
@@ -80,10 +80,7 @@ export class SkillsLoader {
   }
 
   private async _loadSlashCommands(): Promise<void> {
-    const dirs = [
-      resolve(process.cwd(), '.claude/commands'),
-      join(homedir(), '.claude/commands'),
-    ];
+    const dirs = [resolve(process.cwd(), '.claude/commands'), join(homedir(), '.claude/commands')];
 
     for (const dir of dirs) {
       if (!existsSync(dir)) continue;

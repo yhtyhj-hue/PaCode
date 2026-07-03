@@ -43,7 +43,7 @@ export class PlanModeManager {
   }
 
   getActive(): Plan | null {
-    return this.activePlanId ? this.plans.get(this.activePlanId) ?? null : null;
+    return this.activePlanId ? (this.plans.get(this.activePlanId) ?? null) : null;
   }
 
   list(): Plan[] {
@@ -70,9 +70,10 @@ export class PlanModeManager {
     lines.push('');
     for (const step of plan.steps) {
       const riskIcon =
-        step.estimatedRisk === 'high' ? '🔴' :
-        step.estimatedRisk === 'medium' ? '🟡' : '🟢';
-      lines.push(`${step.index + 1}. ${riskIcon} **${step.action}**${step.tool ? ` _(${step.tool})_` : ''}`);
+        step.estimatedRisk === 'high' ? '🔴' : step.estimatedRisk === 'medium' ? '🟡' : '🟢';
+      lines.push(
+        `${step.index + 1}. ${riskIcon} **${step.action}**${step.tool ? ` _(${step.tool})_` : ''}`
+      );
       lines.push(`   ${step.description}`);
     }
     return lines.join('\n');

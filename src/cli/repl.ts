@@ -25,6 +25,7 @@ import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
 import { getPlanManager } from '../agent/plan-mode.js';
+import { renderer } from './enhanced-renderer.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -544,12 +545,12 @@ Focus on breaking down the work into atomic, verifiable steps.`;
             break;
           case 'tool_use':
             if (event.tool) {
-              console.log(`\n${DIM}[Tool: ${event.tool.name}]${RESET}`);
+              renderer.renderToolUse(event.tool);
             }
             break;
           case 'tool_result':
-            if (event.result?.isError) {
-              console.log(`\n${YELLOW}⚠ Tool error${RESET}`);
+            if (event.result) {
+              renderer.renderToolResult(event.result);
             }
             break;
           case 'error':
