@@ -47,3 +47,14 @@ venv/
 *.bak
 *.tmp
 *.temp
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# PaCode session data
+.paude/sessions/
+.paude/memory/

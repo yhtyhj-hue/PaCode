@@ -26,18 +26,56 @@ async function main() {
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
       mode: { type: 'string', short: 'm', default: 'default' },
+      'api-key': { type: 'string' },
     },
     allowPositionals: true,
   });
 
   if (values.help) {
-    console.log('PaCode CLI - Claude Code-like AI Assistant\nUsage: pacode [options] [message]');
+    console.log(`PaCode CLI - Claude Code-like AI Assistant v0.1.0
+
+Usage: pacode [options] [message]
+
+Options:
+  -h, --help              Show this help
+  -v, --version           Show version
+  -m, --mode <mode>       Permission mode (plan|default|acceptEdits|auto|dontAsk|bypass)
+  --api-key <key>         Anthropic API key (or set ANTHROPIC_API_KEY env)
+
+Environment:
+  ANTHROPIC_API_KEY       Your Anthropic API key
+  CLAUDE_MODEL            Default model (default: claude-sonnet-4-0)
+  CLAUDE_MAX_TOKENS       Max output tokens (default: 8192)
+
+Examples:
+  pacode "Read package.json and explain the project"
+  pacode -m acceptEdits "Add error handling to index.ts"
+  ANTHROPIC_API_KEY=sk-xxx pacode "Hello"
+`);
     process.exit(0);
   }
 
   if (values.version) {
     console.log('PaCode v0.1.0');
     process.exit(0);
+  }
+
+  // Check for API key
+  const apiKey = (values['api-key'] as string) || process.env['ANTHROPIC_API_KEY'];
+  if (!apiKey) {
+    log.error('ANTHROPIC_API_KEY not set');
+    console.log(`
+Please set your Anthropic API key:
+
+  export ANTHROPIC_API_KEY=sk-ant-xxx
+
+Or pass it directly:
+
+  pacode --api-key sk-ant-xxx "your question"
+
+Get a key at: https://console.anthropic.com/
+`);
+    process.exit(1);
   }
 
   const toolRegistry = getToolRegistry();
@@ -57,7 +95,7 @@ async function main() {
   const message = positionals.join(' ') || 'Hello';
   session.messages.push({ role: 'user', content: message, timestamp: Date.now() });
 
-  const engine = new QueryEngine({});
+  const engine = new QueryEngine({ apiKey });
 
   console.log('\nPaCode:\n');
 
