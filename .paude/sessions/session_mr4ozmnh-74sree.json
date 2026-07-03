@@ -1,0 +1,17 @@
+{
+  "sessionId": "mr4ozmnh-74sree",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello",
+      "timestamp": 1783068570990
+    }
+  ],
+  "toolCallHistory": [],
+  "maxOutputTokensRecoveryCount": 0,
+  "mode": "default",
+  "hooks": {
+    "hooks": {}
+  },
+  "compactionHistory": []
+}

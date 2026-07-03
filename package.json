@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
+    "start": "node dist/cli/index.js",
+    "dev": "node dist/cli/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
