@@ -30,9 +30,9 @@ export class QueryEngine {
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
-    this.client = new Anthropic({
-      apiKey: options.apiKey ?? process.env['ANTHROPIC_API_KEY'],
-    });
+    const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
+    const baseURL = options.baseUrl ?? process.env['ANTHROPIC_BASE_URL'];
+    this.client = new Anthropic({ apiKey, baseURL });
     this.contextAssembler = new ContextAssembler();
     this.compactionPipeline = new CompactionPipeline();
     this.toolRegistry = new ToolRegistry();
@@ -231,6 +231,7 @@ export class QueryEngine {
 
 interface QueryEngineOptions {
   apiKey?: string;
+  baseUrl?: string;
 }
 
 interface QueryEvent {
