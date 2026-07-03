@@ -1,7 +1,7 @@
 /**
  * Claude Code Style Boot Animation
  *
- * Capybara mascot + Figlet PACODE logo
+ * Capybara mascot (round body + small ears + closed eyes)
  */
 
 import figlet from 'figlet';
@@ -50,26 +50,29 @@ export class BootAnimation {
   }
 
   private printCapybara(): void {
-    // Detailed capybara with clear features
+    // Round chubby capybara matching the reference image style
+    // - Round body (chunky oval shape)
+    // - Small round ears on top
+    // - Closed eyes (squint lines)
+    // - Visible nose (dark brown)
+    // - Small front paws
     const lines = [
       '',
-      `          ${BROWN}__${RESET}`,
-      `        ${BROWN}.--${DARK_BROWN}||${BROWN}--.${RESET}`,
-      `       ${BROWN}/${DARK_BROWN}  ${PINK}__  __  ${DARK_BROWN}\\${BROWN}\\${RESET}`,
-      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${PINK}\\/_\\/_\\/${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}`,
-      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${PINK}|${BROWN}    ${PINK}|${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}  <- ears + eyes`,
-      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${RED}o${BROWN}  ${RED}o${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}  <- nose + mouth`,
-      `      ${BROWN}| ${DARK_BROWN}|${BROWN}   ${RED}<${BROWN}   ${DARK_BROWN}|${BROWN} |${RESET}`,
-      `      ${BROWN}| ${DARK_BROWN}|${BROWN}  ${RED}-${BROWN}  ${DARK_BROWN}|${BROWN} |${RESET}`,
-      `      ${BROWN}| ${DARK_BROWN}|${BROWN} ${RED}~~~${BROWN} ${DARK_BROWN}|${BROWN} |${RESET}`,
-      `      ${BROWN} \\__________/${RESET}`,
-      `       ${BROWN}/          \\${RESET}`,
-      `      ${BROWN} /            \\${RESET}`,
-      `      ${BROWN}/              \\${RESET}`,
-      `     ${BROWN}/________________\\${RESET}`,
-      `     ${DARK_BROWN}|________________|${RESET}`,
-      '',
-      `     ${BROWN}    🦫 PACODE 🦫${RESET}`,
+      `         ${DARK_BROWN}o   o${RESET}`,
+      `        ${DARK_BROWN}o${BROWN}____${DARK_BROWN}o${RESET}`,
+      `       ${BROWN}/${PINK}..${BROWN}____${PINK}..${BROWN}\\${RESET}`,
+      `      ${BROWN}|${RED}  ${DARK_BROWN}o${RED}      ${DARK_BROWN}o${RED}  ${BROWN}|${RESET}  <- closed eyes`,
+      `      ${BROWN}|${RED}   ${RED}\\___/${RED}   ${BROWN}|${RESET}`,
+      `       ${BROWN}\\____________/${RESET}`,
+      `      ${BROWN} .${BROWN}________${BROWN}.${RESET}`,
+      `     ${BROWN} .${DARK_BROWN}o${BROWN}        ${DARK_BROWN}o${BROWN}.${RESET}`,
+      `    ${BROWN}.${DARK_BROWN}o${BROWN}            ${DARK_BROWN}o${BROWN}.${RESET}`,
+      `   ${BROWN}.${DARK_BROWN}o${BROWN}              ${DARK_BROWN}o${BROWN}.${RESET}`,
+      `    ${BROWN}\\                /${RESET}`,
+      `     ${BROWN}\\              /${RESET}`,
+      `      ${BROWN}\\____________/${RESET}`,
+      `       ${DARK_BROWN}o        o${RESET}    <- feet`,
+      `       ${DARK_BROWN}o        o${RESET}`,
       '',
     ];
     console.log(lines.join('\n'));
@@ -78,8 +81,6 @@ export class BootAnimation {
   private async printLogo(): Promise<void> {
     try {
       const logo = await figletAsync('PACODE');
-
-      // Color each line of the logo
       const colors = [CYAN, GREEN, YELLOW, BLUE, MAGENTA];
       const logoLines = logo.split('\n');
       const coloredLines = logoLines.map((line, idx) => {
@@ -87,8 +88,7 @@ export class BootAnimation {
         return `${BOLD}${color}${line}${RESET}`;
       });
       console.log(coloredLines.join('\n'));
-    } catch (e) {
-      // Fallback to simple ASCII
+    } catch {
       console.log(`${CYAN}${BOLD}PACODE${RESET}`);
     }
   }
