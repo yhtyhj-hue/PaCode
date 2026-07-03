@@ -38,7 +38,10 @@ export class ToolRegistry {
     try {
       return await tool.execute(call.input, ctx);
     } catch (e) {
-      return { content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }], isError: true };
+      return {
+        content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }],
+        isError: true,
+      };
     }
   }
 

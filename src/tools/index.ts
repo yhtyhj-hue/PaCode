@@ -8,3 +8,5 @@ export { registerWriteTool } from './write.js';
 export { registerEditTool } from './edit.js';
 export { registerGlobTool } from './glob.js';
 export { registerGrepTool } from './grep.js';
+export { registerTaskTool } from './task.js';
+export { registerTodoWriteTool } from './todowrite.js';

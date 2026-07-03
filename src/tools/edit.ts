@@ -12,13 +12,21 @@ export function registerEditTool(registry: { register: (t: ToolDefinition) => vo
     description: 'Edit file with replacement',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string' }, oldText: { type: 'string' }, newText: { type: 'string' } },
+      properties: {
+        path: { type: 'string' },
+        oldText: { type: 'string' },
+        newText: { type: 'string' },
+      },
       required: ['path', 'oldText', 'newText'],
     },
     concurrencySafe: false,
     permissionMode: PermissionMode.ACCEPT_EDITS,
     async execute(input) {
-      const { path, oldText, newText } = input as { path: string; oldText: string; newText: string };
+      const { path, oldText, newText } = input as {
+        path: string;
+        oldText: string;
+        newText: string;
+      };
       try {
         const fullPath = resolve(path);
         let content = readFileSync(fullPath, 'utf-8');

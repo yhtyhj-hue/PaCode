@@ -43,7 +43,10 @@ export class QueryEngine {
     this.log.info('QueryEngine initialized');
   }
 
-  async *query(request: QueryRequest, state: SessionState): AsyncGenerator<QueryEvent, void, unknown> {
+  async *query(
+    request: QueryRequest,
+    state: SessionState
+  ): AsyncGenerator<QueryEvent, void, unknown> {
     const mode = request.mode ?? state.mode;
     const queryOptions = request.options ?? {};
 
@@ -73,7 +76,12 @@ export class QueryEngine {
             if (!allowed.allowed) {
               yield {
                 type: 'tool_result',
-                result: { content: [{ type: 'text', text: `Permission denied: ${allowed.reason ?? 'unknown'}` }], isError: true },
+                result: {
+                  content: [
+                    { type: 'text', text: `Permission denied: ${allowed.reason ?? 'unknown'}` },
+                  ],
+                  isError: true,
+                },
               };
               continue;
             }
@@ -100,7 +108,10 @@ export class QueryEngine {
       } catch (error) {
         yield {
           type: 'error',
-          error: { code: 'EXECUTION_ERROR', message: error instanceof Error ? error.message : String(error) },
+          error: {
+            code: 'EXECUTION_ERROR',
+            message: error instanceof Error ? error.message : String(error),
+          },
         };
         break;
       }
@@ -111,15 +122,20 @@ export class QueryEngine {
   }
 
   private async assembleContext(state: SessionState, options: QueryOptions) {
-    const context = await this.contextAssembler.assemble(state, { systemPrompt: options.systemPrompt });
+    const context = await this.contextAssembler.assemble(state, {
+      systemPrompt: options.systemPrompt,
+    });
     return this.compactionPipeline.run(context);
   }
 
-  private async callModel(context: Awaited<ReturnType<typeof this.assembleContext>>, options: QueryOptions) {
+  private async callModel(
+    context: Awaited<ReturnType<typeof this.assembleContext>>,
+    options: QueryOptions
+  ) {
     const tools = this.toolRegistry.list();
 
     const system = context.systemPrompt;
-    const messages = context.messages.map(m => ({
+    const messages = context.messages.map((m) => ({
       role: m.role as 'user' | 'assistant' | 'system',
       content: typeof m.content === 'string' ? m.content : '...',
     }));
@@ -130,7 +146,7 @@ export class QueryEngine {
       temperature: options.temperature ?? 0.7,
       system,
       messages: messages as any[],
-      tools: tools.map(t => ({
+      tools: tools.map((t) => ({
         name: t.name,
         description: t.description,
         input_schema: t.inputSchema as any,
@@ -138,7 +154,10 @@ export class QueryEngine {
     });
 
     let stopReason: StopReason = 'end_turn';
-    const content: Array<{ type: 'text'; text: string } | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }> = [];
+    const content: Array<
+      | { type: 'text'; text: string }
+      | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+    > = [];
     const toolCalls: ToolCall[] = [];
 
     for await (const event of stream) {
@@ -151,7 +170,12 @@ export class QueryEngine {
         if (event.content_block.type === 'text') {
           content.push({ type: 'text', text: '' });
         } else if (event.content_block.type === 'tool_use') {
-          content.push({ type: 'tool_use', id: event.content_block.id, name: event.content_block.name, input: {} });
+          content.push({
+            type: 'tool_use',
+            id: event.content_block.id,
+            name: event.content_block.name,
+            input: {},
+          });
         }
       }
 
@@ -184,7 +208,10 @@ export class QueryEngine {
   private async executeTool(toolCall: ToolCall, state: SessionState): Promise<ToolResult> {
     const tool = this.toolRegistry.get(toolCall.name);
     if (!tool) {
-      return { content: [{ type: 'text', text: `Tool not found: ${toolCall.name}` }], isError: true };
+      return {
+        content: [{ type: 'text', text: `Tool not found: ${toolCall.name}` }],
+        isError: true,
+      };
     }
 
     try {
@@ -194,7 +221,10 @@ export class QueryEngine {
         hooks: this.hookRegistry,
       });
     } catch (error) {
-      return { content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }], isError: true };
+      return {
+        content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+        isError: true,
+      };
     }
   }
 }
@@ -204,7 +234,13 @@ interface QueryEngineOptions {
 }
 
 interface QueryEvent {
-  type: 'content_block_delta' | 'tool_use' | 'tool_result' | 'content_block_stop' | 'message_stop' | 'error';
+  type:
+    | 'content_block_delta'
+    | 'tool_use'
+    | 'tool_result'
+    | 'content_block_stop'
+    | 'message_stop'
+    | 'error';
   delta?: { index: number; text: string };
   tool?: ToolCall;
   result?: ToolResult;

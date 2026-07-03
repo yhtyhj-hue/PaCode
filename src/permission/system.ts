@@ -2,7 +2,12 @@
  * Permission System - 7 modes
  */
 
-import { PermissionMode, PermissionCheckRequest, PermissionCheckResult, ToolCall } from '../pkg/types.js';
+import {
+  PermissionMode,
+  PermissionCheckRequest,
+  PermissionCheckResult,
+  ToolCall,
+} from '../pkg/types.js';
 
 export class PermissionSystem {
   check(request: PermissionCheckRequest): PermissionCheckResult {

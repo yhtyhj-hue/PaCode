@@ -7,7 +7,10 @@ import { resolve, join } from 'node:path';
 import { SessionState, ModelContext } from '../pkg/types.js';
 
 export class ContextAssembler {
-  async assemble(state: SessionState, options: { systemPrompt?: string } = {}): Promise<ModelContext> {
+  async assemble(
+    state: SessionState,
+    options: { systemPrompt?: string } = {}
+  ): Promise<ModelContext> {
     const parts: string[] = [];
 
     if (options.systemPrompt) {
@@ -40,7 +43,9 @@ export class ContextAssembler {
       if (existsSync(p)) {
         try {
           return readFileSync(p, 'utf-8');
-        } catch { /* continue */ }
+        } catch {
+          /* continue */
+        }
       }
     }
     return null;
@@ -51,12 +56,14 @@ export class ContextAssembler {
     if (!existsSync(path)) return null;
     try {
       const { readdirSync } = await import('node:fs');
-      const files = readdirSync(path).filter(f => f.endsWith('.md'));
+      const files = readdirSync(path).filter((f) => f.endsWith('.md'));
       const contents: string[] = [];
       for (const f of files) {
         contents.push(readFileSync(join(path, f), 'utf-8'));
       }
       return contents.join('\n\n---\n\n');
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 }

@@ -125,7 +125,13 @@ export interface TokenUsage {
 }
 
 export interface QueryEvent {
-  type: 'content_block_delta' | 'tool_use' | 'tool_result' | 'content_block_stop' | 'message_stop' | 'error';
+  type:
+    | 'content_block_delta'
+    | 'tool_use'
+    | 'tool_result'
+    | 'content_block_stop'
+    | 'message_stop'
+    | 'error';
   delta?: { index: number; text: string };
   tool?: ToolCall;
   result?: ToolResult;

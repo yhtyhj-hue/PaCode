@@ -47,12 +47,15 @@ export class CompactionPipeline {
   private contextCollapse(ctx: ModelContext): ModelContext {
     return {
       ...ctx,
-      compactBoundaries: [...(ctx.compactBoundaries ?? []), {
-        type: 'compact_boundary',
-        summary: '[Earlier messages compressed]',
-        originalMessageCount: ctx.messages.length,
-        timestamp: Date.now(),
-      }],
+      compactBoundaries: [
+        ...(ctx.compactBoundaries ?? []),
+        {
+          type: 'compact_boundary',
+          summary: '[Earlier messages compressed]',
+          originalMessageCount: ctx.messages.length,
+          timestamp: Date.now(),
+        },
+      ],
       tokenCount: this.countTokens(ctx),
     };
   }

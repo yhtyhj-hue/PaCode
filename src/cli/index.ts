@@ -12,6 +12,8 @@ import { registerWriteTool } from '../tools/write.js';
 import { registerEditTool } from '../tools/edit.js';
 import { registerGlobTool } from '../tools/glob.js';
 import { registerGrepTool } from '../tools/grep.js';
+import { registerTaskTool } from '../tools/task.js';
+import { registerTodoWriteTool } from '../tools/todowrite.js';
 import { Logger } from '../pkg/logger/index.js';
 import { PermissionMode } from '../pkg/types.js';
 
@@ -44,6 +46,8 @@ async function main() {
   registerEditTool(toolRegistry);
   registerGlobTool(toolRegistry);
   registerGrepTool(toolRegistry);
+  registerTaskTool(toolRegistry);
+  registerTodoWriteTool(toolRegistry);
 
   const sessionManager = new SessionManager();
   const mode = resolveMode(values.mode as string);

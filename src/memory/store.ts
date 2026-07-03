@@ -4,11 +4,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import {
-  MemoryKey,
-  MemoryBlock,
-  MemoryType,
-} from '../pkg/types.js';
+import { MemoryKey, MemoryBlock, MemoryType } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 
 export class MemoryStore {
@@ -75,7 +71,10 @@ export class MemoryStore {
     }
   }
 
-  async search(_query: string, _options?: { limit?: number; scope?: string }): Promise<MemoryBlock[]> {
+  async search(
+    _query: string,
+    _options?: { limit?: number; scope?: string }
+  ): Promise<MemoryBlock[]> {
     // Simplified implementation - returns empty array
     return [];
   }

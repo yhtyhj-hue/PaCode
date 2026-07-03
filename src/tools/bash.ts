@@ -9,7 +9,11 @@ export function registerBashTool(registry: { register: (t: ToolDefinition) => vo
   registry.register({
     name: 'Bash',
     description: 'Execute shell commands',
-    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+    inputSchema: {
+      type: 'object',
+      properties: { command: { type: 'string' } },
+      required: ['command'],
+    },
     concurrencySafe: false,
     permissionMode: PermissionMode.BYPASS,
     async execute(input) {

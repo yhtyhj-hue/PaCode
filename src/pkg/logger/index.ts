@@ -39,7 +39,15 @@ export class Logger {
     if (this.prefix) parts.push(`[${this.prefix}]`);
     parts.push(msg);
     if (args.length > 0) {
-      parts.push(...args.map(a => a instanceof Error ? `${a.message}\n${a.stack}` : typeof a === 'object' ? JSON.stringify(a) : String(a)));
+      parts.push(
+        ...args.map((a) =>
+          a instanceof Error
+            ? `${a.message}\n${a.stack}`
+            : typeof a === 'object'
+              ? JSON.stringify(a)
+              : String(a)
+        )
+      );
     }
     return parts.join(' ');
   }
@@ -61,7 +69,11 @@ export class Logger {
   }
 
   child(prefix: string): Logger {
-    return new Logger({ level: this.level, prefix: this.prefix ? `${this.prefix}:${prefix}` : prefix, timestamp: this.timestamp });
+    return new Logger({
+      level: this.level,
+      prefix: this.prefix ? `${this.prefix}:${prefix}` : prefix,
+      timestamp: this.timestamp,
+    });
   }
 }
 

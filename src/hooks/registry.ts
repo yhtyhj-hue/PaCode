@@ -27,7 +27,7 @@ export class HookRegistry {
   }
 
   findMatching(type: HookType, ctx: ToolContext): Hook[] {
-    return Array.from(this.hooks.values()).filter(h => {
+    return Array.from(this.hooks.values()).filter((h) => {
       if (h.type !== type) return false;
       if (h.matcher?.tool) {
         const last = ctx.sessionState.toolCallHistory.at(-1);
@@ -40,11 +40,19 @@ export class HookRegistry {
   async execute(hook: Hook): Promise<HookResult> {
     try {
       const cmd = Array.isArray(hook.command) ? hook.command.join(' ') : hook.command;
-      const { stdout, stderr } = await execAsync(cmd, { cwd: hook.cwd ?? process.cwd(), timeout: 30000 });
+      const { stdout, stderr } = await execAsync(cmd, {
+        cwd: hook.cwd ?? process.cwd(),
+        timeout: 30000,
+      });
       return { exitCode: 0, stdout, stderr };
     } catch (e) {
       const err = e as { code?: number; message?: string };
-      return { exitCode: err.code ?? 1, stdout: '', stderr: err.message ?? String(e), blocked: err.code === 2 };
+      return {
+        exitCode: err.code ?? 1,
+        stdout: '',
+        stderr: err.message ?? String(e),
+        blocked: err.code === 2,
+      };
     }
   }
 
