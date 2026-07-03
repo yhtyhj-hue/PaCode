@@ -104,10 +104,10 @@ export class CCSwitchClient {
       for (const p of config.providers) {
         const raw = p as unknown as Record<string, unknown>;
         providers.push({
-          name: (p.name ?? raw['name'] as string ?? 'unnamed') as string,
-          apiKey: (p.apiKey ?? raw['api_key'] as string ?? '') as string,
-          baseUrl: p.baseUrl ?? raw['base_url'] as string ?? raw['endpoint'] as string,
-          model: p.model ?? raw['model_id'] as string,
+          name: (p.name ?? (raw['name'] as string) ?? 'unnamed') as string,
+          apiKey: (p.apiKey ?? (raw['api_key'] as string) ?? '') as string,
+          baseUrl: p.baseUrl ?? (raw['base_url'] as string) ?? (raw['endpoint'] as string),
+          model: p.model ?? (raw['model_id'] as string),
           active: p.active,
           source: p.source ?? 'ccswitch',
         });
@@ -117,7 +117,7 @@ export class CCSwitchClient {
     const raw = config as unknown as Record<string, unknown>;
     return {
       providers,
-      activeProvider: config.activeProvider ?? raw['current_provider'] as string,
+      activeProvider: config.activeProvider ?? (raw['current_provider'] as string),
     };
   }
 
@@ -195,15 +195,20 @@ export class CCSwitchClient {
     try {
       const content = readFileSync(claudeConfigPath, 'utf-8');
       const settings = JSON.parse(content);
+      const env = settings.env ?? {};
       let imported = 0;
 
-      if (settings.env?.ANTHROPIC_API_KEY) {
-        const name = settings.env.ANTHROPIC_MODEL || 'claude-code';
+      // Claude Code uses ANTHROPIC_AUTH_TOKEN (not ANTHROPIC_API_KEY)
+      // Both are supported
+      const apiKey = env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        const model = env.ANTHROPIC_MODEL ?? env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? 'claude-sonnet-4-0';
+        const name = `claude-code-${model.split('-').slice(0, 2).join('-')}`;
         this.addProvider({
           name,
-          apiKey: settings.env.ANTHROPIC_API_KEY,
-          baseUrl: settings.env.ANTHROPIC_BASE_URL,
-          model: settings.env.ANTHROPIC_MODEL,
+          apiKey,
+          baseUrl: env.ANTHROPIC_BASE_URL,
+          model,
           active: true,
           source: 'claude-code',
         });
@@ -215,6 +220,47 @@ export class CCSwitchClient {
       return imported;
     } catch {
       return 0;
+    }
+  }
+
+  /**
+   * Auto-import and activate from Claude Code config if no providers exist
+   */
+  autoImportFromClaudeCode(): Provider | null {
+    const claudeConfigPath = join(homedir(), '.claude', 'settings.json');
+    if (!existsSync(claudeConfigPath)) return null;
+
+    try {
+      const content = readFileSync(claudeConfigPath, 'utf-8');
+      const settings = JSON.parse(content);
+      const env = settings.env ?? {};
+
+      const apiKey = env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY;
+      if (!apiKey) return null;
+
+      const model = env.ANTHROPIC_MODEL ?? env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? 'claude-sonnet-4-0';
+      const name = `claude-code-${model.split('-').slice(0, 2).join('-')}`;
+
+      // Add and switch
+      this.addProvider({
+        name,
+        apiKey,
+        baseUrl: env.ANTHROPIC_BASE_URL,
+        model,
+        active: true,
+        source: 'claude-code',
+      });
+      this.config.activeProvider = name;
+      this.save();
+
+      // Apply to env
+      if (env.ANTHROPIC_BASE_URL) process.env['ANTHROPIC_BASE_URL'] = env.ANTHROPIC_BASE_URL;
+      if (apiKey) process.env['ANTHROPIC_API_KEY'] = apiKey;
+      if (model) process.env['CLAUDE_MODEL'] = model;
+
+      return this.getActive() ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -233,9 +279,11 @@ export class CCSwitchClient {
     const plat = platform();
 
     let ccswitchPath = '';
-    if (plat === 'darwin') ccswitchPath = join(home, 'Library/Application Support/cc-switch/config.json');
+    if (plat === 'darwin')
+      ccswitchPath = join(home, 'Library/Application Support/cc-switch/config.json');
     else if (plat === 'linux') ccswitchPath = join(home, '.config/cc-switch/config.json');
-    else if (plat === 'win32') ccswitchPath = join(process.env['APPDATA'] ?? '', 'cc-switch/config.json');
+    else if (plat === 'win32')
+      ccswitchPath = join(process.env['APPDATA'] ?? '', 'cc-switch/config.json');
 
     return {
       ccswitch: existsSync(ccswitchPath),

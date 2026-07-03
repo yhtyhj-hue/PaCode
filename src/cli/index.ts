@@ -165,9 +165,15 @@ async function handleCCSwitch(
       const sources = cc.detectSources();
       const configPath = cc.getConfigPath();
       console.log('\nCC-Switch detection:');
-      console.log(`  CC-Switch app:     ${sources.ccswitch ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`);
-      console.log(`  Claude Code:       ${sources.claudeCode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`);
-      console.log(`  PaCode:            ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`);
+      console.log(
+        `  CC-Switch app:     ${sources.ccswitch ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+      );
+      console.log(
+        `  Claude Code:       ${sources.claudeCode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+      );
+      console.log(
+        `  PaCode:            ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+      );
       console.log(`\n  Config: ${configPath}\n`);
       return true;
     }
@@ -214,6 +220,15 @@ async function main() {
 
   // Get credentials (cc-switch active provider takes priority)
   const cc = getCCSwitch();
+
+  // Auto-import from Claude Code if no providers configured
+  if (cc.list().length === 0) {
+    const imported = cc.autoImportFromClaudeCode();
+    if (imported) {
+      console.log(`${DIM}Auto-imported provider from ~/.claude/settings.json: ${imported.name}${RESET}\n`);
+    }
+  }
+
   const creds = cc.getCredentials();
   const apiKey = (values['api-key'] as string) || creds.apiKey;
   const baseUrl = (values['base-url'] as string) || creds.baseUrl;
