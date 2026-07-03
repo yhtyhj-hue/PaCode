@@ -27,12 +27,12 @@ const MAGENTA = '\x1b[35m';
 export class BootAnimation {
   constructor() {}
 
-  async show(): Promise<void> {
+  async show(model?: string): Promise<void> {
     this.clearScreen();
     await this.delay(100);
     await this.printLogo();
     await this.delay(300);
-    this.printInfo();
+    this.printInfo(model);
     await this.delay(200);
     this.printStatus();
     await this.delay(200);
@@ -58,14 +58,15 @@ export class BootAnimation {
     }
   }
 
-  private printInfo(): void {
+  private printInfo(model?: string): void {
+    const displayModel = model || 'claude-sonnet-4-0';
     const dash = '-';
     const info = [
       '',
       `+${dash.repeat(60)}+`,
       `|  ${BOLD}PaCode${RESET} ${DIM}v0.1.0${RESET}                                          |`,
       `|  ${DIM}Claude Code-like AI Programming Assistant${RESET}              |`,
-      `|  ${DIM}Model:${RESET} ${CYAN}claude-sonnet-4-0${RESET}                                  |`,
+      `|  ${DIM}Model:${RESET} ${CYAN}${displayModel}${RESET}                                  |`,
       `+${dash.repeat(60)}+`,
       '',
     ].join('\n');

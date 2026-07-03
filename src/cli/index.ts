@@ -362,13 +362,8 @@ async function main() {
     process.exit(0);
   }
 
-  // Show boot animation
-  await bootAnimation.show();
-
-  // Get credentials (cc-switch active provider takes priority)
+  // Get provider info first to show in animation
   const cc = getCCSwitch();
-
-  // Auto-import from Claude Code if no providers configured
   if (cc.list().length === 0) {
     const imported = cc.autoImportFromClaudeCode();
     if (imported) {
@@ -377,11 +372,16 @@ async function main() {
       );
     }
   }
-
   const creds = cc.getCredentials();
+  const defaultModel = 'claude-sonnet-4-0';
+  const model = (values.model as string) || creds.model || defaultModel;
+
+  // Show boot animation
+  await bootAnimation.show(model);
+
+  // Get credentials (cc-switch active provider takes priority)
   const apiKey = (values['api-key'] as string) || creds.apiKey;
   const baseUrl = (values['base-url'] as string) || creds.baseUrl;
-  const model = (values.model as string) || creds.model || 'claude-sonnet-4-0';
 
   if (!apiKey) {
     log.error('ANTHROPIC_API_KEY not set');

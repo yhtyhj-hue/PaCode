@@ -200,9 +200,7 @@ export class REPL {
     const tokenCount = this.tokenUsage.input + this.tokenUsage.output;
     const maxContext = 200000; // 200K context window
     const usagePercent = Math.min(100, Math.round((tokenCount / maxContext) * 100));
-    const contextText = tokenCount > 0
-      ? `${usagePercent}% context used`
-      : '0% context used';
+    const contextText = tokenCount > 0 ? `${usagePercent}% context used` : '0% context used';
 
     const rightText = `${contextText} · /model ${this.model}`;
 
