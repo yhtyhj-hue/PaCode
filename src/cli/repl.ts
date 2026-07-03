@@ -25,7 +25,6 @@ import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
 import { getPlanManager } from '../agent/plan-mode.js';
-import { renderer } from './enhanced-renderer.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -562,6 +561,12 @@ Focus on breaking down the work into atomic, verifiable steps.`;
       timestamp: Date.now(),
     });
 
+    const startTime = Date.now();
+    let toolCallCount = 0;
+
+    // Claude Code style: show initial "thinking" indicator
+    console.log(`${DIM}⏺ Pontificating…${RESET}`);
+
     try {
       for await (const event of this.engine.query(
         { message, options: { model: this.model } },
@@ -570,32 +575,87 @@ Focus on breaking down the work into atomic, verifiable steps.`;
         switch (event.type) {
           case 'content_block_delta':
             if (event.delta) {
-              process.stdout.write(event.delta.text);
+              // Replace thinking indicator with first content
+              process.stdout.write(`\r${event.delta.text}`);
             }
             break;
           case 'tool_use':
             if (event.tool) {
-              renderer.renderToolUse(event.tool);
+              toolCallCount++;
+              console.log('');
+              this.renderToolUseClaude(event.tool);
             }
             break;
           case 'tool_result':
             if (event.result) {
-              renderer.renderToolResult(event.result);
+              this.renderToolResultClaude(event.tool?.name ?? 'tool', event.result);
             }
+            break;
+          case 'message_stop':
+            // Done - show final status
             break;
           case 'error':
             if (event.error) {
-              console.log(`\n${YELLOW}Error: ${event.error.message}${RESET}`);
+              console.log(`\n${RED}⏺ Error: ${event.error.message}${RESET}`);
             }
             break;
         }
       }
-      console.log('\n');
+      console.log('');
+
+      // Show completion status bar (Claude Code style)
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const totalTokens = this.tokenUsage.input + this.tokenUsage.output;
+      console.log(
+        `${DIM}· Done (${elapsed}s · ↑ ${totalTokens} tokens${toolCallCount > 0 ? ` · ${toolCallCount} tools used` : ''})${RESET}\n`
+      );
+
       this.sessionManager.saveSession(session);
     } catch (error) {
       console.log(
-        `\n${YELLOW}Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`
+        `\n${RED}⏺ Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`
       );
+    }
+  }
+
+  private renderToolUseClaude(tool: { name: string; input: Record<string, unknown> }): void {
+    const input = tool.input;
+    let summary = '';
+
+    // Generate human-readable summary based on tool
+    if (tool.name === 'Bash') {
+      summary = String(input['command'] ?? '').substring(0, 60);
+    } else if (tool.name === 'Read') {
+      summary = String(input['path'] ?? '');
+    } else if (tool.name === 'Write' || tool.name === 'Edit') {
+      const path = String(input['path'] ?? '');
+      summary = `${tool.name} ${path}`;
+    } else if (tool.name === 'Glob') {
+      summary = String(input['pattern'] ?? '');
+    } else if (tool.name === 'Grep') {
+      summary = String(input['pattern'] ?? '');
+    } else if (tool.name === 'Task') {
+      summary = String(input['prompt'] ?? '').substring(0, 60);
+    } else if (tool.name === 'TodoWrite') {
+      summary = String(input['action'] ?? 'update task list');
+    } else {
+      summary = JSON.stringify(input).substring(0, 60);
+    }
+
+    console.log(`${CYAN}⏺ ${tool.name}${RESET} ${DIM}${summary}${RESET}`);
+  }
+
+  private renderToolResultClaude(_toolName: string, result: { isError?: boolean; content: Array<{ type: string; text?: string }> }): void {
+    const text = result.content[0]?.type === 'text' ? result.content[0].text ?? '' : '';
+    const lines = text.split('\n').filter(l => l.trim()).length;
+
+    if (result.isError) {
+      console.log(`  ${RED}⎿  Error${RESET}`);
+      console.log(`  ${DIM}${text.substring(0, 100)}${RESET}`);
+    } else {
+      // Claude Code style: ⎿  ...output...
+      const outputText = text.substring(0, 100).replace(/\n/g, ' ');
+      console.log(`  ${DIM}⎿  ${outputText}${lines > 1 ? ` (+${lines - 1} lines)` : ''}${RESET}`);
     }
   }
 }
