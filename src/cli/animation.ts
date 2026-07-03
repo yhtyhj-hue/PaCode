@@ -1,7 +1,7 @@
 /**
  * Claude Code Style Boot Animation
  *
- * Capybara mascot (round body + small ears + closed eyes)
+ * Figlet PACODE logo + status display
  */
 
 import figlet from 'figlet';
@@ -23,10 +23,6 @@ const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const BLUE = '\x1b[34m';
 const MAGENTA = '\x1b[35m';
-const BROWN = '\x1b[38;5;130m';
-const DARK_BROWN = '\x1b[38;5;94m';
-const PINK = '\x1b[38;5;218m';
-const RED = '\x1b[31m';
 
 export class BootAnimation {
   constructor() {}
@@ -34,8 +30,6 @@ export class BootAnimation {
   async show(): Promise<void> {
     this.clearScreen();
     await this.delay(100);
-    this.printCapybara();
-    await this.delay(400);
     await this.printLogo();
     await this.delay(300);
     this.printInfo();
@@ -47,35 +41,6 @@ export class BootAnimation {
 
   private clearScreen(): void {
     process.stdout.write('\x1b[2J\x1b[H');
-  }
-
-  private printCapybara(): void {
-    // Round chubby capybara matching the reference image style
-    // - Round body (chunky oval shape)
-    // - Small round ears on top
-    // - Closed eyes (squint lines)
-    // - Visible nose (dark brown)
-    // - Small front paws
-    const lines = [
-      '',
-      `         ${DARK_BROWN}o   o${RESET}`,
-      `        ${DARK_BROWN}o${BROWN}____${DARK_BROWN}o${RESET}`,
-      `       ${BROWN}/${PINK}..${BROWN}____${PINK}..${BROWN}\\${RESET}`,
-      `      ${BROWN}|${RED}  ${DARK_BROWN}o${RED}      ${DARK_BROWN}o${RED}  ${BROWN}|${RESET}  <- closed eyes`,
-      `      ${BROWN}|${RED}   ${RED}\\___/${RED}   ${BROWN}|${RESET}`,
-      `       ${BROWN}\\____________/${RESET}`,
-      `      ${BROWN} .${BROWN}________${BROWN}.${RESET}`,
-      `     ${BROWN} .${DARK_BROWN}o${BROWN}        ${DARK_BROWN}o${BROWN}.${RESET}`,
-      `    ${BROWN}.${DARK_BROWN}o${BROWN}            ${DARK_BROWN}o${BROWN}.${RESET}`,
-      `   ${BROWN}.${DARK_BROWN}o${BROWN}              ${DARK_BROWN}o${BROWN}.${RESET}`,
-      `    ${BROWN}\\                /${RESET}`,
-      `     ${BROWN}\\              /${RESET}`,
-      `      ${BROWN}\\____________/${RESET}`,
-      `       ${DARK_BROWN}o        o${RESET}    <- feet`,
-      `       ${DARK_BROWN}o        o${RESET}`,
-      '',
-    ];
-    console.log(lines.join('\n'));
   }
 
   private async printLogo(): Promise<void> {
