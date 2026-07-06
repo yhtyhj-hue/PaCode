@@ -99,6 +99,8 @@ export class REPL {
     // Move cursor back up to be next to ❯
     process.stdout.write('\x1b[1A\x1b[999C');
 
+    this.setupKeyHandlers();
+
     this.rl.on('line', (input) => {
       const trimmed = input.trim();
 
@@ -164,6 +166,31 @@ export class REPL {
     });
   }
 
+  private setupKeyHandlers(): void {
+    if (!this.rl) return;
+    const stdin = process.stdin as NodeJS.ReadStream & { emit: (event: string, ...args: unknown[]) => boolean };
+
+    // Ctrl+C - interrupt/cancel
+    stdin.on('keypress', (_str: string, key: { ctrl?: boolean; name?: string }) => {
+      if (key?.ctrl && key.name === 'c') {
+        // Just clear input for now (processMessage handles actual interrupt)
+        if (this.rl) {
+          this.rl.write('', { ctrl: true, name: 'u' });
+        }
+      }
+
+      // Ctrl+D - exit
+      if (key?.ctrl && key.name === 'd') {
+        this.exitRequested = true;
+        this.rl?.close();
+      }
+
+      // Shift+Tab - cycle permission mode
+      // Note: Shift+Tab is hard to detect in standard readline,
+      // so we expose /mode for now
+    });
+  }
+
   private printWelcome(): void {
     console.log('');
     console.log(
@@ -196,10 +223,10 @@ export class REPL {
   }
 
   private drawStatusBar(): void {
-    // Bottom status bar with mode info and tokens
+    // Bottom status bar with mode info, tokens, and keybinding hints
     const width = 120;
     const modeLabel = this.mode === PermissionMode.DEFAULT ? 'normal' : this.mode;
-    const leftText = `⏵⏵ ${modeLabel} mode (shift+tab to cycle) · esc to interrupt · ← for agents`;
+    const leftText = `⏵⏵ ${modeLabel} mode · shift+tab to cycle · esc to interrupt · ctrl+c cancel · ctrl+d exit`;
 
     // Calculate approximate context usage based on token count
     const tokenCount = this.tokenUsage.input + this.tokenUsage.output;
@@ -207,7 +234,7 @@ export class REPL {
     const usagePercent = Math.min(100, Math.round((tokenCount / maxContext) * 100));
     const contextText = tokenCount > 0 ? `${usagePercent}% context used` : '0% context used';
 
-    const rightText = `${contextText} · /model ${this.model}`;
+    const rightText = `${contextText} · /model ${this.model} · /help`;
 
     const pad = width - leftText.length - rightText.length;
     const padding = ' '.repeat(Math.max(2, pad));
