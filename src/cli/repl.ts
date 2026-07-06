@@ -83,21 +83,17 @@ export class REPL {
 
     this.printWelcome();
 
+    // Disable readline's default prompt - we draw our own
     this.rl = createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: this.getPrompt(),
+      prompt: '',
     });
 
-    // Draw top border of input box
-    this.drawInputBox();
-
+    // Draw initial UI: top border + prompt + status bar
+    this.drawInputUI();
+    // Use readline's prompt() to actually wait for input
     this.rl.prompt();
-    // Draw status bar BELOW the prompt
-    process.stdout.write('\n');
-    this.drawStatusBar();
-    // Move cursor back up to be next to ❯
-    process.stdout.write('\x1b[1A\x1b[999C');
 
     this.setupKeyHandlers();
 
@@ -119,8 +115,7 @@ export class REPL {
             if (this.exitRequested) {
               this.rl?.close();
             } else {
-              this.drawInputBox();
-              this.rl?.prompt();
+              this.drawInputUI();
             }
           });
           return;
@@ -130,16 +125,14 @@ export class REPL {
           if (this.exitRequested || !this.rl) {
             this.rl?.close();
           } else {
-            this.drawInputBox();
-            this.rl?.prompt();
+            this.drawInputUI();
           }
         });
         return;
       }
 
       if (!trimmed) {
-        this.drawInputBox();
-        this.rl.prompt();
+        this.drawInputUI();
         return;
       }
 
@@ -153,9 +146,7 @@ export class REPL {
         if (this.exitRequested) {
           this.rl?.close();
         } else {
-          // Status bar shown below input by drawStatusBarAfterPrompt
-          this.drawInputBox();
-          this.rl?.prompt();
+          this.drawInputUI();
         }
       });
     });
@@ -166,9 +157,24 @@ export class REPL {
     });
   }
 
+  private drawInputUI(): void {
+    // Claude Code style: top border + prompt with cursor + status bar
+    const width = 120;
+    const border = '-'.repeat(width);
+    process.stdout.write(`${DIM}${border}${RESET}\r\n`);
+
+    // Prompt with cursor (using simple > instead of ❯ for compat)
+    process.stdout.write(`${CYAN}${BOLD}> ${RESET}`);
+
+    // Status bar below
+    this.drawStatusBar();
+  }
+
   private setupKeyHandlers(): void {
     if (!this.rl) return;
-    const stdin = process.stdin as NodeJS.ReadStream & { emit: (event: string, ...args: unknown[]) => boolean };
+    const stdin = process.stdin as NodeJS.ReadStream & {
+      emit: (event: string, ...args: unknown[]) => boolean;
+    };
 
     // Ctrl+C - interrupt/cancel
     stdin.on('keypress', (_str: string, key: { ctrl?: boolean; name?: string }) => {
@@ -209,21 +215,7 @@ export class REPL {
     console.log('');
   }
 
-  private getPrompt(): string {
-    return `${CYAN}${BOLD}❯${RESET} `;
-  }
-
-  private drawInputBox(): void {
-    // Claude Code style: top border, then prompt line, then bottom status bar
-    const width = 120;
-    const border = '-'.repeat(width);
-
-    // Draw top border
-    process.stdout.write(`${DIM}${border}${RESET}\r\n`);
-  }
-
   private drawStatusBar(): void {
-    // Bottom status bar with mode info, tokens, and keybinding hints
     const width = 120;
     const modeLabel = this.mode === PermissionMode.DEFAULT ? 'normal' : this.mode;
     const leftText = `⏵⏵ ${modeLabel} mode · shift+tab to cycle · esc to interrupt · ctrl+c cancel · ctrl+d exit`;
