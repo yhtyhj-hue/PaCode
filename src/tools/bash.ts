@@ -1,9 +1,11 @@
 /**
- * Bash Tool
+ * Bash Tool - shell execution with security checks
  */
 
-import { exec } from 'node:child_process';
 import { ToolDefinition, PermissionMode } from '../pkg/types.js';
+import { createSecureBashExecutor } from './bash-secure.js';
+
+const secureBash = createSecureBashExecutor(60000);
 
 export function registerBashTool(registry: { register: (t: ToolDefinition) => void }) {
   registry.register({
@@ -15,18 +17,19 @@ export function registerBashTool(registry: { register: (t: ToolDefinition) => vo
       required: ['command'],
     },
     concurrencySafe: false,
-    permissionMode: PermissionMode.BYPASS,
+    permissionMode: PermissionMode.DEFAULT,
     async execute(input) {
       const { command } = input as { command: string };
-      return new Promise((resolve) => {
-        exec(command, { timeout: 60000 }, (err, stdout, stderr) => {
-          if (err) {
-            resolve({ content: [{ type: 'text', text: stderr || err.message }], isError: true });
-          } else {
-            resolve({ content: [{ type: 'text', text: stdout || stderr }] });
-          }
-        });
-      });
+      const { stdout, stderr, exitCode } = await secureBash(command);
+
+      if (exitCode !== 0) {
+        return {
+          content: [{ type: 'text', text: stderr || stdout || 'Command failed' }],
+          isError: true,
+        };
+      }
+
+      return { content: [{ type: 'text', text: stdout || stderr }] };
     },
   });
 }

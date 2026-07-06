@@ -76,6 +76,11 @@ describe('Tool Registry - Deep', () => {
     expect(registry.get('Bash')?.concurrencySafe).toBe(false);
   });
 
+  it('Bash uses DEFAULT permission mode', () => {
+    registerBashTool(registry);
+    expect(registry.get('Bash')?.permissionMode).toBe(PermissionMode.DEFAULT);
+  });
+
   it('Read concurrency safe', () => {
     registerReadTool(registry);
     expect(registry.get('Read')?.concurrencySafe).toBe(true);

@@ -583,7 +583,9 @@ Focus on breaking down the work into atomic, verifiable steps.`;
 
   private async processMessage(message: string): Promise<void> {
     console.log('');
-    console.log(`${CYAN}${BOLD}>${RESET} ${message.split('\n')[0]}${message.includes('\n') ? '...' : ''}`);
+    console.log(
+      `${CYAN}${BOLD}>${RESET} ${message.split('\n')[0]}${message.includes('\n') ? '...' : ''}`
+    );
     console.log('');
 
     const session = this.sessionManager.createSession({ mode: this.mode });
@@ -597,7 +599,12 @@ Focus on breaking down the work into atomic, verifiable steps.`;
     let toolCallCount = 0;
 
     // Spinner frames
-    const spinnerFrames = ['⏺ Pontificating   ', '⏺ Pontificating.  ', '⏺ Pontificating.. ', '⏺ Pontificating...'];
+    const spinnerFrames = [
+      '⏺ Pontificating   ',
+      '⏺ Pontificating.  ',
+      '⏺ Pontificating.. ',
+      '⏺ Pontificating...',
+    ];
     let spinnerIdx = 0;
     let spinnerInterval: ReturnType<typeof setInterval> | null = null;
 

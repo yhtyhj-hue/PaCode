@@ -18,6 +18,7 @@ import { ToolRegistry } from '../tools/registry.js';
 import { PermissionSystem } from '../permission/system.js';
 import { SessionManager } from '../session/manager.js';
 import { HookRegistry } from '../hooks/registry.js';
+import { responseContentToBlocks, serializeMessagesForApi } from './message-serializer.js';
 
 export class QueryEngine {
   private client: Anthropic;
@@ -78,35 +79,71 @@ export class QueryEngine {
         }
 
         if (response.stopReason === 'tool_use') {
+          // 先持久化 assistant 的 tool_use 消息，保证多轮工具调用上下文完整
+          state.messages.push({
+            role: 'assistant',
+            content: responseContentToBlocks(response.content),
+            timestamp: Date.now(),
+          });
+
+          const toolResultBlocks: Array<{
+            type: 'tool_result';
+            toolUseId: string;
+            toolResult: ToolResult;
+          }> = [];
+
           for (const toolCall of response.toolCalls) {
             yield { type: 'tool_use', tool: toolCall };
 
             const allowed = this.permissionSystem.check({ tool: toolCall, mode, context: state });
 
+            let result: ToolResult;
             if (!allowed.allowed) {
-              yield {
-                type: 'tool_result',
-                result: {
-                  content: [
-                    { type: 'text', text: `Permission denied: ${allowed.reason ?? 'unknown'}` },
-                  ],
-                  isError: true,
-                },
+              result = {
+                content: [
+                  { type: 'text', text: `Permission denied: ${allowed.reason ?? 'unknown'}` },
+                ],
+                isError: true,
               };
-              continue;
+            } else if (allowed.requiresInteraction) {
+              // Interactive permission prompt
+              const confirmed = await this.promptForPermission(toolCall, mode);
+              if (!confirmed) {
+                result = {
+                  content: [{ type: 'text', text: 'User denied permission' }],
+                  isError: true,
+                };
+                yield { type: 'tool_result', tool: toolCall, result };
+                toolResultBlocks.push({
+                  type: 'tool_result',
+                  toolUseId: toolCall.id,
+                  toolResult: result,
+                });
+                this.sessionManager.addToolCall(state, toolCall);
+                continue;
+              }
+              result = await this.executeTool(toolCall, state);
+            } else {
+              result = await this.executeTool(toolCall, state);
             }
 
-            const result = await this.executeTool(toolCall, state);
-            yield { type: 'tool_result', result };
+            yield { type: 'tool_result', tool: toolCall, result };
 
-            state.messages.push({
-              role: 'user',
-              content: [{ type: 'tool_result', toolResult: result }],
-              timestamp: Date.now(),
+            toolResultBlocks.push({
+              type: 'tool_result',
+              toolUseId: toolCall.id,
+              toolResult: result,
             });
 
             this.sessionManager.addToolCall(state, toolCall);
           }
+
+          // Anthropic API 要求同一轮的 tool_result 合并为一条 user 消息
+          state.messages.push({
+            role: 'user',
+            content: toolResultBlocks,
+            timestamp: Date.now(),
+          });
           continue;
         }
 
@@ -145,17 +182,14 @@ export class QueryEngine {
     const tools = this.toolRegistry.list();
 
     const system = context.systemPrompt;
-    const messages = context.messages.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: typeof m.content === 'string' ? m.content : '...',
-    }));
+    const messages = serializeMessagesForApi(context.messages);
 
     const stream = this.client.messages.stream({
       model: options.model ?? 'claude-sonnet-4-0',
       max_tokens: options.maxTokens ?? 8192,
       temperature: options.temperature ?? 0.7,
       system,
-      messages: messages as any[],
+      messages,
       tools: tools.map((t) => ({
         name: t.name,
         description: t.description,
@@ -246,12 +280,50 @@ export class QueryEngine {
       };
     }
 
+    // PreToolUse hooks - can block execution (exit code 2)
+    const preHooks = this.hookRegistry.findMatching('PreToolUse' as any, {
+      workingDirectory: process.cwd(),
+      sessionState: state,
+      hooks: this.hookRegistry,
+    } as any);
+
+    for (const hook of preHooks) {
+      try {
+        const result = await this.hookRegistry.execute(hook);
+        if (result.blocked || result.exitCode === 2) {
+          return {
+            content: [{ type: 'text', text: `Tool execution blocked by hook: ${hook.name}` }],
+            isError: true,
+          };
+        }
+      } catch (e) {
+        this.log.warn(`PreToolUse hook failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     try {
-      return await tool.execute(toolCall.input, {
+      const result = await tool.execute(toolCall.input, {
         workingDirectory: process.cwd(),
         sessionState: state,
         hooks: this.hookRegistry,
       });
+
+      // PostToolUse hooks
+      const postHooks = this.hookRegistry.findMatching('PostToolUse' as any, {
+        workingDirectory: process.cwd(),
+        sessionState: state,
+        hooks: this.hookRegistry,
+      } as any);
+
+      for (const hook of postHooks) {
+        try {
+          await this.hookRegistry.execute(hook);
+        } catch (e) {
+          this.log.warn(`PostToolUse hook failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
+      return result;
     } catch (error) {
       return {
         content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
@@ -259,7 +331,33 @@ export class QueryEngine {
       };
     }
   }
-}
+
+
+  private async promptForPermission(tool: ToolCall, _mode: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.log.info(`Permission requested for ${tool.name}`);
+      // In production: show interactive prompt
+      // For now, default to allow
+      const stdin = process.stdin;
+      const wasRaw = stdin.isRaw;
+      if (stdin.isTTY) stdin.setRawMode(true);
+
+      const onData = (key: Buffer) => {
+        const char = key.toString();
+        if (char === 'y' || char === 'Y' || char === '\r') {
+          if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
+          stdin.removeListener('data', onData);
+          resolve(true);
+        } else if (char === 'n' || char === 'N' || char === '\u0003') {
+          if (stdin.isTTY) stdin.setRawMode(wasRaw ?? false);
+          stdin.removeListener('data', onData);
+          resolve(false);
+        }
+      };
+      stdin.on('data', onData);
+      this.log.warn(`Allow ${tool.name}? (y/n) [default: y]`);
+    });
+  }}
 
 interface QueryEngineOptions {
   apiKey?: string;

@@ -5,6 +5,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { SessionState, ModelContext } from '../pkg/types.js';
+import { MemoryStore } from '../memory/store.js';
+import { homedir } from 'node:os';
 
 export class ContextAssembler {
   async assemble(
@@ -25,6 +27,10 @@ export class ContextAssembler {
 
     const skills = await this.loadDirectory('.claude/skills');
     if (skills) parts.push(`## Skills\n\n${skills}`);
+
+    // Load user memory (9th source: Memory)
+    const memory = await this.loadMemory();
+    if (memory) parts.push(`## Memory\n\n${memory}`);
 
     const systemPrompt = parts.join('\n\n');
 
@@ -49,6 +55,17 @@ export class ContextAssembler {
       }
     }
     return null;
+  }
+
+  private async loadMemory(): Promise<string | null> {
+    try {
+      const memStore = new MemoryStore(join(homedir(), '.paude', 'memory'));
+      const memories = await memStore.search('', { limit: 10 });
+      if (memories.length === 0) return null;
+      return memories.map(m => `[${m.key.category}] ${m.content}`).join('\n\n');
+    } catch {
+      return null;
+    }
   }
 
   private async loadDirectory(dir: string): Promise<string | null> {

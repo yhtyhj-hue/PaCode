@@ -92,6 +92,7 @@ export interface ContentBlock {
   type: 'text' | 'tool_use' | 'tool_result';
   text?: string;
   toolUse?: ToolCall;
+  toolUseId?: string;
   toolResult?: ToolResult;
 }
 
