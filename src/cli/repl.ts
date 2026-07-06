@@ -93,6 +93,11 @@ export class REPL {
     this.drawInputBox();
 
     this.rl.prompt();
+    // Draw status bar BELOW the prompt
+    process.stdout.write('\n');
+    this.drawStatusBar();
+    // Move cursor back up to be next to ❯
+    process.stdout.write('\x1b[1A\x1b[999C');
 
     this.rl.on('line', (input) => {
       const trimmed = input.trim();
@@ -146,7 +151,7 @@ export class REPL {
         if (this.exitRequested) {
           this.rl?.close();
         } else {
-          this.drawStatusBar();
+          // Status bar shown below input by drawStatusBarAfterPrompt
           this.drawInputBox();
           this.rl?.prompt();
         }
