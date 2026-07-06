@@ -583,6 +583,9 @@ Focus on breaking down the work into atomic, verifiable steps.`;
 
   private async processMessage(message: string): Promise<void> {
     console.log('');
+    console.log(`${CYAN}${BOLD}>${RESET} ${message.split('\n')[0]}${message.includes('\n') ? '...' : ''}`);
+    console.log('');
+
     const session = this.sessionManager.createSession({ mode: this.mode });
     session.messages.push({
       role: 'user',
@@ -593,8 +596,17 @@ Focus on breaking down the work into atomic, verifiable steps.`;
     const startTime = Date.now();
     let toolCallCount = 0;
 
-    // Claude Code style: show initial "thinking" indicator
-    console.log(`${DIM}⏺ Pontificating…${RESET}`);
+    // Spinner frames
+    const spinnerFrames = ['⏺ Pontificating   ', '⏺ Pontificating.  ', '⏺ Pontificating.. ', '⏺ Pontificating...'];
+    let spinnerIdx = 0;
+    let spinnerInterval: ReturnType<typeof setInterval> | null = null;
+
+    // Start animated spinner
+    process.stdout.write(`${DIM}${spinnerFrames[0]}${RESET}\r`);
+    spinnerInterval = setInterval(() => {
+      spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+      process.stdout.write(`\r${DIM}${spinnerFrames[spinnerIdx]}${RESET}  `);
+    }, 100);
 
     try {
       for await (const event of this.engine.query(
@@ -604,8 +616,13 @@ Focus on breaking down the work into atomic, verifiable steps.`;
         switch (event.type) {
           case 'content_block_delta':
             if (event.delta) {
-              // Replace thinking indicator with first content
-              process.stdout.write(`\r${event.delta.text}`);
+              // Stop spinner, clear line, show content
+              if (spinnerInterval) {
+                clearInterval(spinnerInterval);
+                spinnerInterval = null;
+                process.stdout.write('\r' + ' '.repeat(40) + '\r');
+              }
+              process.stdout.write(event.delta.text);
             }
             break;
           case 'tool_use':
@@ -621,7 +638,6 @@ Focus on breaking down the work into atomic, verifiable steps.`;
             }
             break;
           case 'message_stop':
-            // Capture usage info
             if (event.usage) {
               this.tokenUsage.input += event.usage.inputTokens ?? 0;
               this.tokenUsage.output += event.usage.outputTokens ?? 0;
@@ -629,10 +645,21 @@ Focus on breaking down the work into atomic, verifiable steps.`;
             break;
           case 'error':
             if (event.error) {
+              if (spinnerInterval) {
+                clearInterval(spinnerInterval);
+                spinnerInterval = null;
+                process.stdout.write('\r' + ' '.repeat(40) + '\r');
+              }
               console.log(`\n${RED}⏺ Error: ${event.error.message}${RESET}`);
             }
             break;
         }
+      }
+
+      // Clear spinner if still running
+      if (spinnerInterval) {
+        clearInterval(spinnerInterval);
+        process.stdout.write('\r' + ' '.repeat(40) + '\r');
       }
       console.log('');
 
@@ -645,6 +672,10 @@ Focus on breaking down the work into atomic, verifiable steps.`;
 
       this.sessionManager.saveSession(session);
     } catch (error) {
+      if (spinnerInterval) {
+        clearInterval(spinnerInterval);
+        process.stdout.write('\r' + ' '.repeat(40) + '\r');
+      }
       console.log(
         `\n${RED}⏺ Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`
       );

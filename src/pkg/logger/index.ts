@@ -23,7 +23,7 @@ export class Logger {
   private timestamp: boolean;
 
   constructor(options: LoggerOptions = {}) {
-    this.level = options.level ?? LogLevel.INFO;
+    this.level = options.level ?? LogLevel.WARN;
     this.prefix = options.prefix ?? '';
     this.timestamp = options.timestamp ?? true;
   }
@@ -77,7 +77,7 @@ export class Logger {
   }
 }
 
-export const logger = new Logger({ level: LogLevel.INFO });
+export const logger = new Logger({ level: LogLevel.WARN });
 export function createLogger(prefix: string, level?: LogLevel): Logger {
   return new Logger({ prefix, level });
 }
