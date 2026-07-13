@@ -77,6 +77,19 @@ describe('CCSwitchClient - Deep', () => {
     expect(c2.getActive()?.name).toBe('first');
   });
 
+  it('removes provider', () => {
+    c.addProvider({ name: 'a', apiKey: 'k1' });
+    c.addProvider({ name: 'b', apiKey: 'k2' });
+    c.switchTo('b');
+    expect(c.removeProvider('b')).toBe(true);
+    expect(c.list().length).toBe(1);
+    expect(c.getActive()?.name).toBe('a');
+  });
+
+  it('removeProvider returns false for missing', () => {
+    expect(c.removeProvider('missing')).toBe(false);
+  });
+
   it('handles corrupted json', () => {
     writeFileSync(path, 'invalid{');
     const c2 = new CCSwitchClient(path);

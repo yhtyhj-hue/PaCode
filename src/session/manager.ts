@@ -77,6 +77,17 @@ export class SessionManager {
     return this.currentSession;
   }
 
+  /** 恢复已有 session 为当前会话（用于 --resume） */
+  restoreSession(state: SessionState): SessionState {
+    this.currentSession = state;
+    this.log.info(`Restored session: ${state.sessionId}`);
+    return state;
+  }
+
+  getSessionsDir(): string {
+    return this.sessionsDir;
+  }
+
   addMessage(state: SessionState, message: Message): void {
     state.messages.push({ ...message, timestamp: Date.now() });
   }

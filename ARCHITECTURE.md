@@ -3,8 +3,25 @@
 > 基于 Claude Code v2.1.88 源码分析验证的 AI 编程助手框架
 
 **版本:** 1.0.0
-**日期:** 2026-07-03
-**状态:** 规划中
+**日期:** 2026-07-06
+**状态:** 实施完成（Phase A–F，路线图 18/18 ✅）
+
+### 实施状态快照
+
+| 模块 | 完成度 | 说明 |
+|------|--------|------|
+| Query Engine | ~90% | 全循环 + mock 集成测试；Subagent + SubagentStop hook |
+| Context Assembly | ~85% | 9 源组装；Skills 结构化 catalog |
+| Compaction | ~90% | L1–L5 全实现；阈值/maxTokens 可配置 |
+| Tool Registry | ~85% | 8 核心工具 + Plugin 工具 + 并行调度 |
+| Permission System | ~80% | 7 modes + AUTO 分类器 + Layer 4 tool-gate |
+| Memory | ~85% | 用户 `.paude/memory/` + 项目 `.paude/projects/{hash}/` |
+| Hooks / Skills / Plugins / MCP | ~75% | Hooks ✅；Skills ✅；Plugin tools/agents ✅；MCP stdio ✅ |
+| CLI / REPL | ~80% | handlers 可测试化；Plan 模式；worktree；cc-switch |
+| 测试 | 80.3% | 310 gate tests；Vitest 覆盖率门禁 |
+| Eval harness | ✅ | `evals/gate` + `evals/periodic` 分离 |
+
+**Defer:** Ink/React TUI、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器
 
 ---
 
@@ -198,16 +215,16 @@ User Input
 
 ### 4.1 模块职责矩阵
 
-| 模块 | Claude Code 对应 | 职责 | 复杂度占比 |
-|------|-----------------|------|----------|
-| **Query Engine** | `query.ts` AsyncGenerator | Agent 循环核心 | ~1.6% |
-| **Context Assembly** | `assemble()` | 9个上下文源组合 | ~15% |
-| **Tool Registry** | `tools/` 43 modules | 工具注册、分发、并发控制 | ~20% |
-| **Permission System** | 7 modes + Classifier | 7层权限检查 + ML分类器 | ~25% |
-| **Memory/Compaction** | 5-layer pipeline | 上下文压缩 | ~15% |
-| **Session Store** | Append-oriented | 会话持久化 | ~10% |
-| **Hooks/Skills/Plugins/MCP** | 4 extensibility | 扩展机制 | ~14% |
-| **CLI/TUI** | Ink/React | 用户界面 | ~5% |
+| 模块 | Claude Code 对应 | 职责 | PaCode 状态 |
+|------|-----------------|------|-------------|
+| **Query Engine** | `query.ts` AsyncGenerator | Agent 循环核心 | ✅ `src/agent/engine.ts` |
+| **Context Assembly** | `assemble()` | 9个上下文源组合 | ✅ `src/context/assembler.ts` |
+| **Tool Registry** | `tools/` 43 modules | 工具注册、分发、并发控制 | ✅ 8 核心 + Plugin + MCP |
+| **Permission System** | 7 modes + Classifier | 7层权限 + tool-gate + 非TTY deny | ✅ Layer 4 `tool-gate.ts` |
+| **Memory/Compaction** | 5-layer pipeline | 上下文压缩 + 文件记忆 | ✅ L1–L5 + project memory |
+| **Session Store** | Append-oriented | 会话持久化 | ✅ `src/session/manager.ts` |
+| **Hooks/Skills/Plugins/MCP** | 4 extensibility | 扩展机制 | ✅ 大部分完成 |
+| **CLI/TUI** | Ink/React | 用户界面 | 🔨 REPL + ANSI（TUI defer） |
 
 ### 4.2 核心接口定义
 
@@ -1087,12 +1104,12 @@ Week 7-8: 完善与测试
 
 | 阶段 | 里程碑 | 验收标准 |
 |------|--------|---------|
-| Phase 1 | **MVC** | 能执行简单任务 (read file, write file) |
-| Phase 2 | **Tool Loop** | Agent 循环执行工具并返回结果 |
-| Phase 3 | **Safe** | 权限系统阻止危险操作 |
-| Phase 4 | **Long Session** | 5 层压缩支持长会话 |
-| Phase 5 | **Extensible** | Skills/Plugins/MCP 正常工作 |
-| Phase 6 | **Production** | 80%+ 测试覆盖，文档完整 |
+| Phase 1 | **MVC** | 能执行简单任务 (read file, write file) | ✅ |
+| Phase 2 | **Tool Loop** | Agent 循环执行工具并返回结果 | ✅ |
+| Phase 3 | **Safe** | 权限系统阻止危险操作 | ✅ |
+| Phase 4 | **Long Session** | 5 层压缩支持长会话 | ✅ |
+| Phase 5 | **Extensible** | Skills/Plugins/MCP 正常工作 | ✅ |
+| Phase 6 | **Production** | 80%+ 测试覆盖，文档完整 | ✅ 80.3% + eval harness |
 
 ---
 
@@ -1141,83 +1158,50 @@ Week 7-8: 完善与测试
 
 ## 13. 项目结构
 
+> 当前实现为 TypeScript monolith（`src/`）；Go agent core / SQLite 为远期项。
+
 ```
-paCode/
-├── cmd/                          # CLI 入口
-│   └── pacode/
-│       └── main.ts               # 主入口
-├── internal/
-│   ├── agent/                    # AI Agent 核心
-│   │   ├── engine.ts             # Query Engine
-│   │   ├── planner.ts            # 任务规划
-│   │   ├── executor.ts           # 工具执行器
-│   │   └── types.ts              # 类型定义
-│   │
-│   ├── cli/                      # 命令行界面
-│   │   ├── app.tsx               # Ink React 应用
-│   │   ├── renderer.ts           # 渲染器
-│   │   └── components/           # UI 组件
-│   │
+PaCode/
+├── src/
+│   ├── agent/                    # Query Engine、Subagent、Plan 模式
+│   │   ├── engine.ts
+│   │   ├── subagent.ts
+│   │   ├── plan-mode.ts
+│   │   └── tool-executor.ts
+│   ├── cli/                      # CLI 入口、REPL、handlers
+│   │   ├── index.ts              # 主入口
+│   │   ├── handlers.ts           # mcp/init/resume/worktree/cc-switch
+│   │   ├── repl.ts
+│   │   └── worktree.ts
 │   ├── context/                  # 上下文管理
-│   │   ├── manager.ts            # Context Manager
 │   │   ├── assembler.ts          # 9 sources assembly
 │   │   ├── compaction.ts         # 5-layer pipeline
-│   │   └── tokenizer.ts          # Token 计数
-│   │
+│   │   └── session-compactor.ts
 │   ├── memory/                   # 记忆系统
-│   │   ├── store.ts              # Memory Store
-│   │   ├── session.ts            # Session 管理
-│   │   └── files.ts              # 文件存储
-│   │
-│   ├── tools/                    # 内置工具
-│   │   ├── registry.ts           # Tool Registry
-│   │   ├── bash.ts               # Bash Tool
-│   │   ├── read.ts               # Read Tool
-│   │   ├── edit.ts               # Edit Tool
-│   │   ├── write.ts              # Write Tool
-│   │   ├── grep.ts               # Grep Tool
-│   │   ├── glob.ts               # Glob Tool
-│   │   ├── task.ts               # Task Tool
-│   │   └── todowrite.ts          # TodoWrite Tool
-│   │
-│   ├── permission/               # 权限系统
-│   │   ├── system.ts             # Permission System
-│   │   ├── modes.ts              # 7 modes
-│   │   ├── classifier.ts         # ML 分类器
-│   │   └── hooks.ts              # Hooks System
-│   │
-│   └── mcp/                      # MCP 客户端
-│       ├── client.ts             # MCP Client
-│       ├── protocol.ts           # MCP Protocol
-│       └── transport.ts          # Transport Layer
+│   │   ├── store.ts              # 用户 + 项目双根目录
+│   │   └── project.ts            # .paude/projects/{hash}/
+│   ├── tools/                    # 8 核心工具 + bash-secure
+│   ├── permission/               # 7 modes + classifier + tool-gate
+│   ├── hooks/                    # Hook 注册与加载
+│   ├── skills/                   # Skills 加载
+│   ├── plugins/                  # Plugin bootstrap + tool/agent loader
+│   ├── mcp/                      # MCP 客户端（stdio）
+│   ├── session/                  # 会话持久化
+│   └── pkg/                      # config、settings、cc-switch、app-config
 │
-├── pkg/                          # 公共库
-│   ├── config/                   # 配置管理
-│   ├── logger/                   # 日志系统
-│   └── utils/                    # 工具函数
+├── plugins/                      # 插件目录（example/tools、greet.json）
+├── evals/                        # Eval harness（gate + periodic）
+├── test/                         # Vitest gate tests（310+）
+├── docs/                         # ROADMAP 等文档
 │
-├── plugins/                      # 插件目录
-│   └── example/                  # 示例插件
+├── .paude/                       # 运行时数据 (gitignored)
+│   ├── memory/                   # 用户级记忆
+│   ├── sessions/                 # REPL 会话
+│   └── projects/{hash}/          # 项目级记忆
 │
-├── config/                       # 默认配置
-│   └── default.yaml
-│
-├── memory/                       # 记忆存储目录
-│
-├── .paude/                       # 项目级配置 (gitignored)
-│   ├── settings.json
-│   ├── memory/
-│   └── sessions/
-│
-├── test/                         # 测试
-│   ├── unit/
-│   ├── integration/
-│   └── e2e/
-│
-├── go.mod                        # Go 依赖
-├── go.sum
-├── package.json                  # Node 依赖
+├── package.json
 ├── tsconfig.json
+├── vitest.config.ts              # 覆盖率门禁 80%
 ├── README.md
 └── LICENSE
 ```
@@ -1226,16 +1210,17 @@ paCode/
 
 ## 附录 A: 与 Claude Code 对比
 
-| 特性 | Claude Code | PaCode (规划) |
+| 特性 | Claude Code | PaCode (当前) |
 |------|-------------|---------------|
-| **架构** | 闭源 (~512K LOC TypeScript) | 开源 |
-| **核心循环** | while-loop (~1.6% 代码) | 同上 |
-| **记忆** | 文件-based | 文件-based |
-| **权限** | 7 modes + ML | 7 modes |
-| **压缩** | 5-layer | 5-layer |
-| **扩展** | Hooks/Skills/Plugins/MCP | 同上 |
-| **工具** | 43 内置 + MCP | 8 核心 + MCP |
-| **实现** | TypeScript (Bun) | TypeScript + Go |
+| **架构** | 闭源 (~512K LOC TypeScript) | 开源 TypeScript monolith |
+| **核心循环** | while-loop (~1.6% 代码) | AsyncGenerator QueryEngine ✅ |
+| **记忆** | 文件-based | 文件-based + 项目 hash 分区 ✅ |
+| **权限** | 7 modes + ML | 7 modes + regex AUTO + tool-gate + 工作区路径边界 ✅ |
+| **压缩** | 5-layer | 5-layer L1–L5（L1 降低 API max_tokens） ✅ |
+| **扩展** | Hooks/Skills/Plugins/MCP | 同上（Ink TUI defer） |
+| **工具** | 43 内置 + MCP | 8 核心 + Plugin + MCP；Bash 静态分析（非容器沙箱） ✅ |
+| **测试** | — | 300 tests，80.3% 覆盖率 |
+| **实现** | TypeScript (Bun) | TypeScript（Go core defer） |
 
 ---
 

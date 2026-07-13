@@ -10,21 +10,25 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QueryEngine } from '../agent/engine.js';
 import { SessionManager } from '../session/manager.js';
-import { getToolRegistry } from '../tools/registry.js';
-import { registerBashTool } from '../tools/bash.js';
-import { registerReadTool } from '../tools/read.js';
-import { registerWriteTool } from '../tools/write.js';
-import { registerEditTool } from '../tools/edit.js';
-import { registerGlobTool } from '../tools/glob.js';
-import { registerGrepTool } from '../tools/grep.js';
-import { registerTaskTool } from '../tools/task.js';
-import { registerTodoWriteTool } from '../tools/todowrite.js';
-import { PermissionMode } from '../pkg/types.js';
+import { getToolRegistry, ToolRegistry } from '../tools/registry.js';
+import { registerCoreTools } from '../tools/bootstrap.js';
+import { bootstrapMcpTools } from '../mcp/loader.js';
+import { getMCPClient } from '../mcp/client.js';
+import { bootstrapHooks, runSessionHooks } from '../hooks/loader.js';
+import { bootstrapPlugins, PluginCommand } from '../plugins/bootstrap.js';
+import { HookRegistry } from '../hooks/registry.js';
+import { compactSession } from '../context/session-compactor.js';
+import { PermissionMode, MCPServerConnection, SessionState, HookType } from '../pkg/types.js';
 import { Provider } from '../pkg/ccswitch/index.js';
 import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
 import { getPlanManager } from '../agent/plan-mode.js';
+import { parsePlanFromMarkdown, extractLastAssistantText } from '../agent/plan-parser.js';
+import { ContextAssembler } from '../context/assembler.js';
+import { renderer } from './enhanced-renderer.js';
+import { StreamingMarkdownWriter, summarizeToolAction } from './streaming-markdown.js';
+import { ToolCall } from '../pkg/types.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -40,6 +44,7 @@ export class REPL {
   private rl: Interface | null = null;
   private engine: QueryEngine;
   private sessionManager: SessionManager;
+  private toolRegistry: ToolRegistry;
   private provider: Provider;
   private mode: PermissionMode;
   private apiKey: string;
@@ -49,6 +54,10 @@ export class REPL {
   private tokenUsage = { input: 0, output: 0 };
   private startTime = Date.now();
   private skillsLoader!: SkillsLoader;
+  private mcpConnections: MCPServerConnection[] = [];
+  private hookRegistry: HookRegistry;
+  private pluginCommands: Map<string, PluginCommand> = new Map();
+  private streamWriter = new StreamingMarkdownWriter(renderer);
 
   constructor(options: REPLOptions) {
     this.apiKey = options.apiKey;
@@ -57,29 +66,66 @@ export class REPL {
     this.mode = options.mode;
     this.provider = options.provider;
     this.sessionManager = options.sessionManager ?? new SessionManager();
+    this.toolRegistry = options.toolRegistry ?? getToolRegistry();
+    this.hookRegistry = options.hookRegistry ?? new HookRegistry();
+
+    const taskDeps = {
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+      model: this.model,
+      toolRegistry: this.toolRegistry,
+    };
+    registerCoreTools(this.toolRegistry, { task: taskDeps });
+    bootstrapHooks(this.hookRegistry);
+
+    this.skillsLoader = new SkillsLoader();
+
     this.engine = new QueryEngine({
       apiKey: this.apiKey,
       baseUrl: this.baseUrl,
+      toolRegistry: this.toolRegistry,
+      sessionManager: this.sessionManager,
+      hookRegistry: this.hookRegistry,
+      contextAssembler: new ContextAssembler({ skillsLoader: this.skillsLoader }),
+      permissionPrompt: async (tool) => this.promptForPermission(tool),
     });
 
-    const registry = getToolRegistry();
-    registerBashTool(registry);
-    registerReadTool(registry);
-    registerWriteTool(registry);
-    registerEditTool(registry);
-    registerGlobTool(registry);
-    registerGrepTool(registry);
-    registerTaskTool(registry);
-    registerTodoWriteTool(registry);
-
-    // Load skills and custom slash commands
-    this.skillsLoader = new SkillsLoader();
+    if (options.initialSession) {
+      this.sessionManager.restoreSession(options.initialSession);
+      this.mode = options.initialSession.mode;
+    }
   }
 
   async start(): Promise<void> {
-    // Load skills and custom commands first (synchronous file I/O)
     await this.skillsLoader.loadAll();
     await this.skillsLoader.loadSlashCommands();
+
+    const mcpResult = await bootstrapMcpTools(this.toolRegistry);
+    this.mcpConnections = mcpResult.connections;
+    if (mcpResult.toolCount > 0) {
+      console.log(
+        `${DIM}  MCP: ${mcpResult.toolCount} tool(s) from ${mcpResult.connectedCount} server(s)${RESET}`
+      );
+    }
+    for (const err of mcpResult.errors) {
+      console.log(`${YELLOW}  ⚠ MCP ${err.name}: ${err.error}${RESET}`);
+    }
+
+    const pluginResult = await bootstrapPlugins(this.hookRegistry, {
+      subagentManager: getSubagentManager(),
+      toolRegistry: this.toolRegistry,
+    });
+    for (const cmd of pluginResult.commands) {
+      this.pluginCommands.set(cmd.name, cmd);
+    }
+    if (pluginResult.plugins.length > 0) {
+      console.log(
+        `${DIM}  Plugins: ${pluginResult.plugins.length} loaded, ${pluginResult.commands.length} command(s), ${pluginResult.agentCount} agent(s), ${pluginResult.toolCount} tool(s)${RESET}`
+      );
+    }
+
+    const session = this.getOrCreateSession();
+    await runSessionHooks(this.hookRegistry, HookType.SESSION_START, session);
 
     this.printWelcome();
 
@@ -106,22 +152,7 @@ export class REPL {
       }
 
       if (trimmed.startsWith('/')) {
-        const cmdName = trimmed.split(/\s+/)[0]!.slice(1);
-        const customCmd = this.skillsLoader?.getSlashCommand(cmdName);
-        if (customCmd) {
-          const arg = trimmed.slice(trimmed.indexOf(' ') + 1).trim();
-          const prompt = customCmd.prompt.replace(/\$ARGUMENTS/g, arg);
-          this.processMessage(prompt).then(() => {
-            if (this.exitRequested) {
-              this.rl?.close();
-            } else {
-              this.drawInputUI();
-            }
-          });
-          return;
-        }
-
-        this.handleSlashCommand(trimmed).then(() => {
+        this.dispatchSlashCommand(trimmed).then(() => {
           if (this.exitRequested || !this.rl) {
             this.rl?.close();
           } else {
@@ -207,6 +238,12 @@ export class REPL {
   }
 
   private printGoodbye(): void {
+    const session = this.sessionManager.getCurrentSession();
+    if (session) {
+      void runSessionHooks(this.hookRegistry, HookType.SESSION_STOP, session);
+      this.sessionManager.saveSession(session);
+    }
+
     const elapsed = Math.round((Date.now() - this.startTime) / 1000);
     console.log('');
     console.log(
@@ -231,6 +268,58 @@ export class REPL {
     const pad = width - leftText.length - rightText.length;
     const padding = ' '.repeat(Math.max(2, pad));
     console.log(`${DIM}${leftText}${padding}${rightText}${RESET}`);
+  }
+
+  /** 解析 slash 输入，不执行（供测试与 dispatch 共用） */
+  peekSlashCommand(trimmed: string): SlashPeekResult | null {
+    if (!trimmed.startsWith('/')) return null;
+
+    const cmdName = trimmed.split(/\s+/)[0]!.slice(1);
+    const arg = trimmed.includes(' ') ? trimmed.slice(trimmed.indexOf(' ') + 1).trim() : '';
+
+    const customCmd = this.skillsLoader?.getSlashCommand(cmdName);
+    if (customCmd) {
+      return {
+        kind: 'custom',
+        prompt: customCmd.prompt.replace(/\$ARGUMENTS/g, arg),
+      };
+    }
+
+    const pluginCmd = this.pluginCommands.get(cmdName);
+    if (pluginCmd) {
+      return {
+        kind: 'plugin',
+        name: pluginCmd.name,
+        prompt: pluginCmd.prompt.replace(/\$ARGUMENTS/g, arg),
+      };
+    }
+
+    return { kind: 'builtin', command: trimmed.split(/\s+/)[0]! };
+  }
+
+  /** 执行 slash 命令（REPL 与测试共用） */
+  async dispatchSlashCommand(trimmed: string): Promise<void> {
+    const peek = this.peekSlashCommand(trimmed);
+    if (!peek) return;
+
+    if (peek.kind === 'custom' || peek.kind === 'plugin') {
+      await this.processMessage(peek.prompt);
+      return;
+    }
+
+    await this.handleSlashCommand(trimmed);
+  }
+
+  registerPluginCommand(cmd: PluginCommand): void {
+    this.pluginCommands.set(cmd.name, cmd);
+  }
+
+  getPermissionMode(): PermissionMode {
+    return this.mode;
+  }
+
+  isExitRequested(): boolean {
+    return this.exitRequested;
   }
 
   private async handleSlashCommand(cmd: string): Promise<void> {
@@ -348,6 +437,15 @@ export class REPL {
       console.log('');
     }
 
+    const pluginCmds = Array.from(this.pluginCommands.values());
+    if (pluginCmds.length > 0) {
+      console.log(`  ${MAGENTA}Plugin Commands${RESET}`);
+      for (const cmd of pluginCmds) {
+        console.log(`    ${CYAN}${('/' + cmd.name).padEnd(22)}${RESET}${cmd.description}`);
+      }
+      console.log('');
+    }
+
     console.log(
       `${DIM}Permission modes: plan, default, acceptEdits, auto, dontAsk, bypass${RESET}`
     );
@@ -370,22 +468,45 @@ export class REPL {
   }
 
   private async clearConversation(): Promise<void> {
-    this.sessionManager = new SessionManager();
-    this.engine = new QueryEngine({ apiKey: this.apiKey, baseUrl: this.baseUrl });
+    this.sessionManager.createSession({ mode: this.mode });
     console.log(`${GREEN}✓${RESET} Conversation cleared`);
   }
 
-  private async compact(_instructions: string): Promise<void> {
-    console.log(`${YELLOW}⚠${RESET}  Compaction in progress...`);
+  private async compact(instructions: string): Promise<void> {
     const session = this.sessionManager.getCurrentSession();
     if (!session) {
       console.log(`${YELLOW}⚠${RESET}  No active session to compact`);
       return;
     }
-    console.log(`${GREEN}✓${RESET} Conversation compacted (simulated)`);
-    console.log(
-      `${DIM}  Note: Full compaction requires API call (configured in future version)${RESET}`
-    );
+
+    if (session.messages.length <= 4) {
+      console.log(`${YELLOW}⚠${RESET}  Not enough messages to compact (${session.messages.length})`);
+      return;
+    }
+
+    console.log(`${DIM}⏺ Compacting conversation...${RESET}`);
+
+    try {
+      const result = await compactSession(session, {
+        apiKey: this.apiKey,
+        baseUrl: this.baseUrl,
+        model: this.model,
+        instructions: instructions.trim() || undefined,
+      });
+
+      this.sessionManager.saveSession(result.session);
+      console.log(
+        `${GREEN}✓${RESET} Compacted ${result.beforeCount} → ${result.afterCount} messages`
+      );
+      if (result.summary) {
+        const preview = result.summary.split('\n')[0]?.slice(0, 80) ?? '';
+        console.log(`${DIM}  Summary: ${preview}${result.summary.length > 80 ? '...' : ''}${RESET}`);
+      }
+    } catch (error) {
+      console.log(
+        `${RED}✗${RESET} Compaction failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   private showContext(): void {
@@ -413,8 +534,8 @@ export class REPL {
   private showMemory(): void {
     console.log('');
     console.log(`${CYAN}${BOLD}Memory Locations${RESET}`);
-    console.log(`  ${DIM}User memory:${RESET}  ~/.paude/memory/user/`);
-    console.log(`  ${DIM}Project memory:${RESET} ~/.paude/memory/project/`);
+    console.log(`  ${DIM}User memory:${RESET}    ~/.paude/memory/`);
+    console.log(`  ${DIM}Project memory:${RESET} .paude/projects/{hash}/`);
     console.log(`  ${DIM}Session memory:${RESET} ~/.paude/sessions/`);
     console.log('');
   }
@@ -469,8 +590,25 @@ Project-specific instructions for PaCode/Claude Code.
   private showMcp(): void {
     console.log('');
     console.log(`${CYAN}${BOLD}MCP Servers${RESET}`);
-    console.log(`  ${DIM}No MCP servers currently connected${RESET}`);
-    console.log(`  ${DIM}Configure with: pacode mcp add <name> <command>${RESET}`);
+    const connections = this.mcpConnections.length
+      ? this.mcpConnections
+      : getMCPClient().listConnections();
+
+    if (connections.length === 0) {
+      console.log(`  ${DIM}No MCP servers connected${RESET}`);
+      console.log(`  ${DIM}Configure with: pacode mcp add <name> <command>${RESET}`);
+    } else {
+      for (const conn of connections) {
+        const status =
+          conn.status === 'connected' ? `${GREEN}connected${RESET}` : `${YELLOW}${conn.status}${RESET}`;
+        console.log(
+          `  ${CYAN}${conn.name}${RESET} · ${status} · ${conn.tools.length} tool(s)`
+        );
+        if (conn.lastError) {
+          console.log(`    ${DIM}Error: ${conn.lastError}${RESET}`);
+        }
+      }
+    }
     console.log('');
   }
 
@@ -547,13 +685,19 @@ Project-specific instructions for PaCode/Claude Code.
   }
 
   private async handlePlan(description: string): Promise<void> {
-    if (!description) {
-      const plan = getPlanManager().getActive();
+    const arg = description.trim();
+    const planManager = getPlanManager();
+
+    if (!arg) {
+      const plan = planManager.getActive();
       if (plan) {
-        console.log(getPlanManager().formatPlanMessage(plan));
+        console.log('');
+        console.log(planManager.formatPlanMessage(plan));
+        console.log('');
+        console.log(`${DIM}Status: ${plan.status} | /plan approve | /plan reject | /plan execute${RESET}`);
       } else {
         console.log(`${DIM}Usage: /plan <task description>${RESET}`);
-        console.log(`${DIM}Current mode: ${this.mode}${RESET}`);
+        console.log(`${DIM}       /plan approve | reject | execute | list${RESET}`);
         if (this.mode === PermissionMode.PLAN) {
           console.log(`${YELLOW}⚠${RESET}  Plan mode is active. Tools are disabled.`);
         }
@@ -561,24 +705,106 @@ Project-specific instructions for PaCode/Claude Code.
       return;
     }
 
-    // Switch to plan mode
+    if (arg === 'list') {
+      const plans = planManager.list();
+      if (plans.length === 0) {
+        console.log(`${DIM}No plans yet.${RESET}`);
+        return;
+      }
+      for (const plan of plans) {
+        console.log(`  ${CYAN}${plan.id}${RESET} [${plan.status}] ${plan.title} (${plan.steps.length} steps)`);
+      }
+      return;
+    }
+
+    if (arg === 'approve') {
+      const plan = planManager.getActive();
+      if (!plan) {
+        console.log(`${YELLOW}⚠${RESET}  No active plan. Use /plan <description> first.`);
+        return;
+      }
+      planManager.approve(plan.id);
+      console.log(`${GREEN}✓${RESET} Plan approved: ${plan.title}`);
+      return;
+    }
+
+    if (arg === 'reject') {
+      const plan = planManager.getActive();
+      if (!plan) {
+        console.log(`${YELLOW}⚠${RESET}  No active plan.`);
+        return;
+      }
+      planManager.reject(plan.id);
+      console.log(`${YELLOW}✓${RESET} Plan rejected: ${plan.title}`);
+      return;
+    }
+
+    if (arg === 'execute') {
+      const plan = planManager.getActive();
+      if (!plan) {
+        console.log(`${YELLOW}⚠${RESET}  No active plan. Use /plan <description> first.`);
+        return;
+      }
+      if (plan.status === 'draft') {
+        planManager.approve(plan.id);
+      }
+      const executing = planManager.startExecution(plan.id);
+      if (!executing) {
+        console.log(`${YELLOW}⚠${RESET}  Plan cannot be executed (status: ${plan.status}).`);
+        return;
+      }
+      this.mode = PermissionMode.ACCEPT_EDITS;
+      const session = this.getOrCreateSession();
+      session.mode = this.mode;
+      console.log(`${GREEN}✓${RESET} Executing plan: ${executing.title}`);
+      console.log(`${DIM}Switched to acceptEdits mode. Describe which step to run, or paste the plan.${RESET}`);
+      console.log('');
+      console.log(planManager.formatPlanMessage(executing));
+      return;
+    }
+
+    // 生成新 plan
     if (this.mode !== PermissionMode.PLAN) {
       this.mode = PermissionMode.PLAN;
+      const session = this.getOrCreateSession();
+      session.mode = this.mode;
       console.log(`${GREEN}✓${RESET} Switched to plan mode (tools disabled)`);
     }
 
-    // Generate plan via AI
-    const planPrompt = `Create a detailed implementation plan for: ${description}
+    const planPrompt = `Create a detailed implementation plan for: ${arg}
 
-Format your response as a structured plan with:
-- Title and description
-- Numbered steps with action descriptions
-- For each step, specify the tool (Read/Edit/Bash/etc) and risk level (low/medium/high)
-- Use markdown formatting
+Format your response EXACTLY as markdown with:
+# <Plan Title>
 
-Focus on breaking down the work into atomic, verifiable steps.`;
+<One paragraph description>
+
+## Steps
+
+1. 🟢 **<action>** _(Read)_ 
+   <step description>
+2. 🟡 **<action>** _(Edit)_
+   <step description>
+
+Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolName)_ when relevant.`;
 
     await this.processMessage(planPrompt);
+
+    const session = this.getOrCreateSession();
+    const assistantText = extractLastAssistantText(session.messages);
+    if (!assistantText) {
+      console.log(`${YELLOW}⚠${RESET}  Could not parse plan — no assistant response.`);
+      return;
+    }
+
+    const parsed = parsePlanFromMarkdown(assistantText, arg);
+    const plan = planManager.createPlan(parsed.title, parsed.description, parsed.steps);
+
+    console.log('');
+    console.log(`${GREEN}✓${RESET} Plan saved (${plan.id})`);
+    console.log('');
+    console.log(planManager.formatPlanMessage(plan));
+    console.log('');
+    console.log(`${DIM}Next: /plan approve → /plan execute${RESET}`);
   }
 
   private async processMessage(message: string): Promise<void> {
@@ -588,7 +814,7 @@ Focus on breaking down the work into atomic, verifiable steps.`;
     );
     console.log('');
 
-    const session = this.sessionManager.createSession({ mode: this.mode });
+    const session = this.getOrCreateSession();
     session.messages.push({
       role: 'user',
       content: message,
@@ -615,6 +841,8 @@ Focus on breaking down the work into atomic, verifiable steps.`;
       process.stdout.write(`\r${DIM}${spinnerFrames[spinnerIdx]}${RESET}  `);
     }, 100);
 
+    this.streamWriter.reset();
+
     try {
       for await (const event of this.engine.query(
         { message, options: { model: this.model } },
@@ -623,33 +851,36 @@ Focus on breaking down the work into atomic, verifiable steps.`;
         switch (event.type) {
           case 'content_block_delta':
             if (event.delta) {
-              // Stop spinner, clear line, show content
               if (spinnerInterval) {
                 clearInterval(spinnerInterval);
                 spinnerInterval = null;
                 process.stdout.write('\r' + ' '.repeat(40) + '\r');
               }
-              process.stdout.write(event.delta.text);
+              const formatted = this.streamWriter.append(event.delta.text);
+              if (formatted) process.stdout.write(formatted);
             }
             break;
           case 'tool_use':
             if (event.tool) {
               toolCallCount++;
               console.log('');
-              this.renderToolUseClaude(event.tool);
+              renderer.renderToolUse(event.tool);
             }
             break;
           case 'tool_result':
             if (event.result) {
-              this.renderToolResultClaude(event.tool?.name ?? 'tool', event.result);
+              renderer.renderToolResult(event.result);
             }
             break;
-          case 'message_stop':
+          case 'message_stop': {
+            const tail = this.streamWriter.flush();
+            if (tail) process.stdout.write(tail);
             if (event.usage) {
               this.tokenUsage.input += event.usage.inputTokens ?? 0;
               this.tokenUsage.output += event.usage.outputTokens ?? 0;
             }
             break;
+          }
           case 'error':
             if (event.error) {
               if (spinnerInterval) {
@@ -689,56 +920,42 @@ Focus on breaking down the work into atomic, verifiable steps.`;
     }
   }
 
-  private renderToolUseClaude(tool: { name: string; input: Record<string, unknown> }): void {
-    const input = tool.input;
-    let summary = '';
+  private async promptForPermission(tool: ToolCall): Promise<boolean> {
+    if (!process.stdin.isTTY) return true;
 
-    // Generate human-readable summary based on tool
-    if (tool.name === 'Bash') {
-      summary = String(input['command'] ?? '').substring(0, 60);
-    } else if (tool.name === 'Read') {
-      summary = String(input['path'] ?? '');
-    } else if (tool.name === 'Write' || tool.name === 'Edit') {
-      const path = String(input['path'] ?? '');
-      summary = `${tool.name} ${path}`;
-    } else if (tool.name === 'Glob') {
-      summary = String(input['pattern'] ?? '');
-    } else if (tool.name === 'Grep') {
-      summary = String(input['pattern'] ?? '');
-    } else if (tool.name === 'Task') {
-      summary = String(input['prompt'] ?? '').substring(0, 60);
-    } else if (tool.name === 'TodoWrite') {
-      summary = String(input['action'] ?? 'update task list');
-    } else {
-      summary = JSON.stringify(input).substring(0, 60);
+    if (this.rl) this.rl.pause();
+    try {
+      return await renderer.renderPermissionPrompt(tool.name, summarizeToolAction(tool));
+    } finally {
+      if (this.rl && !this.exitRequested) {
+        this.rl.resume();
+      }
     }
-
-    console.log(`${CYAN}⏺ ${tool.name}${RESET} ${DIM}${summary}${RESET}`);
   }
 
-  private renderToolResultClaude(
-    _toolName: string,
-    result: { isError?: boolean; content: Array<{ type: string; text?: string }> }
-  ): void {
-    const text = result.content[0]?.type === 'text' ? (result.content[0].text ?? '') : '';
-    const lines = text.split('\n').filter((l) => l.trim()).length;
-
-    if (result.isError) {
-      console.log(`  ${RED}⎿  Error${RESET}`);
-      console.log(`  ${DIM}${text.substring(0, 100)}${RESET}`);
-    } else {
-      // Claude Code style: ⎿  ...output...
-      const outputText = text.substring(0, 100).replace(/\n/g, ' ');
-      console.log(`  ${DIM}⎿  ${outputText}${lines > 1 ? ` (+${lines - 1} lines)` : ''}${RESET}`);
+  private getOrCreateSession() {
+    const existing = this.sessionManager.getCurrentSession();
+    if (existing) {
+      existing.mode = this.mode;
+      return existing;
     }
+    return this.sessionManager.createSession({ mode: this.mode });
   }
 }
 
-interface REPLOptions {
+export interface REPLOptions {
   apiKey: string;
   baseUrl?: string;
   model: string;
   mode: PermissionMode;
   provider: Provider;
   sessionManager?: SessionManager;
+  toolRegistry?: ToolRegistry;
+  hookRegistry?: HookRegistry;
+  initialSession?: SessionState;
 }
+
+export type SlashPeekResult =
+  | { kind: 'custom'; prompt: string }
+  | { kind: 'plugin'; name: string; prompt: string }
+  | { kind: 'builtin'; command: string };

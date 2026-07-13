@@ -46,6 +46,7 @@ export interface ToolContext {
   workingDirectory: string;
   sessionState: SessionState;
   hooks: HookRegistry;
+  currentTool?: ToolCall;
 }
 
 export interface ToolResult {
@@ -105,7 +106,7 @@ export interface CompactionRecord {
 
 // Query
 export interface QueryRequest {
-  message: string;
+  message?: string;
   mode?: PermissionMode;
   options?: QueryOptions;
 }

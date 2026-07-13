@@ -60,6 +60,19 @@ export class PlanModeManager {
     if (plan) plan.status = 'rejected';
   }
 
+  /** 标记计划进入执行阶段（需先 approve） */
+  startExecution(id: string): Plan | null {
+    const plan = this.plans.get(id);
+    if (!plan || plan.status !== 'approved') return null;
+    plan.status = 'executing';
+    return plan;
+  }
+
+  complete(id: string): void {
+    const plan = this.plans.get(id);
+    if (plan) plan.status = 'completed';
+  }
+
   formatPlanMessage(plan: Plan): string {
     const lines: string[] = [];
     lines.push(`# ${plan.title}`);

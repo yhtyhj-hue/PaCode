@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir, platform } from 'node:os';
+import { createInterface } from 'node:readline';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -148,6 +149,25 @@ export class CCSwitchClient {
       this.config.providers.push({ ...provider, source: 'pacode' });
     }
     this.save();
+  }
+
+  /** 删除 provider；若删除的是当前激活项则切换到第一个剩余项 */
+  removeProvider(name: string): boolean {
+    const idx = this.config.providers.findIndex((p) => p.name === name);
+    if (idx < 0) return false;
+
+    this.config.providers.splice(idx, 1);
+
+    if (this.config.activeProvider === name) {
+      const next = this.config.providers[0];
+      this.config.activeProvider = next?.name;
+      this.config.providers.forEach((p) => {
+        p.active = p.name === next?.name;
+      });
+    }
+
+    this.save();
+    return true;
   }
 
   switchTo(name: string): Provider | null {
@@ -317,8 +337,7 @@ export class CCSwitchClient {
     console.log(`\n${DIM}Enter number (1-${providers.length}):${RESET} `);
 
     return new Promise((resolve) => {
-      const readline = require('node:readline');
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
       rl.on('line', (input: string) => {
         const idx = parseInt(input.trim(), 10) - 1;
         rl.close();

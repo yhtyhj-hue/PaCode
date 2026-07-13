@@ -56,7 +56,8 @@ export class SkillsLoader {
           if (existsSync(skillPath)) {
             const skill = await this.loadSkill(entry.name, skillPath);
             if (skill) {
-              this.skills.set(skill.name, skill);
+              skill.source = entry.name;
+              this.skills.set(entry.name, skill);
             }
           }
         }
@@ -162,18 +163,20 @@ export class SkillsLoader {
     return Array.from(this.slashCommands.values());
   }
 
-  private async loadSkill(name: string, path: string): Promise<Skill | null> {
+  private async loadSkill(dirName: string, path: string): Promise<Skill | null> {
     try {
       const content = readFileSync(path, 'utf-8');
-      return this.parseSkillMarkdown(name, content);
+      return this.parseSkillMarkdown(dirName, content);
     } catch (error) {
-      this.log.error(`Failed to load skill ${name}:`, error);
+      this.log.error(`Failed to load skill ${dirName}:`, error);
       return null;
     }
   }
 
-  private parseSkillMarkdown(name: string, content: string): Skill {
+  /** 解析 SKILL.md 各段落为结构化元数据 */
+  private parseSkillMarkdown(dirName: string, content: string): Skill {
     const lines = content.split('\n');
+    let title = dirName.replace(/-/g, ' ').replace(/_/g, ' ');
     let description = '';
     const whenToUse: string[] = [];
     const tools: string[] = [];
@@ -183,39 +186,54 @@ export class SkillsLoader {
     for (const line of lines) {
       const trimmed = line.trim();
 
-      if (trimmed.startsWith('### When to Use')) {
-        section = 'when';
-        continue;
-      }
-      if (trimmed.startsWith('### Tools')) {
-        section = 'tools';
-        continue;
-      }
-      if (trimmed.startsWith('### Workflow')) {
-        section = 'workflow';
-        continue;
-      }
-      if (trimmed.startsWith('##')) {
-        section = '';
+      if (/^#\s+/.test(trimmed) && !/^##/.test(trimmed)) {
+        title = trimmed.replace(/^#\s+/, '').trim();
         continue;
       }
 
-      if (trimmed.startsWith('- ')) {
-        const item = trimmed.slice(2);
-        if (section === 'when') whenToUse.push(item);
-        else if (section === 'tools') tools.push(item);
-        else if (section === 'workflow') workflow.push(item);
-        else description += ' ' + item;
+      const sectionMatch = trimmed.match(/^##\s+(.+)$/);
+      if (sectionMatch) {
+        const sectionName = sectionMatch[1]!.toLowerCase();
+        if (sectionName.includes('description')) section = 'description';
+        else if (sectionName.includes('when')) section = 'when';
+        else if (sectionName.includes('tools')) section = 'tools';
+        else if (sectionName.includes('workflow')) section = 'workflow';
+        else section = '';
+        continue;
+      }
+
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      if (section === 'description') {
+        description += (description ? ' ' : '') + trimmed;
+        continue;
+      }
+
+      if (section === 'when' && trimmed.startsWith('- ')) {
+        whenToUse.push(trimmed.slice(2));
+        continue;
+      }
+
+      if (section === 'tools' && trimmed.startsWith('- ')) {
+        tools.push(trimmed.slice(2));
+        continue;
+      }
+
+      if (section === 'workflow') {
+        const numbered = trimmed.match(/^\d+\.\s+(.+)$/);
+        if (numbered) workflow.push(numbered[1]!);
+        else if (trimmed.startsWith('- ')) workflow.push(trimmed.slice(2));
       }
     }
 
     return {
-      name: name.replace(/-/g, ' ').replace(/_/g, ' '),
+      name: title,
       description: description.trim(),
       whenToUse,
       tools,
       workflow,
       content,
+      source: dirName,
     };
   }
 

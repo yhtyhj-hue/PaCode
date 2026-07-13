@@ -3,8 +3,8 @@
  */
 
 import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { ToolDefinition, PermissionMode } from '../pkg/types.js';
+import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
+import { resolvePathInWorkspace } from './path-utils.js';
 
 export function registerWriteTool(registry: { register: (t: ToolDefinition) => void }) {
   registry.register({
@@ -17,10 +17,15 @@ export function registerWriteTool(registry: { register: (t: ToolDefinition) => v
     },
     concurrencySafe: false,
     permissionMode: PermissionMode.ACCEPT_EDITS,
-    async execute(input) {
+    async execute(input, ctx?: ToolContext) {
       const { path, content } = input as { path: string; content: string };
+      const root = ctx?.workingDirectory ?? process.cwd();
+      const resolved = resolvePathInWorkspace(path, root);
+      if (!resolved.ok) {
+        return { content: [{ type: 'text', text: resolved.reason }], isError: true };
+      }
       try {
-        writeFileSync(resolve(path), content, 'utf-8');
+        writeFileSync(resolved.resolved, content, 'utf-8');
         return { content: [{ type: 'text', text: `Written to ${path}` }] };
       } catch (e) {
         return { content: [{ type: 'text', text: String(e) }], isError: true };

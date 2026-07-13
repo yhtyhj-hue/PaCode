@@ -12,6 +12,7 @@ export interface Plugin {
   name: string;
   version: string;
   description: string;
+  path?: string;
   commands?: string[];
   agents?: string[];
   hooks?: Record<string, unknown>;
@@ -68,6 +69,7 @@ export class PluginManager {
     try {
       const content = readFileSync(manifestPath, 'utf-8');
       const plugin = JSON.parse(content) as Plugin;
+      plugin.path = path;
       this.log.debug(`Loaded plugin: ${plugin.name}@${plugin.version}`);
       return plugin;
     } catch (error) {

@@ -10,6 +10,8 @@ import {
   ToolCall,
   ToolResult,
   StopReason,
+  HookType,
+  ToolContext,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 import { ContextAssembler } from '../context/assembler.js';
@@ -19,6 +21,14 @@ import { PermissionSystem } from '../permission/system.js';
 import { SessionManager } from '../session/manager.js';
 import { HookRegistry } from '../hooks/registry.js';
 import { responseContentToBlocks, serializeMessagesForApi } from './message-serializer.js';
+import { executeToolCallsInOrder } from './tool-executor.js';
+import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-stream.js';
+import { resolveAppConfig } from '../pkg/app-config.js';
+
+export type PermissionPromptFn = (tool: ToolCall) => Promise<boolean>;
+
+/** max_tokens 重试上限 */
+export const MAX_OUTPUT_TOKEN_RECOVERY = 3;
 
 export class QueryEngine {
   private client: Anthropic;
@@ -28,20 +38,45 @@ export class QueryEngine {
   private permissionSystem: PermissionSystem;
   private sessionManager: SessionManager;
   private hookRegistry: HookRegistry;
+  private permissionPrompt: PermissionPromptFn;
+  private contextMaxTokens: number;
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
     const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
     const baseURL = options.baseUrl ?? process.env['ANTHROPIC_BASE_URL'];
-    this.client = new Anthropic({ apiKey, baseURL });
-    this.contextAssembler = new ContextAssembler();
-    this.compactionPipeline = new CompactionPipeline();
-    this.toolRegistry = new ToolRegistry();
-    this.permissionSystem = new PermissionSystem();
-    this.sessionManager = new SessionManager();
-    this.hookRegistry = new HookRegistry();
+    this.client = options.anthropicClient ?? new Anthropic({ apiKey, baseURL });
+    const appConfig = resolveAppConfig();
+    this.contextMaxTokens = appConfig.contextMaxTokens;
+    this.contextAssembler = options.contextAssembler ?? new ContextAssembler();
+    this.compactionPipeline =
+      options.compactionPipeline ??
+      new CompactionPipeline({ threshold: appConfig.compactionThreshold });
+    this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
+    this.permissionSystem =
+      options.permissionSystem ??
+      new PermissionSystem({
+        rules: appConfig.permissions,
+        getToolDefinition: (name) => this.toolRegistry.get(name),
+      });
+    this.sessionManager = options.sessionManager ?? new SessionManager();
+    this.hookRegistry = options.hookRegistry ?? new HookRegistry();
+    this.permissionPrompt = options.permissionPrompt ?? this.defaultPermissionPrompt.bind(this);
     this.log = new Logger({ prefix: 'QueryEngine' });
     this.log.info('QueryEngine initialized');
+  }
+
+  getHookRegistry(): HookRegistry {
+    return this.hookRegistry;
+  }
+
+  getToolRegistry(): ToolRegistry {
+    return this.toolRegistry;
+  }
+
+  /** 工具执行管线（含 Hook），供集成测试使用 */
+  async executeToolCall(toolCall: ToolCall, state: SessionState): Promise<ToolResult> {
+    return this.executeTool(toolCall, state);
   }
 
   async *query(
@@ -49,21 +84,36 @@ export class QueryEngine {
     state: SessionState
   ): AsyncGenerator<QueryEvent, void, unknown> {
     const mode = request.mode ?? state.mode;
-    const queryOptions = request.options ?? {};
+    let effectiveOptions: QueryOptions = { ...(request.options ?? {}) };
 
     this.log.debug('Starting query', { mode });
 
     while (true) {
       try {
-        const context = await this.assembleContext(state, queryOptions);
-        const response = await this.callModel(context, queryOptions);
+        const context = await this.assembleContext(state, effectiveOptions);
+
+        let response: Extract<ModelStreamEvent, { type: 'model_complete' }> | undefined;
+        for await (const event of this.streamModel(context, effectiveOptions)) {
+          if (event.type === 'content_block_delta') {
+            yield event;
+          } else if (event.type === 'model_complete') {
+            response = event;
+          }
+        }
+
+        if (!response) break;
 
         if (response.stopReason === 'end_turn') {
-          for (const block of response.content) {
-            if (block.type === 'text') {
-              yield { type: 'content_block_delta', delta: { index: 0, text: block.text ?? '' } };
-            }
+          // 持久化 assistant 回复，供 REPL 多轮对话使用
+          const assistantBlocks = responseContentToBlocks(response.content);
+          if (assistantBlocks.length > 0) {
+            state.messages.push({
+              role: 'assistant',
+              content: assistantBlocks,
+              timestamp: Date.now(),
+            });
           }
+
           yield {
             type: 'message_stop',
             stopReason: response.stopReason,
@@ -79,7 +129,6 @@ export class QueryEngine {
         }
 
         if (response.stopReason === 'tool_use') {
-          // 先持久化 assistant 的 tool_use 消息，保证多轮工具调用上下文完整
           state.messages.push({
             role: 'assistant',
             content: responseContentToBlocks(response.content),
@@ -92,53 +141,61 @@ export class QueryEngine {
             toolResult: ToolResult;
           }> = [];
 
+          // 权限检查（串行，需用户确认）
+          const resultById = new Map<string, ToolResult>();
+          const approvedCalls: ToolCall[] = [];
+
           for (const toolCall of response.toolCalls) {
             yield { type: 'tool_use', tool: toolCall };
 
             const allowed = this.permissionSystem.check({ tool: toolCall, mode, context: state });
 
-            let result: ToolResult;
             if (!allowed.allowed) {
-              result = {
+              resultById.set(toolCall.id, {
                 content: [
                   { type: 'text', text: `Permission denied: ${allowed.reason ?? 'unknown'}` },
                 ],
                 isError: true,
-              };
-            } else if (allowed.requiresInteraction) {
-              // Interactive permission prompt
-              const confirmed = await this.promptForPermission(toolCall, mode);
-              if (!confirmed) {
-                result = {
-                  content: [{ type: 'text', text: 'User denied permission' }],
-                  isError: true,
-                };
-                yield { type: 'tool_result', tool: toolCall, result };
-                toolResultBlocks.push({
-                  type: 'tool_result',
-                  toolUseId: toolCall.id,
-                  toolResult: result,
-                });
-                this.sessionManager.addToolCall(state, toolCall);
-                continue;
-              }
-              result = await this.executeTool(toolCall, state);
-            } else {
-              result = await this.executeTool(toolCall, state);
+              });
+              continue;
             }
 
-            yield { type: 'tool_result', tool: toolCall, result };
+            if (allowed.requiresInteraction) {
+              const confirmed = await this.permissionPrompt(toolCall);
+              if (!confirmed) {
+                resultById.set(toolCall.id, {
+                  content: [{ type: 'text', text: 'User denied permission' }],
+                  isError: true,
+                });
+                continue;
+              }
+            }
 
+            approvedCalls.push(toolCall);
+          }
+
+          // concurrencySafe 工具并行执行
+          const executed = await executeToolCallsInOrder({
+            toolCalls: approvedCalls,
+            getDefinition: (name) => this.toolRegistry.get(name),
+            executeOne: (call) => this.executeTool(call, state),
+          });
+
+          for (const { toolCall, result } of executed) {
+            resultById.set(toolCall.id, result);
+          }
+
+          for (const toolCall of response.toolCalls) {
+            const result = resultById.get(toolCall.id)!;
+            yield { type: 'tool_result', tool: toolCall, result };
             toolResultBlocks.push({
               type: 'tool_result',
               toolUseId: toolCall.id,
               toolResult: result,
             });
-
             this.sessionManager.addToolCall(state, toolCall);
           }
 
-          // Anthropic API 要求同一轮的 tool_result 合并为一条 user 消息
           state.messages.push({
             role: 'user',
             content: toolResultBlocks,
@@ -148,8 +205,34 @@ export class QueryEngine {
         }
 
         if (response.stopReason === 'max_tokens') {
-          this.sessionManager.incrementRecoveryCount(state);
-          this.log.warn('Max tokens reached, retrying');
+          const recoveryCount = this.sessionManager.incrementRecoveryCount(state);
+          const partialBlocks = responseContentToBlocks(response.content);
+          if (partialBlocks.length > 0) {
+            state.messages.push({
+              role: 'assistant',
+              content: partialBlocks,
+              timestamp: Date.now(),
+            });
+          }
+
+          if (recoveryCount > MAX_OUTPUT_TOKEN_RECOVERY) {
+            this.log.error('Max tokens recovery limit exceeded');
+            yield {
+              type: 'error',
+              error: {
+                code: 'MAX_TOKENS',
+                message: `Output exceeded max_tokens after ${MAX_OUTPUT_TOKEN_RECOVERY} retries`,
+              },
+            };
+            break;
+          }
+
+          const currentMax = effectiveOptions.maxTokens ?? 8192;
+          effectiveOptions = {
+            ...effectiveOptions,
+            maxTokens: Math.min(Math.floor(currentMax * 1.5), 64000),
+          };
+          this.log.warn(`Max tokens reached, retry ${recoveryCount}/${MAX_OUTPUT_TOKEN_RECOVERY}`);
           continue;
         }
       } catch (error) {
@@ -171,104 +254,62 @@ export class QueryEngine {
   private async assembleContext(state: SessionState, options: QueryOptions) {
     const context = await this.contextAssembler.assemble(state, {
       systemPrompt: options.systemPrompt,
+      tools: this.toolRegistry.list(),
     });
+    context.maxTokens = this.contextMaxTokens;
     return this.compactionPipeline.run(context);
   }
 
-  private async callModel(
+  private async *streamModel(
     context: Awaited<ReturnType<typeof this.assembleContext>>,
     options: QueryOptions
   ) {
     const tools = this.toolRegistry.list();
-
     const system = context.systemPrompt;
     const messages = serializeMessagesForApi(context.messages);
 
     const stream = this.client.messages.stream({
       model: options.model ?? 'claude-sonnet-4-0',
-      max_tokens: options.maxTokens ?? 8192,
+      max_tokens: Math.min(options.maxTokens ?? 8192, context.maxTokens),
       temperature: options.temperature ?? 0.7,
       system,
       messages,
       tools: tools.map((t) => ({
         name: t.name,
         description: t.description,
-        input_schema: t.inputSchema as any,
-      })) as any[],
+        input_schema: t.inputSchema,
+      })) as Anthropic.Messages.Tool[],
     });
 
-    let stopReason: StopReason = 'end_turn';
-    let usage: { input_tokens: number; output_tokens: number } | null = null;
-    const content: Array<
-      | { type: 'text'; text: string }
-      | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-    > = [];
-    const toolCalls: ToolCall[] = [];
-
-    for await (const event of stream) {
-      if (event.type === 'message_stop') {
-        stopReason = 'end_turn';
-        break;
-      }
-
-      if (event.type === 'content_block_start') {
-        if (event.content_block.type === 'text') {
-          content.push({ type: 'text', text: '' });
-        } else if (event.content_block.type === 'tool_use') {
-          content.push({
-            type: 'tool_use',
-            id: event.content_block.id,
-            name: event.content_block.name,
-            input: {},
-          });
+    for await (const event of consumeModelStream(stream as AsyncIterable<StreamEventLike>)) {
+      if (event.type === 'model_complete') {
+        try {
+          const finalMessage = await stream.finalMessage();
+          if (finalMessage.usage) {
+            yield {
+              ...event,
+              usage: {
+                input_tokens: finalMessage.usage.input_tokens,
+                output_tokens: finalMessage.usage.output_tokens,
+              },
+            };
+            continue;
+          }
+        } catch {
+          /* usage optional */
         }
       }
-
-      if (event.type === 'content_block_delta') {
-        const last = content[content.length - 1];
-        if (event.delta.type === 'text_delta' && last?.type === 'text') {
-          last.text += event.delta.text;
-        }
-        if (event.delta.type === 'input_json_delta' && last?.type === 'tool_use') {
-          Object.assign(last.input, JSON.parse(event.delta.partial_json));
-        }
-      }
-
-      if (event.type === 'message_delta') {
-        if (event.delta.stop_reason === 'tool_use') stopReason = 'tool_use';
-        else if (event.delta.stop_reason === 'end_turn') stopReason = 'end_turn';
-        else if (event.delta.stop_reason === 'max_tokens') stopReason = 'max_tokens';
-      }
-
-      // Capture usage info
-      if (event.type === 'message_start' && event.message?.usage) {
-        usage = {
-          input_tokens: event.message.usage.input_tokens,
-          output_tokens: event.message.usage.output_tokens,
-        };
-      }
+      yield event;
     }
+  }
 
-    for (const block of content) {
-      if (block.type === 'tool_use') {
-        toolCalls.push({ id: block.id, name: block.name, input: block.input });
-      }
-    }
-
-    // Get final usage from stream
-    try {
-      const finalMessage = await stream.finalMessage();
-      if (finalMessage.usage) {
-        usage = {
-          input_tokens: finalMessage.usage.input_tokens,
-          output_tokens: finalMessage.usage.output_tokens,
-        };
-      }
-    } catch {
-      // Ignore - usage will be null
-    }
-
-    return { stopReason, content, toolCalls, usage };
+  private buildToolContext(toolCall: ToolCall, state: SessionState): ToolContext {
+    return {
+      workingDirectory: process.cwd(),
+      sessionState: state,
+      hooks: this.hookRegistry,
+      currentTool: toolCall,
+    };
   }
 
   private async executeTool(toolCall: ToolCall, state: SessionState): Promise<ToolResult> {
@@ -280,41 +321,47 @@ export class QueryEngine {
       };
     }
 
-    // PreToolUse hooks - can block execution (exit code 2)
-    const preHooks = this.hookRegistry.findMatching('PreToolUse' as any, {
-      workingDirectory: process.cwd(),
-      sessionState: state,
-      hooks: this.hookRegistry,
-    } as any);
+    const ctx = this.buildToolContext(toolCall, state);
 
+    const preHooks = this.hookRegistry.findMatching(HookType.PRE_TOOL_USE, ctx);
     for (const hook of preHooks) {
       try {
         const result = await this.hookRegistry.execute(hook);
-        if (result.blocked || result.exitCode === 2) {
+        const exitCode = result.exitCode ?? 0;
+        if (result.blocked || exitCode === 2) {
           return {
             content: [{ type: 'text', text: `Tool execution blocked by hook: ${hook.name}` }],
             isError: true,
           };
         }
+        if (exitCode !== 0) {
+          const msg = result.stderr || `Hook ${hook.name} exited with code ${exitCode}`;
+          if (process.env['PACODE_HOOK_FAIL_OPEN'] === '1') {
+            this.log.warn(`PreToolUse hook non-zero exit (fail-open): ${msg}`);
+            continue;
+          }
+          return {
+            content: [{ type: 'text', text: `Tool blocked: PreToolUse hook failed: ${msg}` }],
+            isError: true,
+          };
+        }
       } catch (e) {
-        this.log.warn(`PreToolUse hook failed: ${e instanceof Error ? e.message : String(e)}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        this.log.warn(`PreToolUse hook failed: ${msg}`);
+        if (process.env['PACODE_HOOK_FAIL_OPEN'] === '1') {
+          continue;
+        }
+        return {
+          content: [{ type: 'text', text: `Tool blocked: PreToolUse hook failed: ${msg}` }],
+          isError: true,
+        };
       }
     }
 
     try {
-      const result = await tool.execute(toolCall.input, {
-        workingDirectory: process.cwd(),
-        sessionState: state,
-        hooks: this.hookRegistry,
-      });
+      const result = await tool.execute(toolCall.input, ctx);
 
-      // PostToolUse hooks
-      const postHooks = this.hookRegistry.findMatching('PostToolUse' as any, {
-        workingDirectory: process.cwd(),
-        sessionState: state,
-        hooks: this.hookRegistry,
-      } as any);
-
+      const postHooks = this.hookRegistry.findMatching(HookType.POST_TOOL_USE, ctx);
       for (const hook of postHooks) {
         try {
           await this.hookRegistry.execute(hook);
@@ -332,12 +379,20 @@ export class QueryEngine {
     }
   }
 
+  private async defaultPermissionPrompt(tool: ToolCall): Promise<boolean> {
+    if (!process.stdin.isTTY) {
+      if (process.env['PACODE_AUTO_APPROVE'] === '1') {
+        this.log.info(`Non-TTY with PACODE_AUTO_APPROVE: allowing ${tool.name}`);
+        return true;
+      }
+      this.log.warn(
+        `Non-TTY environment: denying ${tool.name} (set PACODE_AUTO_APPROVE=1 to allow)`
+      );
+      return false;
+    }
 
-  private async promptForPermission(tool: ToolCall, _mode: string): Promise<boolean> {
     return new Promise((resolve) => {
-      this.log.info(`Permission requested for ${tool.name}`);
-      // In production: show interactive prompt
-      // For now, default to allow
+      this.log.warn(`Allow ${tool.name}? (y/n) [default: y]`);
       const stdin = process.stdin;
       const wasRaw = stdin.isRaw;
       if (stdin.isTTY) stdin.setRawMode(true);
@@ -354,14 +409,23 @@ export class QueryEngine {
           resolve(false);
         }
       };
-      stdin.on('data', onData);
-      this.log.warn(`Allow ${tool.name}? (y/n) [default: y]`);
-    });
-  }}
 
-interface QueryEngineOptions {
+      stdin.on('data', onData);
+    });
+  }
+}
+
+export interface QueryEngineOptions {
   apiKey?: string;
   baseUrl?: string;
+  anthropicClient?: Anthropic;
+  toolRegistry?: ToolRegistry;
+  hookRegistry?: HookRegistry;
+  permissionSystem?: PermissionSystem;
+  sessionManager?: SessionManager;
+  contextAssembler?: ContextAssembler;
+  compactionPipeline?: CompactionPipeline;
+  permissionPrompt?: PermissionPromptFn;
 }
 
 interface QueryEvent {

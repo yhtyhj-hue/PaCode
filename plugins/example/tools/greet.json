@@ -1,0 +1,17 @@
+{
+  "name": "greet",
+  "description": "Returns a friendly greeting from the example plugin",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": { "type": "string", "description": "Name to greet" }
+    },
+    "required": ["name"]
+  },
+  "concurrencySafe": true,
+  "permissionMode": "default",
+  "handler": {
+    "type": "template",
+    "template": "Hello, {{name}}! (from example plugin)"
+  }
+}

@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolRegistry } from '../src/tools/registry.js';
 import { ToolDefinition, PermissionMode } from '../src/pkg/types.js';
-import { registerBashTool } from '../src/tools/bash.js';
+import { registerCoreTools } from '../src/tools/bootstrap.js';
 import { registerReadTool } from '../src/tools/read.js';
 import { registerWriteTool } from '../src/tools/write.js';
 import { registerEditTool } from '../src/tools/edit.js';
-import { registerGlobTool } from '../src/tools/glob.js';
-import { registerGrepTool } from '../src/tools/grep.js';
-import { registerTaskTool } from '../src/tools/task.js';
 import { registerTodoWriteTool } from '../src/tools/todowrite.js';
-import { writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { writeFileSync, existsSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 describe('Tool Registry - Deep', () => {
   let registry: ToolRegistry;
@@ -60,65 +59,97 @@ describe('Tool Registry - Deep', () => {
   });
 
   it('all 8 tools register', () => {
-    registerBashTool(registry);
-    registerReadTool(registry);
-    registerWriteTool(registry);
-    registerEditTool(registry);
-    registerGlobTool(registry);
-    registerGrepTool(registry);
-    registerTaskTool(registry);
-    registerTodoWriteTool(registry);
+    registerCoreTools(registry, { task: { toolRegistry: registry } });
     expect(registry.list().length).toBe(8);
   });
 
   it('Bash not concurrency safe', () => {
-    registerBashTool(registry);
+    registerCoreTools(registry, { task: { toolRegistry: registry } });
     expect(registry.get('Bash')?.concurrencySafe).toBe(false);
   });
 
   it('Bash uses DEFAULT permission mode', () => {
-    registerBashTool(registry);
+    registerCoreTools(registry, { task: { toolRegistry: registry } });
     expect(registry.get('Bash')?.permissionMode).toBe(PermissionMode.DEFAULT);
   });
 
   it('Read concurrency safe', () => {
-    registerReadTool(registry);
+    registerCoreTools(registry, { task: { toolRegistry: registry } });
     expect(registry.get('Read')?.concurrencySafe).toBe(true);
   });
 
-  it('Read reads a file', async () => {
+  it('Read reads a file within workspace', async () => {
     registerReadTool(registry);
-    const f = '/tmp/pacode-test-r.txt';
+    const workDir = mkdtempSync(join(tmpdir(), 'pacode-read-'));
+    const f = join(workDir, 'test.txt');
     writeFileSync(f, 'hello');
     try {
-      const r = await registry.execute({ id: '1', name: 'Read', input: { path: f } }, { workingDirectory: process.cwd(), sessionState: {} as any, hooks: {} as any });
+      const r = await registry.execute(
+        { id: '1', name: 'Read', input: { path: 'test.txt' } },
+        { workingDirectory: workDir, sessionState: {} as never, hooks: {} as never }
+      );
       expect(r.isError).toBeFalsy();
       expect(r.content[0]?.text).toBe('hello');
-    } finally { if (existsSync(f)) unlinkSync(f); }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   });
 
-  it('Write writes a file', async () => {
+  it('Read blocks path traversal', async () => {
+    registerReadTool(registry);
+    const r = await registry.execute(
+      { id: '1', name: 'Read', input: { path: '../../../etc/passwd' } },
+      { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
+    );
+    expect(r.isError).toBe(true);
+    expect(r.content[0]?.text).toContain('escapes workspace');
+  });
+
+  it('Write writes a file within workspace', async () => {
     registerWriteTool(registry);
-    const f = '/tmp/pacode-test-w.txt';
+    const workDir = mkdtempSync(join(tmpdir(), 'pacode-write-'));
+    const f = join(workDir, 'out.txt');
     try {
-      await registry.execute({ id: '1', name: 'Write', input: { path: f, content: 'data' } }, { workingDirectory: process.cwd(), sessionState: {} as any, hooks: {} as any });
+      await registry.execute(
+        { id: '1', name: 'Write', input: { path: 'out.txt', content: 'data' } },
+        { workingDirectory: workDir, sessionState: {} as never, hooks: {} as never }
+      );
       expect(existsSync(f)).toBe(true);
-    } finally { if (existsSync(f)) unlinkSync(f); }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   });
 
-  it('Edit edits a file', async () => {
+  it('Edit edits a file within workspace', async () => {
     registerEditTool(registry);
-    const f = '/tmp/pacode-test-e.txt';
+    const workDir = mkdtempSync(join(tmpdir(), 'pacode-edit-'));
+    const f = join(workDir, 'edit.txt');
     writeFileSync(f, 'Hello World');
     try {
-      await registry.execute({ id: '1', name: 'Edit', input: { path: f, oldText: 'World', newText: 'PaCode' } }, { workingDirectory: process.cwd(), sessionState: {} as any, hooks: {} as any });
-    } finally { if (existsSync(f)) unlinkSync(f); }
+      await registry.execute(
+        { id: '1', name: 'Edit', input: { path: 'edit.txt', oldText: 'World', newText: 'PaCode' } },
+        { workingDirectory: workDir, sessionState: {} as never, hooks: {} as never }
+      );
+      expect(existsSync(f)).toBe(true);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   });
 
-  it('TodoWrite creates todo', async () => {
+  it('TodoWrite creates todo scoped to session', async () => {
     registerTodoWriteTool(registry);
-    const r = await registry.execute({ id: '1', name: 'TodoWrite', input: { action: 'create', content: 't' } }, { workingDirectory: process.cwd(), sessionState: {} as any, hooks: {} as any });
+    const sessionState = { sessionId: 'todo-test-session' } as any;
+    const r = await registry.execute(
+      { id: '1', name: 'TodoWrite', input: { action: 'create', content: 't' } },
+      { workingDirectory: process.cwd(), sessionState, hooks: {} as any }
+    );
     expect(r.isError).toBeFalsy();
+
+    const list = await registry.execute(
+      { id: '2', name: 'TodoWrite', input: { action: 'list' } },
+      { workingDirectory: process.cwd(), sessionState: { sessionId: 'other' } as any, hooks: {} as any }
+    );
+    expect(list.content[0]?.text).toBe('No tasks');
   });
 
   function createTool(name: string, description: string): ToolDefinition {

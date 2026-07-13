@@ -5,8 +5,11 @@
  * Mirrors Claude Code's Task tool / subagent delegation.
  */
 
-import { QueryEngine } from './engine.js';
-import { PermissionMode } from '../pkg/types.js';
+import { QueryEngine, QueryEngineOptions } from './engine.js';
+import { PermissionMode, HookType, ToolContext } from '../pkg/types.js';
+import { ToolRegistry } from '../tools/registry.js';
+import { createFilteredRegistry, registerCoreTools } from '../tools/bootstrap.js';
+import { HookRegistry } from '../hooks/registry.js';
 
 export interface SubagentConfig {
   name: string;
@@ -24,6 +27,16 @@ export interface SubagentResult {
   toolCalls: number;
   duration: number;
   error?: string;
+}
+
+export interface SubagentRunOptions {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  toolRegistry?: ToolRegistry;
+  hookRegistry?: HookRegistry;
+  /** 测试注入：自定义 QueryEngine 构造 */
+  createEngine?: (options: QueryEngineOptions) => QueryEngine;
 }
 
 export class SubagentManager {
@@ -62,16 +75,51 @@ export class SubagentManager {
     });
   }
 
-  async run(config: SubagentConfig, prompt: string): Promise<SubagentResult> {
+  async run(
+    config: SubagentConfig,
+    prompt: string,
+    options: SubagentRunOptions = {}
+  ): Promise<SubagentResult> {
     const startTime = Date.now();
     let toolCalls = 0;
     let output = '';
+    let result: SubagentResult;
 
     try {
-      const engine = new QueryEngine({});
+      const parentRegistry = options.toolRegistry ?? new ToolRegistry();
+      const registry =
+        config.tools && config.tools.length > 0
+          ? createFilteredRegistry(parentRegistry, config.tools)
+          : parentRegistry;
+
+      if (registry.list().length === 0) {
+        registerCoreTools(registry, {
+          task: {
+            apiKey: options.apiKey,
+            baseUrl: options.baseUrl,
+            model: options.model,
+            toolRegistry: registry,
+          },
+        });
+      }
+
+      const engine =
+        options.createEngine?.({
+          apiKey: options.apiKey,
+          baseUrl: options.baseUrl,
+          toolRegistry: registry,
+          hookRegistry: options.hookRegistry,
+        }) ??
+        new QueryEngine({
+          apiKey: options.apiKey,
+          baseUrl: options.baseUrl,
+          toolRegistry: registry,
+          hookRegistry: options.hookRegistry,
+        });
+
       const session = {
         sessionId: `sub-${Date.now()}`,
-        messages: [],
+        messages: [] as Array<{ role: 'user' | 'assistant' | 'system'; content: string; timestamp: number }>,
         toolCallHistory: [],
         maxOutputTokensRecoveryCount: 0,
         mode: config.mode ?? PermissionMode.DEFAULT,
@@ -79,8 +127,15 @@ export class SubagentManager {
         compactionHistory: [],
       };
 
+      session.messages.push({ role: 'user', content: prompt, timestamp: Date.now() });
+
       for await (const event of engine.query(
-        { message: prompt, options: { systemPrompt: config.systemPrompt } },
+        {
+          options: {
+            model: options.model ?? config.model,
+            systemPrompt: config.systemPrompt,
+          },
+        },
         session
       )) {
         if (event.type === 'content_block_delta' && event.delta) {
@@ -88,7 +143,7 @@ export class SubagentManager {
         } else if (event.type === 'tool_use') {
           toolCalls++;
         } else if (event.type === 'error') {
-          return {
+          result = {
             name: config.name,
             success: false,
             output: output + `\n[Error: ${event.error?.message ?? 'Unknown'}]`,
@@ -96,10 +151,12 @@ export class SubagentManager {
             duration: Date.now() - startTime,
             error: event.error?.message,
           };
+          await runSubagentStopHooks(options.hookRegistry, config, result);
+          return result;
         }
       }
 
-      return {
+      result = {
         name: config.name,
         success: true,
         output,
@@ -107,7 +164,7 @@ export class SubagentManager {
         duration: Date.now() - startTime,
       };
     } catch (e) {
-      return {
+      result = {
         name: config.name,
         success: false,
         output: e instanceof Error ? e.message : String(e),
@@ -116,6 +173,37 @@ export class SubagentManager {
         error: e instanceof Error ? e.message : String(e),
       };
     }
+
+    await runSubagentStopHooks(options.hookRegistry, config, result);
+    return result;
+  }
+}
+
+/** SubagentStop hook — 子代理结束时触发 */
+async function runSubagentStopHooks(
+  registry: HookRegistry | undefined,
+  config: SubagentConfig,
+  _result: SubagentResult
+): Promise<void> {
+  if (!registry) return;
+
+  const ctx: ToolContext = {
+    workingDirectory: process.cwd(),
+    sessionState: {
+      sessionId: `subagent-${config.name}`,
+      messages: [],
+      toolCallHistory: [],
+      maxOutputTokensRecoveryCount: 0,
+      mode: config.mode ?? PermissionMode.DEFAULT,
+      hooks: { hooks: {} },
+      compactionHistory: [],
+    },
+    hooks: registry,
+  };
+
+  const matching = registry.findMatching(HookType.SUBAGENT_STOP, ctx);
+  for (const hook of matching) {
+    await registry.execute(hook);
   }
 }
 
@@ -126,4 +214,8 @@ export function getSubagentManager(): SubagentManager {
     instance.registerDefaults();
   }
   return instance;
+}
+
+export function resetSubagentManager(): void {
+  instance = null;
 }

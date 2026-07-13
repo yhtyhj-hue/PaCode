@@ -1,0 +1,8 @@
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "Example PaCode plugin for slash commands and agents",
+  "commands": ["hello"],
+  "agents": ["reviewer"],
+  "tools": ["greet"]
+}

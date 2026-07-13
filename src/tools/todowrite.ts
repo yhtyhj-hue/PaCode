@@ -1,18 +1,15 @@
 /**
- * TodoWrite Tool - Task list management
+ * TodoWrite Tool - Task list management (session-scoped)
  */
 
-import { ToolDefinition, PermissionMode } from '../pkg/types.js';
+import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
+import { getTodoStore } from '../context/todo-store.js';
 
-interface TodoItem {
-  content: string;
-  status: 'pending' | 'in_progress' | 'completed';
-  created: number;
+function sessionIdFrom(ctx: ToolContext): string {
+  return ctx.sessionState?.sessionId ?? 'default';
 }
 
 export function registerTodoWriteTool(registry: { register: (t: ToolDefinition) => void }) {
-  const todos = new Map<string, TodoItem>();
-
   registry.register({
     name: 'TodoWrite',
     description: 'Manage task list',
@@ -28,7 +25,7 @@ export function registerTodoWriteTool(registry: { register: (t: ToolDefinition) 
     },
     concurrencySafe: true,
     permissionMode: PermissionMode.DEFAULT,
-    async execute(input) {
+    async execute(input, ctx) {
       const { action, id, content, status } = input as {
         action: string;
         id?: string;
@@ -36,32 +33,35 @@ export function registerTodoWriteTool(registry: { register: (t: ToolDefinition) 
         status?: string;
       };
 
+      const sessionId = sessionIdFrom(ctx);
+      const store = getTodoStore();
+
       switch (action) {
-        case 'create':
+        case 'create': {
           if (!content)
             return { content: [{ type: 'text', text: 'Content required' }], isError: true };
-          const newId = `todo-${Date.now()}`;
-          todos.set(newId, { content, status: 'pending', created: Date.now() });
+          const newId = store.create(sessionId, content);
           return { content: [{ type: 'text', text: `Created: ${newId}` }] };
+        }
 
         case 'update':
           if (!id || !status)
             return { content: [{ type: 'text', text: 'ID and status required' }], isError: true };
-          const todo = todos.get(id);
-          if (!todo)
+          if (!store.update(sessionId, id, status as 'pending' | 'in_progress' | 'completed'))
             return { content: [{ type: 'text', text: `Not found: ${id}` }], isError: true };
-          todo.status = status as TodoItem['status'];
           return { content: [{ type: 'text', text: `Updated: ${id}` }] };
 
-        case 'list':
-          const list = Array.from(todos.entries())
-            .map(([k, v]) => `[${v.status}] ${k}: ${v.content}`)
+        case 'list': {
+          const list = store
+            .list(sessionId)
+            .map((t) => `[${t.status}] ${t.id}: ${t.content}`)
             .join('\n');
           return { content: [{ type: 'text', text: list || 'No tasks' }] };
+        }
 
         case 'delete':
           if (!id) return { content: [{ type: 'text', text: 'ID required' }], isError: true };
-          todos.delete(id);
+          store.delete(sessionId, id);
           return { content: [{ type: 'text', text: `Deleted: ${id}` }] };
 
         default:

@@ -5,7 +5,7 @@
 import { ToolDefinition, PermissionMode } from '../pkg/types.js';
 import { createSecureBashExecutor } from './bash-secure.js';
 
-const secureBash = createSecureBashExecutor(60000);
+const secureBash = createSecureBashExecutor({ timeoutMs: 60000 });
 
 export function registerBashTool(registry: { register: (t: ToolDefinition) => void }) {
   registry.register({
@@ -20,16 +20,19 @@ export function registerBashTool(registry: { register: (t: ToolDefinition) => vo
     permissionMode: PermissionMode.DEFAULT,
     async execute(input) {
       const { command } = input as { command: string };
-      const { stdout, stderr, exitCode } = await secureBash(command);
+      const { stdout, stderr, exitCode, truncated } = await secureBash(command);
+
+      const body = stdout || stderr;
+      const suffix = truncated ? '\n\n[output truncated]' : '';
 
       if (exitCode !== 0) {
         return {
-          content: [{ type: 'text', text: stderr || stdout || 'Command failed' }],
+          content: [{ type: 'text', text: (stderr || stdout || 'Command failed') + suffix }],
           isError: true,
         };
       }
 
-      return { content: [{ type: 'text', text: stdout || stderr }] };
+      return { content: [{ type: 'text', text: body + suffix }] };
     },
   });
 }

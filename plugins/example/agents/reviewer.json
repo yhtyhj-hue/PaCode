@@ -1,0 +1,7 @@
+{
+  "name": "reviewer",
+  "description": "Code review subagent from the example plugin",
+  "mode": "acceptEdits",
+  "systemPrompt": "You are a thorough code reviewer. Focus on correctness, edge cases, and test coverage. Be concise.",
+  "tools": ["Read", "Grep", "Glob"]
+}

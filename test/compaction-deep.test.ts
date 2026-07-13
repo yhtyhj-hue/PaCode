@@ -44,6 +44,25 @@ describe('CompactionPipeline - Deep Tests', () => {
       const result = await pipeline.run(ctx);
       expect(result).toBeDefined();
     });
+
+    it('context collapse reduces message count at 97%', async () => {
+      const msgs = createMessages(20);
+      const ctx = createContext(97000, 100000, msgs);
+      const result = await pipeline.run(ctx);
+      expect(result.messages.length).toBeLessThan(20);
+      expect(String(result.messages[0]?.content)).toContain('context-collapse');
+    });
+
+    it('auto compact uses summarizeFn at 99%', async () => {
+      const pipelineWithFn = new CompactionPipeline({
+        summarizeFn: async () => '- User asked about auth\n- Fixed login bug',
+      });
+      const msgs = createMessages(10);
+      const ctx = createContext(99500, 100000, msgs);
+      const result = await pipelineWithFn.run(ctx);
+      expect(result.messages.length).toBeLessThan(10);
+      expect(String(result.messages[0]?.content)).toContain('auth');
+    });
   });
 
   function createContext(tokenCount: number, maxTokens: number, messages: Message[]) {
@@ -57,10 +76,12 @@ describe('CompactionPipeline - Deep Tests', () => {
   }
 
   function createMessages(count: number): Message[] {
-    return Array(count).fill(null).map((_, i) => ({
-      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: 'msg ' + i,
-      timestamp: Date.now() + i,
-    }));
+    return Array(count)
+      .fill(null)
+      .map((_, i) => ({
+        role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: 'msg ' + i,
+        timestamp: Date.now() + i,
+      }));
   }
 });

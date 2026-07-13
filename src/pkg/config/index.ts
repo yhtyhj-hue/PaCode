@@ -88,25 +88,27 @@ export type PaudeConfig = z.infer<typeof PaudeConfigSchema>;
 let cachedConfig: PaudeConfig | null = null;
 
 export function loadConfig(configPath?: string): PaudeConfig {
-  if (cachedConfig) {
+  if (!configPath && cachedConfig) {
     return cachedConfig;
   }
 
   const path = configPath ?? findConfigPath();
 
   if (!path) {
-    cachedConfig = PaudeConfigSchema.parse({});
-    return cachedConfig;
+    const defaults = PaudeConfigSchema.parse({});
+    if (!configPath) cachedConfig = defaults;
+    return defaults;
   }
 
   try {
     const content = readFileSync(path, 'utf-8');
-    const parsed = content.endsWith('.json')
+    const parsed = path.endsWith('.json')
       ? JSON.parse(content)
       : parseYaml(content);
 
-    cachedConfig = PaudeConfigSchema.parse(parsed);
-    return cachedConfig;
+    const config = PaudeConfigSchema.parse(parsed);
+    if (!configPath) cachedConfig = config;
+    return config;
   } catch (error) {
     throw new Error(`Failed to load config from ${path}: ${error}`);
   }

@@ -30,8 +30,9 @@ export class HookRegistry {
     return Array.from(this.hooks.values()).filter((h) => {
       if (h.type !== type) return false;
       if (h.matcher?.tool) {
-        const last = ctx.sessionState.toolCallHistory.at(-1);
-        if (last?.name !== h.matcher.tool) return false;
+        const toolName =
+          ctx.currentTool?.name ?? ctx.sessionState.toolCallHistory.at(-1)?.name;
+        if (toolName !== h.matcher.tool) return false;
       }
       return true;
     });

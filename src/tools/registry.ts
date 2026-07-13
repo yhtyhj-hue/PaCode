@@ -59,3 +59,7 @@ export function getToolRegistry(): ToolRegistry {
   if (!instance) instance = new ToolRegistry();
   return instance;
 }
+
+export function resetToolRegistry(): void {
+  instance = null;
+}

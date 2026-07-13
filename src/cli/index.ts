@@ -3,336 +3,32 @@
  * CLI Entry Point
  */
 
-import { parseArgs } from 'node:util';
 import { QueryEngine } from '../agent/engine.js';
 import { SessionManager } from '../session/manager.js';
-import { getToolRegistry } from '../tools/registry.js';
-import { registerBashTool } from '../tools/bash.js';
-import { registerReadTool } from '../tools/read.js';
-import { registerWriteTool } from '../tools/write.js';
-import { registerEditTool } from '../tools/edit.js';
-import { registerGlobTool } from '../tools/glob.js';
-import { registerGrepTool } from '../tools/grep.js';
-import { registerTaskTool } from '../tools/task.js';
-import { registerTodoWriteTool } from '../tools/todowrite.js';
+import { setupToolRegistry } from '../tools/setup.js';
+import { getSubagentManager } from '../agent/subagent.js';
 import { Logger } from '../pkg/logger/index.js';
-import { PermissionMode } from '../pkg/types.js';
 import { bootAnimation } from './animation.js';
 import { getCCSwitch } from '../pkg/ccswitch/index.js';
 import { REPL } from './repl.js';
+import { resolveAppConfig } from '../pkg/app-config.js';
+import {
+  handleMcp,
+  handleInit,
+  handleResume,
+  handleWorktree,
+  handleCCSwitch,
+  showHelp,
+} from './handlers.js';
+import { parseCliArgs } from './args.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
 const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
-const GREEN = '\x1b[32m';
-const GRAY = '\x1b[90m';
-const YELLOW = '\x1b[33m';
-const CYAN = '\x1b[36m';
-
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-
-async function handleMcp(
-  positionals: string[],
-  _options: Record<string, unknown>
-): Promise<boolean> {
-  const subCmd = positionals[0];
-  const args = positionals.slice(1);
-
-  const configDir = join(homedir(), '.paude');
-  const configPath = join(configDir, 'mcp.json');
-
-  function loadConfig(): { servers: Record<string, unknown> } {
-    if (!existsSync(configPath)) return { servers: {} };
-    try {
-      return JSON.parse(readFileSync(configPath, 'utf-8'));
-    } catch {
-      return { servers: {} };
-    }
-  }
-
-  function saveConfig(config: { servers: Record<string, unknown> }): void {
-    if (!existsSync(configDir)) {
-      require('node:fs').mkdirSync(configDir, { recursive: true });
-    }
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
-  }
-
-  switch (subCmd) {
-    case 'list': {
-      const config = loadConfig();
-      console.log('\nMCP Servers:');
-      if (Object.keys(config.servers).length === 0) {
-        console.log(`  ${DIM}No servers configured${RESET}`);
-      }
-      for (const [name, conf] of Object.entries(config.servers)) {
-        const cmd = (conf as { command?: string }).command || 'unknown';
-        console.log(`  ${CYAN}${name}${RESET}: ${cmd}`);
-      }
-      console.log(`\n  Config: ${configPath}\n`);
-      return true;
-    }
-
-    case 'add': {
-      const name = args[0];
-      if (!name) {
-        console.error('Usage: pacode mcp add <name> <command> [args...]');
-        process.exit(1);
-      }
-      const command = args[1];
-      if (!command) {
-        console.error('Usage: pacode mcp add <name> <command> [args...]');
-        process.exit(1);
-      }
-      const cmdArgs = args.slice(2);
-      const config = loadConfig();
-      config.servers[name] = { type: 'stdio', command, args: cmdArgs };
-      saveConfig(config);
-      console.log(`${GREEN}✓${RESET} Added MCP server: ${name}`);
-      return true;
-    }
-
-    case 'remove': {
-      const name = args[0];
-      if (!name) {
-        console.error('Usage: pacode mcp remove <name>');
-        process.exit(1);
-      }
-      const config = loadConfig();
-      if (config.servers[name]) {
-        delete config.servers[name];
-        saveConfig(config);
-        console.log(`${GREEN}✓${RESET} Removed: ${name}`);
-      } else {
-        console.log(`${YELLOW}⚠${RESET} Not found: ${name}`);
-      }
-      return true;
-    }
-
-    default:
-      console.error(`Unknown mcp command: ${subCmd}`);
-      console.error('Commands: list, add <name> <command>, remove <name>');
-      return true;
-  }
-}
-
-async function handleInit(_positionals: string[]): Promise<boolean> {
-  const claudeMdPath = join(process.cwd(), 'CLAUDE.md');
-  if (existsSync(claudeMdPath)) {
-    console.log(`${YELLOW}⚠${RESET} CLAUDE.md already exists at ${claudeMdPath}`);
-    return true;
-  }
-
-  const template = `# CLAUDE.md
-
-Project-specific instructions for PaCode/Claude Code.
-
-## Project Overview
-
-[Briefly describe your project here]
-
-## Architecture
-
-[Describe the high-level architecture]
-
-## Key Files
-
-- [\`src/\`](src/) - Source code
-- [\`docs/\`](docs/) - Documentation
-- [\`tests/\`](tests/) - Test files
-
-## Development Workflow
-
-1. Read the relevant code first
-2. Make focused changes
-3. Run tests before committing
-4. Update documentation if needed
-
-## Conventions
-
-- Use TypeScript for all new code
-- Follow existing code style
-- Write tests for new features
-- Update CLAUDE.md when patterns change
-`;
-  writeFileSync(claudeMdPath, template, 'utf-8');
-  console.log(`${GREEN}✓${RESET} Created CLAUDE.md`);
-  return true;
-}
-
-function showHelp(): void {
-  console.log(`PaCode CLI - Claude Code-like AI Assistant v0.1.0
-
-Usage:
-  pacode [options] [message]       Run AI agent with a message
-  pacode cc-switch <command>       Manage API providers (ccswitch integration)
-
-Options:
-  -h, --help              Show this help
-  -v, --version           Show version
-  -m, --mode <mode>       Permission mode (plan|default|acceptEdits|auto|dontAsk|bypass)
-  --api-key <key>         Anthropic API key
-  --base-url <url>        Custom API base URL (for proxy)
-  --model <model>         Model name (default: claude-sonnet-4-0)
-
-CC-Switch Commands:
-  pacode cc-switch list              List all configured providers
-  pacode cc-switch use               Interactive provider switcher
-  pacode cc-switch use <name>        Switch to a specific provider
-  pacode cc-switch add <name>        Add a new provider
-  pacode cc-switch remove <name>     Remove a provider
-  pacode cc-switch import            Import from ~/.claude/settings.json
-  pacode cc-switch status            Show current active provider
-  pacode cc-switch detect            Detect available config sources
-
-Environment:
-  ANTHROPIC_API_KEY       Your Anthropic API key
-  ANTHROPIC_BASE_URL      Custom base URL
-  CLAUDE_MODEL            Default model
-
-Examples:
-  pacode "Read package.json and explain the project"
-  pacode -m acceptEdits "Add error handling to index.ts"
-  pacode cc-switch add anthropic --api-key sk-xxx
-  pacode cc-switch use
-`);
-}
-
-async function handleCCSwitch(
-  positionals: string[],
-  options: Record<string, unknown>
-): Promise<boolean> {
-  const subCmd = positionals[0];
-  const args = positionals.slice(1);
-  const cc = getCCSwitch();
-
-  switch (subCmd) {
-    case 'list': {
-      const providers = cc.list();
-      if (providers.length === 0) {
-        console.log('No providers configured. Use: pacode cc-switch add <name> --api-key=<key>');
-        return true;
-      }
-      const active = cc.getActive();
-      console.log('\nProviders:');
-      providers.forEach((p) => {
-        const marker = active?.name === p.name ? '●' : '○';
-        const model = p.model ? ` (${p.model})` : '';
-        const url = p.baseUrl ? ` → ${p.baseUrl}` : '';
-        console.log(`  ${marker} ${p.name}${model}${url}`);
-      });
-      console.log('');
-      return true;
-    }
-
-    case 'use': {
-      const name = args[0] || (options.name as string);
-      if (!name) {
-        await cc.interactiveSwitch();
-      } else {
-        const p = cc.switchTo(name);
-        if (p) {
-          console.log(`✓ Switched to: ${p.name}`);
-        } else {
-          console.error(`Provider not found: ${name}`);
-          process.exit(1);
-        }
-      }
-      return true;
-    }
-
-    case 'add': {
-      const name = args[0] || (options.name as string);
-      if (!name) {
-        console.error(
-          'Usage: pacode cc-switch add <name> --api-key=<key> [--base-url=<url>] [--model=<model>]'
-        );
-        process.exit(1);
-      }
-      const apiKey = (options['api-key'] as string) || process.env['ANTHROPIC_API_KEY'];
-      const baseUrl = (options['base-url'] as string) || process.env['ANTHROPIC_BASE_URL'];
-      const model = (options.model as string) || process.env['CLAUDE_MODEL'];
-
-      if (!apiKey) {
-        console.error('--api-key is required');
-        process.exit(1);
-      }
-
-      cc.addProvider({ name, apiKey, baseUrl, model });
-      console.log(`✓ Added provider: ${name}`);
-      return true;
-    }
-
-    case 'remove': {
-      const name = args[0] || (options.name as string);
-      if (!name) {
-        console.error('Usage: pacode cc-switch remove <name>');
-        process.exit(1);
-      }
-      console.log(`✓ Removed: ${name}`);
-      console.log('  (Note: Edit ~/.paude/providers.json to fully remove)');
-      return true;
-    }
-
-    case 'import': {
-      const count = cc.importFromClaudeCode();
-      console.log(`✓ Imported ${count} provider(s) from ~/.claude/settings.json`);
-      return true;
-    }
-
-    case 'status': {
-      const active = cc.getActive();
-      if (active) {
-        console.log(`\nActive provider: ${active.name}`);
-        if (active.model) console.log(`  Model: ${active.model}`);
-        if (active.baseUrl) console.log(`  Base URL: ${active.baseUrl}`);
-        console.log(`  API Key: ${active.apiKey.slice(0, 8)}...${active.apiKey.slice(-4)}`);
-      } else {
-        console.log('\nNo active provider. Use: pacode cc-switch use <name>');
-      }
-      console.log('');
-      return true;
-    }
-
-    case 'detect': {
-      const sources = cc.detectSources();
-      const configPath = cc.getConfigPath();
-      console.log('\nCC-Switch detection:');
-      console.log(
-        `  CC-Switch app:     ${sources.ccswitch ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
-      );
-      console.log(
-        `  Claude Code:       ${sources.claudeCode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
-      );
-      console.log(
-        `  PaCode:            ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
-      );
-      console.log(`\n  Config: ${configPath}\n`);
-      return true;
-    }
-
-    default:
-      console.error(`Unknown cc-switch command: ${subCmd}`);
-      console.error('Run: pacode --help for usage');
-      return true;
-  }
-}
 
 async function main() {
-  const { values, positionals } = parseArgs({
-    options: {
-      help: { type: 'boolean', short: 'h' },
-      version: { type: 'boolean', short: 'v' },
-      mode: { type: 'string', short: 'm', default: 'default' },
-      'api-key': { type: 'string' },
-      'base-url': { type: 'string' },
-      model: { type: 'string' },
-      name: { type: 'string' },
-    },
-    allowPositionals: true,
-  });
+  const { values, positionals } = parseCliArgs();
 
   if (values.help) {
     showHelp();
@@ -344,44 +40,53 @@ async function main() {
     process.exit(0);
   }
 
-  // Handle cc-switch subcommand
   if (positionals[0] === 'cc-switch' || positionals[0] === 'ccs') {
     await handleCCSwitch(positionals.slice(1), values);
     process.exit(0);
   }
 
-  // Handle mcp subcommand
   if (positionals[0] === 'mcp') {
-    await handleMcp(positionals.slice(1), values);
+    await handleMcp(positionals.slice(1));
     process.exit(0);
   }
 
-  // Handle /init in REPL (or standalone)
   if (positionals[0] === 'init') {
-    await handleInit(positionals.slice(1));
+    await handleInit();
     process.exit(0);
   }
 
-  // Get provider info first to show in animation
+  if (positionals[0] === 'resume') {
+    await handleResume(positionals.slice(1), values);
+    return;
+  }
+
+  if (positionals[0] === 'worktree' || positionals[0] === 'wt') {
+    await handleWorktree(positionals.slice(1));
+    process.exit(0);
+  }
+
   const cc = getCCSwitch();
   if (cc.list().length === 0) {
     const imported = cc.autoImportFromClaudeCode();
     if (imported) {
       console.log(
-        `${DIM}Auto-imported provider from ~/.claude/settings.json: ${imported.name}${RESET}\n`
+        `${DIM}Auto-imported provider from ~/.claude/settings.json: ${imported.name}\x1b[0m\n`
       );
     }
   }
-  const creds = cc.getCredentials();
-  const defaultModel = 'claude-sonnet-4-0';
-  const model = (values.model as string) || creds.model || defaultModel;
+  const appConfig = resolveAppConfig({
+    mode: values.mode as string | undefined,
+    model: values.model as string | undefined,
+    apiKey: values['api-key'] as string | undefined,
+    baseUrl: values['base-url'] as string | undefined,
+  });
 
-  // Show boot animation
+  const model = appConfig.model;
+
   await bootAnimation.show(model);
 
-  // Get credentials (cc-switch active provider takes priority)
-  const apiKey = (values['api-key'] as string) || creds.apiKey;
-  const baseUrl = (values['base-url'] as string) || creds.baseUrl;
+  const apiKey = appConfig.apiKey;
+  const baseUrl = appConfig.baseUrl;
 
   if (!apiKey) {
     log.error('ANTHROPIC_API_KEY not set');
@@ -401,9 +106,8 @@ Get a key at: https://console.anthropic.com/
   }
 
   const activeProvider = cc.getActive();
-  const mode = resolveMode(values.mode as string);
+  const mode = appConfig.mode;
 
-  // Show active provider info
   if (activeProvider) {
     console.log(
       `\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
@@ -412,7 +116,11 @@ Get a key at: https://console.anthropic.com/
 
   const message = positionals.join(' ');
 
-  // If no message, start REPL mode
+  if (values.resume && !message) {
+    await handleResume([], values);
+    return;
+  }
+
   if (!message) {
     const repl = new REPL({
       apiKey,
@@ -425,28 +133,34 @@ Get a key at: https://console.anthropic.com/
     return;
   }
 
-  // Single message mode
-  const toolRegistry = getToolRegistry();
-  registerBashTool(toolRegistry);
-  registerReadTool(toolRegistry);
-  registerWriteTool(toolRegistry);
-  registerEditTool(toolRegistry);
-  registerGlobTool(toolRegistry);
-  registerGrepTool(toolRegistry);
-  registerTaskTool(toolRegistry);
-  registerTodoWriteTool(toolRegistry);
+  const { registry: toolRegistry, hookRegistry } = await setupToolRegistry({
+    apiKey,
+    baseUrl,
+    model,
+    bootstrapPlugins: true,
+    subagentManager: getSubagentManager(),
+  });
 
   const sessionManager = new SessionManager();
   const session = sessionManager.createSession({ mode });
 
   session.messages.push({ role: 'user', content: message, timestamp: Date.now() });
 
-  const engine = new QueryEngine({ apiKey, baseUrl });
+  const engine = new QueryEngine({
+    apiKey,
+    baseUrl,
+    toolRegistry,
+    sessionManager,
+    hookRegistry,
+  });
 
   console.log('\nPaCode:\n');
 
   let hasAuthError = false;
-  for await (const event of engine.query({ message, options: { model } }, session)) {
+  for await (const event of engine.query(
+    { message, options: { model, maxTokens: appConfig.maxTokens, temperature: appConfig.temperature } },
+    session
+  )) {
     if (event.type === 'content_block_delta' && event.delta) {
       process.stdout.write(event.delta.text);
     } else if (event.type === 'tool_use' && event.tool) {
@@ -472,18 +186,6 @@ Get a key at: https://console.anthropic.com/
   }
 
   sessionManager.saveSession(session);
-}
-
-function resolveMode(mode: string): PermissionMode {
-  const modes: Record<string, PermissionMode> = {
-    plan: PermissionMode.PLAN,
-    default: PermissionMode.DEFAULT,
-    acceptEdits: PermissionMode.ACCEPT_EDITS,
-    auto: PermissionMode.AUTO,
-    dontAsk: PermissionMode.DONT_ASK,
-    bypass: PermissionMode.BYPASS,
-  };
-  return modes[mode] ?? PermissionMode.DEFAULT;
 }
 
 main().catch((err) => {
