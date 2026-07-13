@@ -6,6 +6,7 @@ import { ToolRegistry } from '../tools/registry.js';
 import { MCPServerConnection } from '../pkg/types.js';
 import { MCPClient, getMCPClient } from './client.js';
 import { loadMcpConfig, toServerConfig } from './config.js';
+import { validateMcpServerEntry, formatMcpConnectError } from './validate.js';
 import { Logger } from '../pkg/logger/index.js';
 
 const MCP_TOOL_PREFIX = 'mcp__';
@@ -55,10 +56,18 @@ export async function bootstrapMcpTools(
 
   if (!options.skipConnect) {
     for (const [name, entry] of Object.entries(config.servers)) {
+      const validationError = validateMcpServerEntry(entry);
+      if (validationError) {
+        errors.push({ name, error: validationError });
+        log.warn(`Invalid MCP config for ${name}: ${validationError}`);
+        continue;
+      }
+
       try {
         await client.connect(toServerConfig(name, entry));
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const raw = error instanceof Error ? error.message : String(error);
+        const message = formatMcpConnectError(name, entry.command, raw);
         errors.push({ name, error: message });
         log.warn(`Failed to connect MCP server ${name}: ${message}`);
       }

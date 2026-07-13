@@ -5,6 +5,7 @@
 import { existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadMcpConfig, saveMcpConfig, getMcpConfigPath } from '../mcp/config.js';
+import { validateMcpServerEntry } from '../mcp/validate.js';
 import { getSessionResume, SessionResume } from './resume.js';
 import { getCCSwitch, CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { REPL } from './repl.js';
@@ -134,8 +135,15 @@ export async function handleMcp(
         return false;
       }
       const cmdArgs = args.slice(2);
+      const entry = { type: 'stdio' as const, command, args: cmdArgs };
+      const validationError = validateMcpServerEntry(entry);
+      if (validationError) {
+        console.error(validationError);
+        exit(1);
+        return false;
+      }
       const config = loadMcpConfig(configPath);
-      config.servers[name] = { type: 'stdio', command, args: cmdArgs };
+      config.servers[name] = entry;
       saveMcpConfig(config, configPath);
       console.log(`${GREEN}✓${RESET} Added MCP server: ${name}`);
       return true;
