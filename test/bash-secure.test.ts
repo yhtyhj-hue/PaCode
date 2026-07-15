@@ -170,7 +170,7 @@ describe('Bash Tool Integration', () => {
       { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
     );
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('Recursive force delete');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('Recursive force delete');
   });
 
   it('executes safe commands via Bash tool', async () => {
@@ -181,6 +181,6 @@ describe('Bash Tool Integration', () => {
       { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
     );
     expect(result.isError).toBeFalsy();
-    expect(result.content[0]?.text?.trim()).toBe('hello-bash');
+    expect((result.content[0] as { type: 'text'; text: string }).text?.trim()).toBe('hello-bash');
   });
 });

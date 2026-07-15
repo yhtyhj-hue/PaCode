@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SkillsLoader } from '../src/skills/loader.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { writeFileSync, mkdirSync } from 'node:fs';
+
 
 describe('SkillsLoader - Deep', () => {
   describe('Slash Commands API', () => {

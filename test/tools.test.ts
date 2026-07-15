@@ -21,7 +21,7 @@ describe('ToolRegistry', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.DEFAULT,
       async execute() {
-        return { content: [{ type: 'text', text: 'ok' }] };
+        return { content: [{ type: 'text' as const, text: 'ok' }] };
       },
     };
     registry.register(tool);

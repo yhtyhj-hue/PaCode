@@ -7,7 +7,7 @@ import { CompactionPipeline } from '../../src/context/compaction.js';
 
 export function stubAssembler(): ContextAssembler {
   return {
-    async assemble(state) {
+    async assemble(state: any) {
       return {
         systemPrompt: 'test-system',
         messages: state.messages,
@@ -20,5 +20,5 @@ export function stubAssembler(): ContextAssembler {
 }
 
 export function passthroughCompaction(): CompactionPipeline {
-  return { async run(ctx) { return ctx; } } as unknown as CompactionPipeline;
+  return { async run(ctx: any) { return ctx; } } as unknown as CompactionPipeline;
 }

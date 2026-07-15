@@ -17,7 +17,7 @@ describe('consumeModelStream', () => {
       { type: 'content_block_start', content_block: { type: 'text' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ' world' } },
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+      { type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'end_turn' } },
     ];
 
     const collected: string[] = [];
@@ -33,7 +33,7 @@ describe('consumeModelStream', () => {
 
     expect(collected).toEqual(['Hello', ' world']);
     expect(complete?.stopReason).toBe('end_turn');
-    expect(complete?.content[0]).toEqual({ type: 'text', text: 'Hello world' });
+    expect(complete?.content[0]).toEqual({ type: 'text' as const, text: 'Hello world' });
   });
 
   it('collects tool_use blocks on complete', async () => {
@@ -46,7 +46,7 @@ describe('consumeModelStream', () => {
         type: 'content_block_delta',
         delta: { type: 'input_json_delta', partial_json: '{"path":"a.ts"}' },
       },
-      { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
+      { type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'tool_use' } },
     ];
 
     let complete: Awaited<ReturnType<typeof consumeModelStream>> extends AsyncGenerator<
@@ -80,7 +80,7 @@ describe('consumeModelStream', () => {
         type: 'content_block_delta',
         delta: { type: 'input_json_delta', partial_json: '"src/a.ts"}' },
       },
-      { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
+      { type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'tool_use' } },
     ];
 
     let complete: Awaited<ReturnType<typeof consumeModelStream>> extends AsyncGenerator<

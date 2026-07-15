@@ -59,7 +59,7 @@ describe('ContextAssembler — 9 sources', () => {
         concurrencySafe: true,
         permissionMode: PermissionMode.DEFAULT,
         async execute() {
-          return { content: [{ type: 'text', text: 'ok' }] };
+          return { content: [{ type: 'text' as const, text: 'ok' }] };
         },
       },
     ];
@@ -84,7 +84,7 @@ describe('ContextAssembler — 9 sources', () => {
               type: 'tool_result',
               toolUseId: 't1',
               toolResult: {
-                content: [{ type: 'text', text: 'file contents here' }],
+                content: [{ type: 'text' as const, text: 'file contents here' }],
               },
             },
           ],

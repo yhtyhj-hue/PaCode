@@ -94,8 +94,8 @@ describe('P0: Task tool delegates to SubagentManager', () => {
 
     expect(runSpy).toHaveBeenCalledOnce();
     expect(result.isError).toBeFalsy();
-    expect(result.content[0]?.text).toContain('found 3 files');
-    expect(result.content[0]?.text).toContain('explore');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('found 3 files');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('explore');
 
     runSpy.mockRestore();
   });
@@ -114,7 +114,7 @@ describe('P0: Task tool delegates to SubagentManager', () => {
     );
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('Unknown subagent type');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('Unknown subagent type');
   });
 });
 
@@ -122,7 +122,7 @@ describe('P0: assistant message persisted on end_turn', () => {
   it('responseContentToBlocks produces storable assistant content', async () => {
     const { responseContentToBlocks } = await import('../src/agent/message-serializer.js');
     const blocks = responseContentToBlocks([
-      { type: 'text', text: 'Hello user' },
+      { type: 'text' as const, text: 'Hello user' },
     ]);
 
     const sessionManager = new SessionManager(join(tmpdir(), `eng-${Date.now()}`));

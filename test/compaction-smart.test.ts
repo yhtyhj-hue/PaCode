@@ -22,16 +22,16 @@ describe('compaction-utils', () => {
           type: 'tool_result',
           toolUseId: 'x',
           toolResult: {
-            content: [{ type: 'text', text: 'a'.repeat(5000) }],
+            content: [{ type: 'text' as const, text: 'a'.repeat(5000) }],
           },
         },
       ],
     };
 
     const truncated = truncateToolResultsInMessage(msg, 100);
-    const block = (truncated.content as typeof msg.content)[0]!;
-    expect(block.toolResult!.content[0]!.text.length).toBeLessThan(5000);
-    expect(block.toolResult!.content[0]!.text).toContain('truncated');
+    const block = (truncated.content as typeof msg.content)[0]! as { type: 'tool_result'; toolUseId?: string; toolResult?: any; text?: string };
+    expect(block.toolResult.content[0].text.length).toBeLessThan(5000);
+    expect(block.toolResult.content[0].text).toContain('truncated');
   });
 
   it('microcompact collapses whitespace in tool results', () => {
@@ -43,14 +43,15 @@ describe('compaction-utils', () => {
           type: 'tool_result',
           toolUseId: 'x',
           toolResult: {
-            content: [{ type: 'text', text: 'line1\n\n  line2   line3' }],
+            content: [{ type: 'text' as const, text: 'line1\n\n  line2   line3' }],
           },
         },
       ],
     };
 
     const compacted = microcompactMessages([msg], 1)[0]!;
-    const text = (compacted.content as typeof msg.content)[0]!.toolResult!.content[0]!.text;
+    const block = (compacted.content as typeof msg.content)[0]! as { type: 'tool_result'; toolUseId?: string; toolResult?: any; text?: string };
+    const text = block.toolResult!.content[0].text;
     expect(text).not.toContain('\n');
     expect(text).toContain('line1 line2 line3');
   });
@@ -112,7 +113,7 @@ describe('CompactionPipeline — token recount after snip', () => {
           type: 'tool_result',
           toolUseId: 't',
           toolResult: {
-            content: [{ type: 'text', text: 'z'.repeat(10000) }],
+            content: [{ type: 'text' as const, text: 'z'.repeat(10000) }],
           },
         },
       ],

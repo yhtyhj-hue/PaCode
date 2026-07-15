@@ -31,7 +31,7 @@ describe('runParallelAgentPrefetch', () => {
 
   it('runs agents in parallel and yields progress events', async () => {
     const execute = async (call: ToolCall): Promise<ToolResult> => ({
-      content: [{ type: 'text', text: `${call.name}-ok` }],
+      content: [{ type: 'text' as const, text: `${call.name}-ok` }],
     });
 
     const events = [];

@@ -65,7 +65,7 @@ export function textEndTurnScenario(text: string, usage?: MockStreamScenario['us
     events: [
       { type: 'content_block_start', content_block: { type: 'text' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+      { type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'end_turn' } },
     ],
     usage,
   };
@@ -87,7 +87,7 @@ export function toolUseScenario(
         type: 'content_block_delta',
         delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) },
       },
-      { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
+      { type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'tool_use' } },
     ],
   };
 }
@@ -95,6 +95,6 @@ export function toolUseScenario(
 /** max_tokens 场景 */
 export function maxTokensScenario(): MockStreamScenario {
   return {
-    events: [{ type: 'message_delta', delta: { stop_reason: 'max_tokens' } }],
+    events: [{ type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'max_tokens' } }],
   };
 }

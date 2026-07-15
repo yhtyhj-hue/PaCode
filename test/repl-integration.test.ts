@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { SessionManager } from '../src/session/manager.js';
 import { QueryEngine } from '../src/agent/engine.js';
 import { ToolRegistry } from '../src/tools/registry.js';
@@ -23,7 +23,7 @@ describe('REPL Integration', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.DEFAULT,
       async execute() {
-        return { content: [{ type: 'text', text: 'pong' }] };
+        return { content: [{ type: 'text' as const, text: 'pong' }] };
       },
     });
 
@@ -40,7 +40,7 @@ describe('REPL Integration', () => {
       session
     );
 
-    expect(result.content[0]?.text).toBe('pong');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toBe('pong');
     expect(engine.getToolRegistry()).toBe(toolRegistry);
   });
 

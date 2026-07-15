@@ -35,7 +35,7 @@ describe('Message Serializer', () => {
       {
         role: 'assistant',
         content: [
-          { type: 'text', text: 'Let me read that file.' },
+          { type: 'text' as const, text: 'Let me read that file.' },
           {
             type: 'tool_use',
             toolUse: { id: 'toolu_01', name: 'Read', input: { path: '/tmp/a.txt' } },
@@ -47,7 +47,7 @@ describe('Message Serializer', () => {
 
     const result = serializeMessagesForApi(messages);
     expect(result[0]?.content).toEqual([
-      { type: 'text', text: 'Let me read that file.' },
+      { type: 'text' as const, text: 'Let me read that file.' },
       { type: 'tool_use', id: 'toolu_01', name: 'Read', input: { path: '/tmp/a.txt' } },
     ]);
   });
@@ -60,7 +60,7 @@ describe('Message Serializer', () => {
           {
             type: 'tool_result',
             toolUseId: 'toolu_01',
-            toolResult: { content: [{ type: 'text', text: 'file contents' }] },
+            toolResult: { content: [{ type: 'text' as const, text: 'file contents' }] },
           },
         ],
         timestamp: 1,
@@ -87,7 +87,7 @@ describe('Message Serializer', () => {
             type: 'tool_result',
             toolUseId: 'toolu_02',
             toolResult: {
-              content: [{ type: 'text', text: 'Permission denied' }],
+              content: [{ type: 'text' as const, text: 'Permission denied' }],
               isError: true,
             },
           },
@@ -117,7 +117,7 @@ describe('Message Serializer', () => {
           {
             type: 'tool_result',
             toolUseId: 'toolu_01',
-            toolResult: { content: [{ type: 'text', text: 'hello' }] },
+            toolResult: { content: [{ type: 'text' as const, text: 'hello' }] },
           },
         ],
         timestamp: 3,
@@ -133,12 +133,12 @@ describe('Message Serializer', () => {
 
   it('responseContentToBlocks converts model output', () => {
     const blocks = responseContentToBlocks([
-      { type: 'text', text: 'Running command.' },
+      { type: 'text' as const, text: 'Running command.' },
       { type: 'tool_use', id: 'toolu_03', name: 'Bash', input: { command: 'pwd' } },
     ]);
 
     expect(blocks).toEqual([
-      { type: 'text', text: 'Running command.' },
+      { type: 'text' as const, text: 'Running command.' },
       { type: 'tool_use', toolUse: { id: 'toolu_03', name: 'Bash', input: { command: 'pwd' } } },
     ]);
   });
