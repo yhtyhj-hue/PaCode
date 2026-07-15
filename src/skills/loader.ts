@@ -9,6 +9,11 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { Logger } from '../pkg/logger/index.js';
+import {
+  loadExternalSkills,
+  type MountedSkill,
+  type SkillMountConfig,
+} from '../services/skill-mount/index.js';
 
 export interface Skill {
   name: string;
@@ -69,6 +74,48 @@ export class SkillsLoader {
     }
 
     return this.skills;
+  }
+
+  /**
+   * Load skills from external sources via skill-mount layer.
+   * Merges with existing skills in this.skills; conflicts are logged
+   * (existing project/user skill wins over external by default).
+   */
+  async loadFromExternal(config: SkillMountConfig): Promise<Map<string, Skill>> {
+    try {
+      const result = await loadExternalSkills(config);
+      for (const warning of result.warnings) {
+        this.log.warn(
+          `Skill '${warning.id}' conflict: ${warning.overriddenSource} (${warning.overriddenPath}) overridden by ${warning.winningSource} (${warning.winningPath})`
+        );
+      }
+      for (const mounted of result.skills) {
+        const skill = mountedToSkill(mounted);
+        // Don't let external override already-loaded project/user skills
+        if (!this.skills.has(skill.name)) {
+          this.skills.set(skill.name, skill);
+        }
+      }
+      this.log.info(
+        `Loaded ${result.skills.length} external skills (${this.skills.size} total)`
+      );
+    } catch (error) {
+      this.log.error('Failed to load external skills:', error);
+    }
+    return this.skills;
+  }
+
+  /** Default external skill roots (project > user > everything-claude-code). */
+  defaultExternalConfig(): SkillMountConfig {
+    const home = homedir();
+    return {
+      roots: [
+        { root: resolve(process.cwd(), '.paude/skills'), kind: 'project' },
+        { root: resolve(process.cwd(), '.claude/skills'), kind: 'project' },
+        { root: join(home, '.paude/skills'), kind: 'user' },
+        { root: join(home, 'everything-claude-code/skills'), kind: 'external' },
+      ],
+    };
   }
 
   /**
@@ -255,4 +302,28 @@ export class SkillsLoader {
         s.whenToUse.some((w) => w.toLowerCase().includes(lower))
     );
   }
+}
+
+/** Adapter: skill-mount MountedSkill → SkillsLoader Skill. */
+function mountedToSkill(mounted: MountedSkill): Skill {
+  const fm = mounted.frontmatter;
+  // skill-mount parser collects under 'when_to_use' / 'tools' (snake_case
+  // key recognition) but may also surface camelCase aliases via .extra.
+  // Accept both so adapters stay robust to either form.
+  const whenToUse =
+    fm.whenToUse ??
+    (fm.extra['whenToUse'] ? fm.extra['whenToUse'].split(',').map((s) => s.trim()).filter(Boolean) : undefined) ??
+    (fm.extra['when_to_use'] ? fm.extra['when_to_use'].split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+  const tools =
+    fm.tools ??
+    (fm.extra['tools'] ? fm.extra['tools'].split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+  return {
+    name: fm.name ?? mounted.name,
+    description: fm.description ?? '',
+    whenToUse: whenToUse ?? [],
+    tools: tools ?? [],
+    workflow: undefined,
+    content: mounted.content,
+    source: `${mounted.source}:${mounted.originPath}`,
+  };
 }
