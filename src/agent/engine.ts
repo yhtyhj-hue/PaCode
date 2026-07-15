@@ -9,21 +9,45 @@ import {
   SessionState,
   ToolCall,
   ToolResult,
-  StopReason,
   HookType,
   ToolContext,
+  PermissionMode,
+  QueryEvent,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 import { ContextAssembler } from '../context/assembler.js';
 import { CompactionPipeline } from '../context/compaction.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { PermissionSystem } from '../permission/system.js';
+import { authorizePrefetchTool } from '../permission/prefetch-gate.js';
 import { SessionManager } from '../session/manager.js';
 import { HookRegistry } from '../hooks/registry.js';
-import { responseContentToBlocks, serializeMessagesForApi } from './message-serializer.js';
+import { responseContentToBlocks } from './message-serializer.js';
 import { executeToolCallsInOrder } from './tool-executor.js';
 import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-stream.js';
+import { withRetry } from './retry.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
+import { getLatestUserText, requiresToolExecution } from './tool-intent.js';
+import { compileMessagesForApi } from '../services/context-compiler/index.js';
+import {
+  resolveDagPlanWithHistory,
+  formatDagResults,
+  loadSkillContextForIntent,
+  runIntentPrefetch,
+  isParallelAgentsEnabled,
+  runParallelAgentPrefetch,
+} from '../services/agent-scheduler/index.js';
+
+const DAG_PREFETCH_NOTE = 'Running intent DAG prefetch before model summary.';
+
+/** 模型未调工具时的重试上限 */
+export const MAX_TOOL_NUDGE_RETRIES = 1;
+
+/** Agent 循环最大轮次，防止 tool_use 死循环 */
+export const MAX_AGENT_TURNS = 50;
+
+const TOOL_NUDGE_MESSAGE =
+  'You must call at least one tool (Read, Glob, Grep, or Bash) before answering. Do not reply with text only.';
 
 export type PermissionPromptFn = (tool: ToolCall) => Promise<boolean>;
 
@@ -85,26 +109,198 @@ export class QueryEngine {
   ): AsyncGenerator<QueryEvent, void, unknown> {
     const mode = request.mode ?? state.mode;
     let effectiveOptions: QueryOptions = { ...(request.options ?? {}) };
+    let toolNudgeAttempts = 0;
+    let turnCount = 0;
+    let toolsUsedInQuery = false;
+    let dagPrefetched = false;
+    let deferredText: string[] = [];
+    const pinnedIntent = request.message ?? getLatestUserText(state.messages);
+    const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
 
     this.log.debug('Starting query', { mode });
 
     while (true) {
+      if (shouldAbort()) {
+        yield {
+          type: 'error',
+          error: { code: 'ABORTED', message: 'Query interrupted' },
+        };
+        break;
+      }
+
+      if (turnCount >= MAX_AGENT_TURNS) {
+        yield {
+          type: 'error',
+          error: { code: 'MAX_TURNS', message: `Exceeded ${MAX_AGENT_TURNS} agent turns` },
+        };
+        break;
+      }
+      turnCount++;
+
       try {
-        const context = await this.assembleContext(state, effectiveOptions);
+        // 与 Claude Code 对齐：预取只加速上下文，不禁工具；模型可继续 Read/Grep 补洞
+        const mustUseTools =
+          requiresToolExecution(pinnedIntent) &&
+          mode !== PermissionMode.PLAN &&
+          !toolsUsedInQuery;
+
+        const flushDeferredText = function* (): Generator<QueryEvent> {
+          if (deferredText.length === 0) return;
+          for (const text of deferredText) {
+            yield { type: 'content_block_delta', delta: { index: 0, text } };
+          }
+          deferredText = [];
+        };
+
+        if (mustUseTools && effectiveOptions.toolChoice !== 'any') {
+          effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+        }
+
+        // L1 调度：intent DAG 预取（结果以 user 文本注入，不走 tool_result 协议）
+        const dagPlan = !dagPrefetched
+          ? resolveDagPlanWithHistory(pinnedIntent, state.messages)
+          : null;
+        if (dagPlan && mode !== PermissionMode.PLAN) {
+          dagPrefetched = true;
+          deferredText = [];
+          toolsUsedInQuery = true;
+          this.log.debug(DAG_PREFETCH_NOTE);
+
+          const skillCtx = await loadSkillContextForIntent(dagPlan.intent);
+          if (skillCtx.loadedNames.length > 0) {
+            yield { type: 'skill_loaded', skills: skillCtx.loadedNames };
+          }
+
+          const useParallel =
+            isParallelAgentsEnabled() &&
+            (dagPlan.intent === 'inspect_project' ||
+              dagPlan.intent === 'review_implementation' ||
+              dagPlan.intent === 'code_audit');
+
+          const queryId = `q_${state.sessionId}_${Date.now()}`;
+          // L1 预取：与主循环同一 PermissionSystem；交互确认整批一次（并行安全）
+          const prefetchBatchConfirm = { promise: null as Promise<boolean> | null };
+          const prefetchExecute = async (call: ToolCall) => {
+            const blocked = await authorizePrefetchTool(call, {
+              permissionSystem: this.permissionSystem,
+              mode,
+              state,
+              prompt: this.permissionPrompt,
+              shouldAbort,
+              batchConfirm: prefetchBatchConfirm,
+            });
+            if (blocked) return blocked;
+            return this.executeTool(call, state);
+          };
+          const prefetchGen = useParallel
+            ? runParallelAgentPrefetch(dagPlan.intent, prefetchExecute, queryId)
+            : runIntentPrefetch(dagPlan, prefetchExecute);
+          let runs: Array<{ tool: ToolCall; result: ToolResult }> = [];
+
+          while (true) {
+            const step = await prefetchGen.next();
+            if (step.done) {
+              runs = step.value ?? [];
+              break;
+            }
+            if (shouldAbort()) {
+              yield {
+                type: 'error',
+                error: { code: 'ABORTED', message: 'Query interrupted' },
+              };
+              break;
+            }
+            yield step.value;
+          }
+
+          if (shouldAbort()) break;
+
+          if (runs.length > 0) {
+            yield {
+              type: 'prefetch_complete',
+              prefetchTools: runs.map((r) => r.tool),
+            };
+            state.messages.push({
+              role: 'user',
+              content: formatDagResults(dagPlan.intent, runs, skillCtx.markdown),
+              timestamp: Date.now(),
+            });
+            // 保留 tools：预取是加速，不是关掉 agent 循环（CC 式）
+            effectiveOptions = {
+              ...effectiveOptions,
+              toolChoice: 'auto',
+              suppressTools: false,
+            };
+          }
+
+          if (shouldAbort()) {
+            yield {
+              type: 'error',
+              error: { code: 'ABORTED', message: 'Query interrupted' },
+            };
+            break;
+          }
+        }
+
+        const context = await this.assembleContext(state, effectiveOptions, mode);
 
         let response: Extract<ModelStreamEvent, { type: 'model_complete' }> | undefined;
-        for await (const event of this.streamModel(context, effectiveOptions)) {
+        for await (const event of this.streamModel(context, effectiveOptions, mode)) {
+          if (shouldAbort()) break;
           if (event.type === 'content_block_delta') {
-            yield event;
+            if (mustUseTools && !toolsUsedInQuery) {
+              deferredText.push(event.delta.text);
+            } else {
+              yield* flushDeferredText();
+              yield event;
+            }
           } else if (event.type === 'model_complete') {
             response = event;
           }
         }
 
+        if (shouldAbort()) {
+          yield {
+            type: 'error',
+            error: { code: 'ABORTED', message: 'Query interrupted' },
+          };
+          break;
+        }
+
         if (!response) break;
 
         if (response.stopReason === 'end_turn') {
-          // 持久化 assistant 回复，供 REPL 多轮对话使用
+          const noToolsUsed = response.toolCalls.length === 0;
+
+          if (
+            noToolsUsed &&
+            mustUseTools &&
+            !toolsUsedInQuery &&
+            toolNudgeAttempts < MAX_TOOL_NUDGE_RETRIES
+          ) {
+            toolNudgeAttempts++;
+            deferredText = [];
+            this.log.warn('Model returned end_turn without tools; nudging tool use');
+            state.messages.push({
+              role: 'user',
+              content: TOOL_NUDGE_MESSAGE,
+              timestamp: Date.now(),
+            });
+            effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+            continue;
+          }
+
+          if (noToolsUsed && mustUseTools && !toolsUsedInQuery) {
+            yield {
+              type: 'error',
+              error: {
+                code: 'TOOL_REQUIRED',
+                message: 'Model replied without calling required tools',
+              },
+            };
+            break;
+          }
+
           const assistantBlocks = responseContentToBlocks(response.content);
           if (assistantBlocks.length > 0) {
             state.messages.push({
@@ -113,6 +309,8 @@ export class QueryEngine {
               timestamp: Date.now(),
             });
           }
+
+          yield* flushDeferredText();
 
           yield {
             type: 'message_stop',
@@ -129,6 +327,9 @@ export class QueryEngine {
         }
 
         if (response.stopReason === 'tool_use') {
+          deferredText = [];
+          toolsUsedInQuery = true;
+
           state.messages.push({
             role: 'assistant',
             content: responseContentToBlocks(response.content),
@@ -146,6 +347,8 @@ export class QueryEngine {
           const approvedCalls: ToolCall[] = [];
 
           for (const toolCall of response.toolCalls) {
+            if (shouldAbort()) break;
+
             yield { type: 'tool_use', tool: toolCall };
 
             const allowed = this.permissionSystem.check({ tool: toolCall, mode, context: state });
@@ -161,10 +364,24 @@ export class QueryEngine {
             }
 
             if (allowed.requiresInteraction) {
-              const confirmed = await this.permissionPrompt(toolCall);
-              if (!confirmed) {
+              if (shouldAbort()) {
                 resultById.set(toolCall.id, {
-                  content: [{ type: 'text', text: 'User denied permission' }],
+                  content: [{ type: 'text', text: 'Interrupted during permission prompt' }],
+                  isError: true,
+                });
+                continue;
+              }
+              const confirmed = await this.permissionPrompt(toolCall);
+              if (shouldAbort() || !confirmed) {
+                resultById.set(toolCall.id, {
+                  content: [
+                    {
+                      type: 'text',
+                      text: shouldAbort()
+                        ? 'Interrupted during permission prompt'
+                        : 'User denied permission',
+                    },
+                  ],
                   isError: true,
                 });
                 continue;
@@ -172,6 +389,14 @@ export class QueryEngine {
             }
 
             approvedCalls.push(toolCall);
+          }
+
+          if (shouldAbort()) {
+            yield {
+              type: 'error',
+              error: { code: 'ABORTED', message: 'Query interrupted' },
+            };
+            break;
           }
 
           // concurrencySafe 工具并行执行
@@ -247,14 +472,22 @@ export class QueryEngine {
       }
     }
 
-    this.sessionManager.saveSession(state);
+    if (!shouldAbort()) {
+      this.sessionManager.saveSession(state);
+    }
     this.log.debug('Query completed');
   }
 
-  private async assembleContext(state: SessionState, options: QueryOptions) {
+  private async assembleContext(
+    state: SessionState,
+    options: QueryOptions,
+    mode: PermissionMode
+  ) {
+    const tools =
+      mode === PermissionMode.PLAN ? [] : this.toolRegistry.list();
     const context = await this.contextAssembler.assemble(state, {
       systemPrompt: options.systemPrompt,
-      tools: this.toolRegistry.list(),
+      tools,
     });
     context.maxTokens = this.contextMaxTokens;
     return this.compactionPipeline.run(context);
@@ -262,24 +495,39 @@ export class QueryEngine {
 
   private async *streamModel(
     context: Awaited<ReturnType<typeof this.assembleContext>>,
-    options: QueryOptions
+    options: QueryOptions,
+    mode: PermissionMode
   ) {
-    const tools = this.toolRegistry.list();
+    const tools =
+      mode === PermissionMode.PLAN || options.suppressTools ? [] : this.toolRegistry.list();
     const system = context.systemPrompt;
-    const messages = serializeMessagesForApi(context.messages);
+    const { messages } = compileMessagesForApi(context.messages);
 
-    const stream = this.client.messages.stream({
+    const streamParams: Anthropic.Messages.MessageCreateParams = {
       model: options.model ?? 'claude-sonnet-4-0',
       max_tokens: Math.min(options.maxTokens ?? 8192, context.maxTokens),
       temperature: options.temperature ?? 0.7,
       system,
       messages,
-      tools: tools.map((t) => ({
+    };
+
+    if (tools.length > 0) {
+      streamParams.tools = tools.map((t) => ({
         name: t.name,
         description: t.description,
         input_schema: t.inputSchema,
-      })) as Anthropic.Messages.Tool[],
-    });
+      })) as Anthropic.Messages.Tool[];
+      if (options.toolChoice === 'any') {
+        streamParams.tool_choice = { type: 'any' };
+      }
+    }
+
+    // Anthropic SDK 的 messages.stream() 在返回前会先发起 HTTP 请求；429/529/网络错误在
+// 这个阶段或首次迭代时抛错。我们用 withRetry 包装：首次抛错会退避重试整个请求。
+const stream = await withRetry(
+      () => Promise.resolve().then(() => this.client.messages.stream(streamParams)),
+      { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 8000 }
+    );
 
     for await (const event of consumeModelStream(stream as AsyncIterable<StreamEventLike>)) {
       if (event.type === 'model_complete') {
@@ -426,20 +674,4 @@ export interface QueryEngineOptions {
   contextAssembler?: ContextAssembler;
   compactionPipeline?: CompactionPipeline;
   permissionPrompt?: PermissionPromptFn;
-}
-
-interface QueryEvent {
-  type:
-    | 'content_block_delta'
-    | 'tool_use'
-    | 'tool_result'
-    | 'content_block_stop'
-    | 'message_stop'
-    | 'error';
-  delta?: { index: number; text: string };
-  tool?: ToolCall;
-  result?: ToolResult;
-  stopReason?: StopReason;
-  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
-  error?: { code: string; message: string };
 }

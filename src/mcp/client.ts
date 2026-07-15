@@ -159,6 +159,9 @@ export class MCPClient {
     description: string | undefined,
     inputSchema: unknown
   ): ToolDefinition {
+    // 闭包绑定 MCPClient 实例；禁止 MCPClient.prototype.callTool.call(this) —
+    // tool.execute 的 this 是工具对象，不是 client，会导致 servers Map 丢失。
+    const client = this;
     return {
       name: `mcp__${serverName}__${name}`,
       description: description ?? `MCP tool ${name} from ${serverName}`,
@@ -166,12 +169,7 @@ export class MCPClient {
       concurrencySafe: false,
       permissionMode: PermissionMode.DEFAULT,
       async execute(input) {
-        return MCPClient.prototype.callTool.call(
-          this,
-          serverName,
-          name,
-          input as Record<string, unknown>
-        );
+        return client.callTool(serverName, name, input as Record<string, unknown>);
       },
     };
   }

@@ -82,6 +82,35 @@ describe('Bash Security', () => {
     expect(check.category).toBe('destructive');
   });
 
+  // Case-insensitive variants of dangerous commands must also be blocked (regression: regex missing /i).
+  it('blocks rm -Rf / (case-insensitive)', () => {
+    const check = checkBashSecurity('RM -Rf /');
+    expect(check.safe).toBe(false);
+    expect(check.category).toBe('destructive');
+  });
+
+  // Exact-match base command: `lsmine` is not `ls` and must NOT be auto-approved readonly.
+  it('does not classify lsmine as readonly (exact base match)', () => {
+    const check = checkBashSecurity('lsmine');
+    expect(check.safe).toBe(false);
+  });
+
+  // find -exec passes the segment as a single block; must be blocked, not silently auto-approved.
+  it('blocks find -exec rm', () => {
+    const check = checkBashSecurity('find . -exec rm -rf {} \\;');
+    expect(check.safe).toBe(false);
+  });
+
+  it('blocks eval', () => {
+    const check = checkBashSecurity('eval "rm -rf /"');
+    expect(check.safe).toBe(false);
+  });
+
+  it('blocks xargs', () => {
+    const check = checkBashSecurity('echo url | xargs curl');
+    expect(check.safe).toBe(false);
+  });
+
   it('blocks unknown commands', () => {
     const check = checkBashSecurity('node -e "1"');
     expect(check.safe).toBe(false);

@@ -12,7 +12,7 @@
 | 9 上下文源 + 压缩 L1–5 | ✅ |
 | 权限 7 模式 + AUTO 分类器 + tool-gate | ✅ |
 | MCP stdio + Plugins/Skills/Hooks | ✅ |
-| 测试 | 310 通过（1 periodic skip），覆盖率 80.3% |
+| 测试 | 397 通过（1 periodic skip），覆盖率 ≥80% |
 | Eval harness | ✅ gate + periodic |
 
 ---
@@ -67,17 +67,33 @@
 
 ---
 
+## Phase G — Claude Code 行为对齐（进行中）
+
+| # | 任务 | 关键文件 | 状态 |
+|---|------|---------|------|
+| G1 | **预取不禁工具**：DAG 注入后保留 tool loop（去 suppressTools） | `src/agent/engine.ts` | ✅ |
+| G2 | **Shift+Tab 切模式** + 去掉假 /vim /effort 宣传 | `cycle-mode.ts`, `repl-line-editor.ts` | ✅ |
+| G3 | **Edit 唯一匹配 + replaceAll** | `src/tools/edit.ts` | ✅ |
+| G4 | **图片粘贴 / 多模态输入** | REPL + ContentBlock | 🔜 |
+| G5 | **MCP HTTP/SSE** | `src/mcp/client.ts` | 🔜 |
+| G6 | **ML AUTO 分类器**（本地 Claude Code 路由） | `classifier.ts` | 🔜 |
+| G7 | **预取走权限批确认** | `prefetch-gate.ts` | ✅ |
+| G8 | **/permissions 真规则 + /cost 按模型计价** | `format-display.ts`, `cost-estimate.ts` | ✅ |
+
+---
+
 ## 执行顺序
 
 ```
-A1 → A2 → A3 → B1 → B2 → B3 → C1 → C2 → C3 → D1 → D2 → D3 → E1 → E2 → E3 → F1 → F2 → F3
+A1 → … → F3 → G1 → G2 → G3 → G7 → G8 → G4 → G5 → G6
 ```
 
 ## 不在本轮范围
 
 - Ink/React TUI（依赖已装但未用，defer）
 - Go agent core / SQLite（架构文档远期项）
-- ML 权限分类器（需本地 Claude Code 路由，defer）
+- ML 权限分类器（需本地 Claude Code 路由，defer → G6）
+- 容器级 Bash 沙箱
 
 ---
 
@@ -85,6 +101,9 @@ A1 → A2 → A3 → B1 → B2 → B3 → C1 → C2 → C3 → D1 → D2 → D3 
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-15 | G7–G8：预取批确认、/permissions 真规则、/cost 按模型计价 |
+| 2026-07-14 | 去掉虚假执行：真实 boot 自检、MCP this 绑定、prefetch worker 文案、/plan prepared、菜单去 vim/effort |
+| 2026-07-14 | Phase G1–G3：预取保留工具、Shift+Tab、Edit uniqueness |
 | 2026-07-06 | Week 1–4: Agent/MCP/Hooks/Context/Parallel/Streaming/Permissions AUTO/Plugins |
 | 2026-07-06 | Week 5: EnhancedRenderer/StreamingMarkdown/Plugin agents |
 | 2026-07-06 | Phase A–E 全部完成；F1 覆盖率 80.3%（300 tests） |

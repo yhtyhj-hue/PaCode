@@ -120,6 +120,22 @@ describe('SubagentManager', () => {
     expect(executeSpy.mock.calls[0]?.[0]?.name).toBe('on-subagent-stop');
   });
 
+  it('runParallel executes all agents concurrently', async () => {
+    manager.register({ name: 'a1', description: 'a', mode: PermissionMode.BYPASS });
+    manager.register({ name: 'a2', description: 'b', mode: PermissionMode.BYPASS });
+
+    const results = await manager.runParallel(
+      [
+        { config: manager.get('a1')!, prompt: 'one' },
+        { config: manager.get('a2')!, prompt: 'two' },
+      ],
+      { createEngine: createMockEngine([textEndTurnScenario('ok')]) }
+    );
+
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.success)).toBe(true);
+  });
+
   it('fires SubagentStop hook on error path', async () => {
     manager.register({ name: 'err-agent', description: 'e', mode: PermissionMode.BYPASS });
 

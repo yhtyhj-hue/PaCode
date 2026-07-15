@@ -32,17 +32,24 @@ function globMatch(pattern: string, text: string): boolean {
  * 规则优先级：deny > ask > allow
  * 无匹配返回 null，交给 mode 逻辑
  */
-export function matchPermissionRules(
+export function matchDenyRules(
   tool: ToolCall,
   rules?: PermissionRules
 ): PermissionCheckResult | null {
-  if (!rules) return null;
-
-  for (const rule of rules.deny ?? []) {
+  if (!rules?.deny) return null;
+  for (const rule of rules.deny) {
     if (matchRule(rule, tool)) {
       return { allowed: false, reason: `Denied by rule: ${rule}` };
     }
   }
+  return null;
+}
+
+export function matchAllowAskRules(
+  tool: ToolCall,
+  rules?: PermissionRules
+): PermissionCheckResult | null {
+  if (!rules) return null;
 
   for (const rule of rules.ask ?? []) {
     if (matchRule(rule, tool)) {
@@ -57,4 +64,13 @@ export function matchPermissionRules(
   }
 
   return null;
+}
+
+export function matchPermissionRules(
+  tool: ToolCall,
+  rules?: PermissionRules
+): PermissionCheckResult | null {
+  const deny = matchDenyRules(tool, rules);
+  if (deny) return deny;
+  return matchAllowAskRules(tool, rules);
 }

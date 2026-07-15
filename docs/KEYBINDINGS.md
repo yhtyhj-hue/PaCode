@@ -15,14 +15,14 @@ Reference for Claude Code-style keyboard shortcuts in PaCode.
 
 | Shortcut | Action | Status |
 |----------|--------|--------|
-| `Shift+Tab` | Cycle permission modes | 🔜 Use `/mode` |
+| `Shift+Tab` | Cycle permission modes (default → accept edits → plan) | ✅ Implemented |
 
 ## Model Picker
 
 | Shortcut | Action | Status |
 |----------|--------|--------|
 | `Cmd+P` / `Meta+P` | Open model picker | 🔜 Use `/model` |
-| `Cmd+T` / `Meta+T` | Toggle thinking | 🔜 Use `/effort` |
+| `Cmd+T` / `Meta+T` | Toggle thinking | 🔜 Not implemented (`/effort` stub) |
 
 ## Input
 

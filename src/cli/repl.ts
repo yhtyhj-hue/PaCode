@@ -5,9 +5,9 @@
  * Implements core Claude Code slash commands.
  */
 
-import { createInterface, Interface } from 'node:readline';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import readline from 'node:readline';
 import { QueryEngine } from '../agent/engine.js';
 import { SessionManager } from '../session/manager.js';
 import { getToolRegistry, ToolRegistry } from '../tools/registry.js';
@@ -28,7 +28,18 @@ import { parsePlanFromMarkdown, extractLastAssistantText } from '../agent/plan-p
 import { ContextAssembler } from '../context/assembler.js';
 import { renderer } from './enhanced-renderer.js';
 import { StreamingMarkdownWriter, summarizeToolAction } from './streaming-markdown.js';
-import { ToolCall } from '../pkg/types.js';
+import { ReplLineEditor } from './repl-line-editor.js';
+import { formatUserMessage } from './repl-ui.js';
+import { formatCostReport } from './cost-estimate.js';
+import { formatPermissionsReport } from '../permission/format-display.js';
+import { resolveAppConfig } from '../pkg/app-config.js';
+import type { SlashMenuEntry } from './slash-menu.js';
+import { isCtrlCKey, resolveCtrlCAction, shouldDedupeCtrlC } from './repl-interrupt.js';
+import { ToolCall, ToolResult } from '../pkg/types.js';
+import { TranscriptBuffer, isCtrlOKey } from './transcript-buffer.js';
+import { QueryProgressLine } from './query-progress.js';
+import { getAgentPool } from '../services/agent-scheduler/index.js';
+import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -41,7 +52,7 @@ const RED = '\x1b[31m';
 const GRAY = '\x1b[90m';
 
 export class REPL {
-  private rl: Interface | null = null;
+  private inputEditor: ReplLineEditor | null = null;
   private engine: QueryEngine;
   private sessionManager: SessionManager;
   private toolRegistry: ToolRegistry;
@@ -58,6 +69,14 @@ export class REPL {
   private hookRegistry: HookRegistry;
   private pluginCommands: Map<string, PluginCommand> = new Map();
   private streamWriter = new StreamingMarkdownWriter(renderer);
+  private lastCtrlCAt = 0;
+  private lastCtrlCHandledAt = 0;
+  private isProcessing = false;
+  private interruptRequested = false;
+  private ctrlCListener: ((str: string, key: readline.Key) => void) | null = null;
+  private sigintListener: (() => void) | null = null;
+  /** 当前 query 的 transcript，供 ctrl+o 展开 */
+  private queryTranscript: TranscriptBuffer | null = null;
 
   constructor(options: REPLOptions) {
     this.apiKey = options.apiKey;
@@ -129,112 +148,163 @@ export class REPL {
 
     this.printWelcome();
 
-    // Disable readline's default prompt - we draw our own
-    this.rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: '',
-    });
+    this.inputEditor = new ReplLineEditor();
+    this.beginInterruptListener();
+    try {
+      await this.runInputLoop(true);
+    } finally {
+      this.endInterruptListener();
+    }
+  }
 
-    // Draw initial UI: top border + prompt + status bar
-    this.drawInputUI();
-    // Use readline's prompt() to actually wait for input
-    this.rl.prompt();
+  /** 主输入循环：四行输入区 + 自定义行编辑器 */
+  private async runInputLoop(isFirst: boolean): Promise<void> {
+    let first = isFirst;
 
-    this.setupKeyHandlers();
+    while (!this.exitRequested && this.inputEditor) {
+      const input = await this.inputEditor.readLine({
+        mode: this.mode,
+        tokens: this.tokenUsage.input + this.tokenUsage.output,
+        isFirst: first,
+        slashCommands: this.getSlashMenuEntries(),
+        onModeCycle: () => {
+          this.mode = cyclePermissionMode(this.mode);
+          this.getOrCreateSession().mode = this.mode;
+          return this.mode;
+        },
+      });
+      first = false;
 
-    this.rl.on('line', (input) => {
+      if (input === null) {
+        this.exitRequested = true;
+        break;
+      }
+
       const trimmed = input.trim();
 
-      if (this.exitRequested || !this.rl) {
-        this.rl?.close();
-        return;
-      }
-
       if (trimmed.startsWith('/')) {
-        this.dispatchSlashCommand(trimmed).then(() => {
-          if (this.exitRequested || !this.rl) {
-            this.rl?.close();
-          } else {
-            this.drawInputUI();
-          }
-        });
-        return;
+        this.printUserTurn(trimmed);
+        await this.dispatchSlashCommand(trimmed);
+        if (this.exitRequested) break;
+        continue;
       }
 
-      if (!trimmed) {
-        this.drawInputUI();
-        return;
-      }
+      if (!trimmed) continue;
 
       if (trimmed === 'exit' || trimmed === 'quit') {
         this.exitRequested = true;
-        this.rl.close();
+        break;
+      }
+
+      this.printUserTurn(trimmed);
+      await this.processMessage(trimmed);
+      if (this.exitRequested) break;
+    }
+
+    this.inputEditor?.close();
+    this.printGoodbye();
+    process.exit(0);
+  }
+
+  /** 全局 Ctrl+C：清输入 / 中断生成 / 双击退出 */
+  private beginInterruptListener(): void {
+    if (!process.stdin.isTTY || this.ctrlCListener) return;
+
+    readline.emitKeypressEvents(process.stdin);
+
+    this.ctrlCListener = (str, key) => {
+      if (
+        this.isProcessing &&
+        this.queryTranscript &&
+        isCtrlOKey(str, key ?? {})
+      ) {
+        this.dumpTranscript(this.queryTranscript);
         return;
       }
-
-      this.processMessage(trimmed).then(() => {
-        if (this.exitRequested) {
-          this.rl?.close();
-        } else {
-          this.drawInputUI();
-        }
-      });
-    });
-
-    this.rl.on('close', () => {
-      this.printGoodbye();
-      process.exit(0);
-    });
-  }
-
-  private drawInputUI(): void {
-    // Claude Code style: top border + prompt with cursor + status bar
-    const width = 120;
-    const border = '-'.repeat(width);
-    process.stdout.write(`${DIM}${border}${RESET}\r\n`);
-
-    // Prompt with cursor (using simple > instead of ❯ for compat)
-    process.stdout.write(`${CYAN}${BOLD}> ${RESET}`);
-
-    // Status bar below
-    this.drawStatusBar();
-  }
-
-  private setupKeyHandlers(): void {
-    if (!this.rl) return;
-    const stdin = process.stdin as NodeJS.ReadStream & {
-      emit: (event: string, ...args: unknown[]) => boolean;
+      if (!isCtrlCKey(str, key ?? {})) return;
+      this.handleCtrlC();
     };
 
-    // Ctrl+C - interrupt/cancel
-    stdin.on('keypress', (_str: string, key: { ctrl?: boolean; name?: string }) => {
-      if (key?.ctrl && key.name === 'c') {
-        // Just clear input for now (processMessage handles actual interrupt)
-        if (this.rl) {
-          this.rl.write('', { ctrl: true, name: 'u' });
-        }
-      }
+    this.sigintListener = () => {
+      // raw 模式下 keypress 已处理 Ctrl+C，避免双触发
+      if (this.inputEditor?.isActive()) return;
+      this.handleCtrlC();
+    };
 
-      // Ctrl+D - exit
-      if (key?.ctrl && key.name === 'd') {
-        this.exitRequested = true;
-        this.rl?.close();
-      }
+    process.stdin.on('keypress', this.ctrlCListener);
+    process.on('SIGINT', this.sigintListener);
+  }
 
-      // Shift+Tab - cycle permission mode
-      // Note: Shift+Tab is hard to detect in standard readline,
-      // so we expose /mode for now
+  private endInterruptListener(): void {
+    if (this.ctrlCListener) {
+      process.stdin.off('keypress', this.ctrlCListener);
+      this.ctrlCListener = null;
+    }
+    if (this.sigintListener) {
+      process.off('SIGINT', this.sigintListener);
+      this.sigintListener = null;
+    }
+  }
+
+  private handleCtrlC(): void {
+    const now = Date.now();
+    if (shouldDedupeCtrlC(this.lastCtrlCHandledAt, now)) return;
+    this.lastCtrlCHandledAt = now;
+
+    const action = resolveCtrlCAction({
+      isProcessing: this.isProcessing,
+      bufferLength: this.inputEditor?.getBufferLength() ?? 0,
+      lastCtrlCAt: this.lastCtrlCAt,
+      now,
     });
+
+    switch (action) {
+      case 'clear-buffer':
+        process.stdout.write('\n^C\n');
+        this.inputEditor?.clearBuffer();
+        this.lastCtrlCAt = 0;
+        return;
+      case 'abort-processing':
+        this.interruptRequested = true;
+        process.stdout.write('\n^C\n');
+        this.lastCtrlCAt = now;
+        return;
+      case 'hint-exit':
+        this.inputEditor?.showExitHint(
+          `${DIM}  再按一次 Ctrl+C 退出 PaCode${RESET}`
+        );
+        this.lastCtrlCAt = now;
+        return;
+      case 'exit':
+        this.exitRequested = true;
+        this.interruptRequested = true;
+        this.inputEditor?.cancelForExit();
+        return;
+    }
   }
 
   private printWelcome(): void {
     console.log('');
-    console.log(
-      `${CYAN}${BOLD}  💬 Interactive Mode${RESET} ${DIM}- Type your message and press Enter${RESET}`
-    );
-    console.log(`${DIM}  Commands: /help for all commands | /exit to quit${RESET}`);
+    console.log(`${DIM}  Type a message below.${RESET}`);
     console.log('');
+  }
+
+  /** 对话区用户轮次（Claude Code 风格，无边框） */
+  private printUserTurn(message: string): void {
+    process.stdout.write(`${formatUserMessage(message)}\n\n`);
+  }
+
+  /** 自定义 + 插件 slash 命令，供输入菜单展示 */
+  private getSlashMenuEntries(): SlashMenuEntry[] {
+    const custom = this.skillsLoader.listSlashCommands().map((cmd) => ({
+      command: `/${cmd.name}`,
+      description: cmd.description,
+    }));
+    const plugins = Array.from(this.pluginCommands.values()).map((cmd) => ({
+      command: `/${cmd.name}`,
+      description: cmd.description,
+    }));
+    return [...custom, ...plugins];
   }
 
   private printGoodbye(): void {
@@ -244,30 +314,12 @@ export class REPL {
       this.sessionManager.saveSession(session);
     }
 
+    process.stdout.write('\n');
     const elapsed = Math.round((Date.now() - this.startTime) / 1000);
-    console.log('');
+    const totalTokens = this.tokenUsage.input + this.tokenUsage.output;
     console.log(
-      `${GREEN}✓${RESET} Session ended. Duration: ${elapsed}s | Tokens: ${this.tokenUsage.input + this.tokenUsage.output}`
+      `${GREEN}✓${RESET} Session ended. ${DIM}Duration: ${elapsed}s | Tokens: ${totalTokens}${RESET}`
     );
-    console.log('');
-  }
-
-  private drawStatusBar(): void {
-    const width = 120;
-    const modeLabel = this.mode === PermissionMode.DEFAULT ? 'normal' : this.mode;
-    const leftText = `⏵⏵ ${modeLabel} mode · shift+tab to cycle · esc to interrupt · ctrl+c cancel · ctrl+d exit`;
-
-    // Calculate approximate context usage based on token count
-    const tokenCount = this.tokenUsage.input + this.tokenUsage.output;
-    const maxContext = 200000; // 200K context window
-    const usagePercent = Math.min(100, Math.round((tokenCount / maxContext) * 100));
-    const contextText = tokenCount > 0 ? `${usagePercent}% context used` : '0% context used';
-
-    const rightText = `${contextText} · /model ${this.model} · /help`;
-
-    const pad = width - leftText.length - rightText.length;
-    const padding = ' '.repeat(Math.max(2, pad));
-    console.log(`${DIM}${leftText}${padding}${rightText}${RESET}`);
   }
 
   /** 解析 slash 输入，不执行（供测试与 dispatch 共用） */
@@ -363,7 +415,7 @@ export class REPL {
         this.handleModel(args);
         break;
       case '/mode':
-        this.handleMode(args);
+        await this.handleMode(args);
         break;
       case '/agents':
         this.showAgents();
@@ -375,10 +427,10 @@ export class REPL {
         this.showProviders();
         break;
       case '/effort':
-        console.log(`${DIM}Effort level: default${RESET}`);
+        console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
         break;
       case '/vim':
-        console.log(`${DIM}Vim mode: off${RESET}`);
+        console.log(`${DIM}Vim mode is not implemented. Use the line editor as-is.${RESET}`);
         break;
       case '/exit':
       case '/quit':
@@ -410,10 +462,8 @@ export class REPL {
         ['/providers', 'List API providers'],
       ],
       Configuration: [
-        ['/mode [name]', 'Change permission mode'],
+        ['/mode [name]', 'Change permission mode (or Shift+Tab)'],
         ['/model [name]', 'Show or change model'],
-        ['/effort', 'Show effort level'],
-        ['/vim', 'Toggle vim mode'],
         ['/init', 'Initialize project with CLAUDE.md'],
       ],
     };
@@ -521,13 +571,11 @@ export class REPL {
 
   private showCost(): void {
     console.log('');
-    console.log(`${CYAN}${BOLD}Token Usage${RESET}`);
-    console.log(`  ${DIM}Input:${RESET}   ${this.tokenUsage.input}`);
-    console.log(`  ${DIM}Output:${RESET}  ${this.tokenUsage.output}`);
-    console.log(`  ${DIM}Total:${RESET}   ${this.tokenUsage.input + this.tokenUsage.output}`);
-    // Rough cost estimate: $3/M input, $15/M output
-    const cost = (this.tokenUsage.input * 3 + this.tokenUsage.output * 15) / 1_000_000;
-    console.log(`  ${DIM}Est. cost:${RESET} $${cost.toFixed(4)}`);
+    const lines = formatCostReport(this.model, this.tokenUsage.input, this.tokenUsage.output);
+    console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
+    for (const line of lines.slice(1)) {
+      console.log(`${DIM}${line}${RESET}`);
+    }
     console.log('');
   }
 
@@ -613,10 +661,13 @@ Project-specific instructions for PaCode/Claude Code.
   }
 
   private showPermissions(): void {
+    const { permissions } = resolveAppConfig();
     console.log('');
-    console.log(`${CYAN}${BOLD}Permission Rules${RESET}`);
-    console.log(`  ${DIM}Current mode: ${this.mode}${RESET}`);
-    console.log(`  ${DIM}Configure with: /mode <name>${RESET}`);
+    const lines = formatPermissionsReport(this.mode, permissions);
+    console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
+    for (const line of lines.slice(1)) {
+      console.log(`${DIM}${line}${RESET}`);
+    }
     console.log('');
   }
 
@@ -630,7 +681,23 @@ Project-specific instructions for PaCode/Claude Code.
     console.log(`${GREEN}✓${RESET} Model: ${this.model}`);
   }
 
-  private handleMode(args: string[]): void {
+  /** 同步读取一行用户确认（仅 confirm 场景使用；不与 inputEditor 交互） */
+  private async readConfirmationLine(): Promise<string> {
+    if (!this.inputEditor) return '';
+    try {
+      const result = await this.inputEditor.readLine({
+        mode: this.mode,
+        tokens: this.tokenUsage.input + this.tokenUsage.output,
+        isFirst: false,
+        slashCommands: [],
+      });
+      return (result ?? '').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  private async handleMode(args: string[]): Promise<void> {
     if (args.length === 0) {
       console.log(`Current mode: ${this.mode}`);
       console.log(`Available: plan, default, acceptEdits, auto, dontAsk, bypass`);
@@ -645,12 +712,24 @@ Project-specific instructions for PaCode/Claude Code.
       dontAsk: PermissionMode.DONT_ASK,
       bypass: PermissionMode.BYPASS,
     };
-    if (modes[newMode]) {
-      this.mode = modes[newMode]!;
-      console.log(`${GREEN}✓${RESET} Mode: ${this.mode}`);
-    } else {
+    if (!modes[newMode]) {
       console.log(`${RED}✗${RESET} Unknown mode: ${newMode}`);
+      return;
     }
+    // 宽松模式（auto/dontAsk/bypass）需用户主动二次确认：模式切换属于安全敏感动作。
+    const LOOSE_MODES = new Set([PermissionMode.AUTO, PermissionMode.DONT_ASK, PermissionMode.BYPASS]);
+    if (LOOSE_MODES.has(modes[newMode]!) && this.mode !== modes[newMode]) {
+      console.log(`${YELLOW}⚠${RESET}  About to switch mode: ${this.mode} → ${modes[newMode]}`);
+      console.log(`${DIM}Loose modes auto-approve many tool actions. Continue? (y/N)${RESET}`);
+      const answer = await this.readConfirmationLine();
+      if (answer !== 'y' && answer !== 'Y') {
+        console.log(`${DIM}Mode change cancelled.${RESET}`);
+        return;
+      }
+    }
+    this.mode = modes[newMode]!;
+    this.getOrCreateSession().mode = this.mode;
+    console.log(`${GREEN}✓${RESET} Mode: ${this.mode}`);
   }
 
   private showProviders(): void {
@@ -671,16 +750,30 @@ Project-specific instructions for PaCode/Claude Code.
   }
 
   private showAgents(): void {
-    const agents = getSubagentManager().list();
+    const pool = getAgentPool();
+    const running = pool.snapshot();
+    const registered = getSubagentManager().list();
+
     console.log('');
-    console.log(`${CYAN}${BOLD}Available Subagents${RESET}`);
-    for (const agent of agents) {
-      console.log(`  ${CYAN}${agent.name}${RESET}`);
-      console.log(`    ${DIM}${agent.description}${RESET}`);
-      if (agent.tools && agent.tools.length > 0) {
-        console.log(`    ${DIM}Tools: ${agent.tools.join(', ')}${RESET}`);
+    console.log(`${CYAN}${BOLD}Agents${RESET}`);
+
+    if (pool.activeQueryId() && running.length > 0) {
+      console.log(`${DIM}Active query: ${pool.activeQueryId()}${RESET}`);
+      for (const run of running) {
+        const marker =
+          run.status === 'done' ? `${GREEN}●${RESET}` : run.status === 'error' ? `${RED}●${RESET}` : `${YELLOW}●${RESET}`;
+        const hint = run.currentTool ?? run.status;
+        console.log(`  ${marker} ${run.label} (${run.agentType}) · ${run.toolCalls} tools · ${hint}`);
       }
+      console.log('');
     }
+
+    console.log(`${DIM}Registered subagent types:${RESET}`);
+    for (const agent of registered) {
+      console.log(`  ${CYAN}${agent.name}${RESET} — ${DIM}${agent.description}${RESET}`);
+    }
+    console.log('');
+    console.log(`${DIM}Prefetch workers run automatically on 检查/优化 queries (same-process DAG, not subagents).${RESET}`);
     console.log('');
   }
 
@@ -745,6 +838,15 @@ Project-specific instructions for PaCode/Claude Code.
         console.log(`${YELLOW}⚠${RESET}  No active plan. Use /plan <description> first.`);
         return;
       }
+      // /plan execute 将模式切到 acceptEdits（后续工具自动批准）。
+      // 这是安全敏感动作，必须二次确认。
+      console.log(`${YELLOW}⚠${RESET}  /plan execute will switch to acceptEdits mode (auto-approve Edit/Write/Read/Glob/Grep).`);
+      console.log(`${DIM}Continue? (y/N)${RESET}`);
+      const answer = await this.readConfirmationLine();
+      if (answer !== 'y' && answer !== 'Y') {
+        console.log(`${DIM}Execution cancelled.${RESET}`);
+        return;
+      }
       if (plan.status === 'draft') {
         planManager.approve(plan.id);
       }
@@ -756,8 +858,10 @@ Project-specific instructions for PaCode/Claude Code.
       this.mode = PermissionMode.ACCEPT_EDITS;
       const session = this.getOrCreateSession();
       session.mode = this.mode;
-      console.log(`${GREEN}✓${RESET} Executing plan: ${executing.title}`);
-      console.log(`${DIM}Switched to acceptEdits mode. Describe which step to run, or paste the plan.${RESET}`);
+      console.log(`${GREEN}✓${RESET} Plan prepared (not auto-executed): ${executing.title}`);
+      console.log(
+        `${DIM}Steps are NOT run automatically. Switched to acceptEdits — tell me which step to run, or paste the plan.${RESET}`
+      );
       console.log('');
       console.log(planManager.formatPlanMessage(executing));
       return;
@@ -807,13 +911,37 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     console.log(`${DIM}Next: /plan approve → /plan execute${RESET}`);
   }
 
-  private async processMessage(message: string): Promise<void> {
-    console.log('');
-    console.log(
-      `${CYAN}${BOLD}>${RESET} ${message.split('\n')[0]}${message.includes('\n') ? '...' : ''}`
-    );
-    console.log('');
+  private formatToolLabel(tool: ToolCall): string {
+    const args = Object.entries(tool.input)
+      .map(([k, v]) => {
+        const val = typeof v === 'string' ? v : JSON.stringify(v);
+        return `${k}=${val.length > 40 ? val.slice(0, 37) + '...' : val}`;
+      })
+      .join(' ');
+    return `${tool.name}(${args})`;
+  }
 
+  private summarizeForTranscript(tool: ToolCall, result: ToolResult): string {
+    const text =
+      result.content[0]?.type === 'text' ? result.content[0].text : '';
+    if (result.isError) return text.slice(0, 200);
+    if (tool.name === 'Read') return `${text.split('\n').length} lines`;
+    if (tool.name === 'Glob') return `${text.split('\n').filter(Boolean).length} paths`;
+    return text.slice(0, 300);
+  }
+
+  private dumpTranscript(buffer: TranscriptBuffer): void {
+    const wasExpanded = buffer.expanded;
+    buffer.toggleExpand();
+    if (wasExpanded) return;
+    process.stdout.write(`\n${DIM}── transcript ──${RESET}\n`);
+    for (const entry of buffer.entries) {
+      renderer.renderTranscriptEntry(entry.label, entry.detail);
+    }
+    process.stdout.write(`${DIM}── end transcript ──${RESET}\n`);
+  }
+
+  private async processMessage(message: string): Promise<void> {
     const session = this.getOrCreateSession();
     session.messages.push({
       role: 'user',
@@ -822,54 +950,139 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     });
 
     const startTime = Date.now();
-    let toolCallCount = 0;
+    let modelToolCount = 0;
+    let turnOutputTokens = 0;
+    const prefetchTools: ToolCall[] = [];
+    let thoughtPrinted = false;
+    let agentsBlockPrinted = false;
+    const transcript = new TranscriptBuffer();
+    this.queryTranscript = transcript;
+    const progress = new QueryProgressLine();
+    this.isProcessing = true;
+    this.interruptRequested = false;
+    this.inputEditor?.pause();
 
-    // Spinner frames
-    const spinnerFrames = [
-      '⏺ Pontificating   ',
-      '⏺ Pontificating.  ',
-      '⏺ Pontificating.. ',
-      '⏺ Pontificating...',
-    ];
-    let spinnerIdx = 0;
-    let spinnerInterval: ReturnType<typeof setInterval> | null = null;
-
-    // Start animated spinner
-    process.stdout.write(`${DIM}${spinnerFrames[0]}${RESET}\r`);
-    spinnerInterval = setInterval(() => {
-      spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
-      process.stdout.write(`\r${DIM}${spinnerFrames[spinnerIdx]}${RESET}  `);
-    }, 100);
-
+    progress.startThinking();
     this.streamWriter.reset();
+
+    const stopProgress = (): void => {
+      if (!thoughtPrinted) {
+        const elapsed = progress.stop();
+        progress.renderThoughtSummary(elapsed);
+        thoughtPrinted = true;
+      }
+    };
 
     try {
       for await (const event of this.engine.query(
-        { message, options: { model: this.model } },
+        {
+          message,
+          options: {
+            model: this.model,
+            shouldAbort: () => this.interruptRequested || this.exitRequested,
+          },
+        },
         session
       )) {
+        if (this.interruptRequested || this.exitRequested) break;
+
         switch (event.type) {
+          case 'skill_loaded':
+            if (event.skills && event.skills.length > 0) {
+              stopProgress();
+              renderer.renderSkillLoaded(event.skills);
+              for (const name of event.skills) {
+                transcript.add({ kind: 'skill', label: `Skill ${name}` });
+              }
+            }
+            break;
+          case 'agents_running':
+            if (event.parallelAgents && event.parallelAgents.length > 0) {
+              stopProgress();
+              progress.suspend();
+              agentsBlockPrinted = true;
+              renderer.renderParallelAgents(event.parallelAgents, {
+                elapsedSec: progress.elapsedSeconds(),
+              });
+              transcript.add({
+                kind: 'prefetch',
+                label: `Running ${event.parallelAgents.length} prefetch workers`,
+              });
+            }
+            break;
+          case 'agent_progress':
+            if (event.parallelAgents && event.tool && !agentsBlockPrinted) {
+              progress.setPrefetchPhase(this.formatToolLabel(event.tool));
+            }
+            break;
+          case 'agents_complete':
+            if (event.parallelAgents && event.parallelAgents.length > 0) {
+              progress.suspend();
+              // 补画 ■ 完成态，避免只留下启动时的空 □
+              renderer.renderParallelAgents(event.parallelAgents, {
+                elapsedSec: progress.elapsedSeconds(),
+              });
+            }
+            if (prefetchTools.length > 0) {
+              renderer.renderCompactToolActivity(prefetchTools, {
+                hiddenCount: transcript.hiddenCount(),
+              });
+            }
+            break;
+          case 'prefetch_progress':
+            if (event.tool && event.result) {
+              prefetchTools.push(event.tool);
+              if (!agentsBlockPrinted) {
+                progress.setPrefetchPhase(this.formatToolLabel(event.tool));
+              }
+              transcript.add({
+                kind: 'prefetch',
+                label: this.formatToolLabel(event.tool),
+                detail: this.summarizeForTranscript(event.tool, event.result),
+              });
+            }
+            break;
           case 'content_block_delta':
             if (event.delta) {
-              if (spinnerInterval) {
-                clearInterval(spinnerInterval);
-                spinnerInterval = null;
-                process.stdout.write('\r' + ' '.repeat(40) + '\r');
-              }
+              stopProgress();
               const formatted = this.streamWriter.append(event.delta.text);
               if (formatted) process.stdout.write(formatted);
             }
             break;
+          case 'prefetch_complete':
+            if (event.prefetchTools && event.prefetchTools.length > 0) {
+              stopProgress();
+              for (const t of event.prefetchTools) {
+                if (!prefetchTools.some((p) => p.id === t.id)) {
+                  prefetchTools.push(t);
+                }
+              }
+              if (!agentsBlockPrinted) {
+                renderer.renderCompactToolActivity(event.prefetchTools, {
+                  hiddenCount: transcript.hiddenCount(),
+                });
+              }
+            }
+            break;
           case 'tool_use':
             if (event.tool) {
-              toolCallCount++;
-              console.log('');
+              stopProgress();
+              modelToolCount++;
               renderer.renderToolUse(event.tool);
+              transcript.add({
+                kind: 'tool_use',
+                label: this.formatToolLabel(event.tool),
+              });
             }
             break;
           case 'tool_result':
-            if (event.result) {
-              renderer.renderToolResult(event.result);
+            if (event.tool && event.result) {
+              renderer.renderToolResult(event.tool, event.result);
+              transcript.add({
+                kind: 'tool_result',
+                label: this.formatToolLabel(event.tool),
+                detail: this.summarizeForTranscript(event.tool, event.result),
+              });
             }
             break;
           case 'message_stop': {
@@ -878,57 +1091,76 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
             if (event.usage) {
               this.tokenUsage.input += event.usage.inputTokens ?? 0;
               this.tokenUsage.output += event.usage.outputTokens ?? 0;
+              turnOutputTokens = event.usage.outputTokens ?? 0;
             }
             break;
           }
           case 'error':
             if (event.error) {
-              if (spinnerInterval) {
-                clearInterval(spinnerInterval);
-                spinnerInterval = null;
-                process.stdout.write('\r' + ' '.repeat(40) + '\r');
-              }
+              stopProgress();
               console.log(`\n${RED}⏺ Error: ${event.error.message}${RESET}`);
             }
             break;
         }
       }
 
-      // Clear spinner if still running
-      if (spinnerInterval) {
-        clearInterval(spinnerInterval);
-        process.stdout.write('\r' + ' '.repeat(40) + '\r');
+      stopProgress();
+
+      if (this.interruptRequested) {
+        console.log(`${DIM}· Interrupted${RESET}\n`);
+        return;
       }
+
       console.log('');
 
-      // Show completion status bar (Claude Code style)
       const elapsed = Math.round((Date.now() - startTime) / 1000);
-      const totalTokens = this.tokenUsage.input + this.tokenUsage.output;
-      console.log(
-        `${DIM}· Done (${elapsed}s · ↑ ${totalTokens} tokens${toolCallCount > 0 ? ` · ${toolCallCount} tools used` : ''})${RESET}\n`
-      );
+      const tokenMeta =
+        turnOutputTokens > 0
+          ? `${DIM}(${elapsed}s · ↓ ${turnOutputTokens} tokens)${RESET}`
+          : `${DIM}(${elapsed}s)${RESET}`;
+      console.log(`${tokenMeta}\n`);
 
       this.sessionManager.saveSession(session);
     } catch (error) {
-      if (spinnerInterval) {
-        clearInterval(spinnerInterval);
-        process.stdout.write('\r' + ' '.repeat(40) + '\r');
-      }
+      progress.stop();
       console.log(
         `\n${RED}⏺ Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`
       );
+    } finally {
+      this.isProcessing = false;
+      this.interruptRequested = false;
+      this.queryTranscript = null;
+      getAgentPool().clear();
+      if (!this.exitRequested) {
+        this.inputEditor?.resume();
+      }
     }
   }
 
   private async promptForPermission(tool: ToolCall): Promise<boolean> {
-    if (!process.stdin.isTTY) return true;
+    if (!process.stdin.isTTY) {
+      if (process.env['PACODE_AUTO_APPROVE'] === '1') return true;
+      return false;
+    }
 
-    if (this.rl) this.rl.pause();
+    const action = summarizeToolAction(tool);
+    const preview = action.length > 72 ? `${action.slice(0, 69)}…` : action;
+    process.stdout.write(
+      `\n${YELLOW}?${RESET} Allow ${BOLD}${tool.name}${RESET} ${DIM}· ${preview}${RESET}\n`
+    );
+
+    const wasProcessing = this.isProcessing;
+    if (wasProcessing) {
+      this.inputEditor?.resume();
+    }
+
     try {
-      return await renderer.renderPermissionPrompt(tool.name, summarizeToolAction(tool));
+      const answer = await this.readConfirmationLine();
+      const normalized = answer.trim().toLowerCase();
+      return normalized === 'y' || normalized === 'yes' || normalized === '';
     } finally {
-      if (this.rl && !this.exitRequested) {
-        this.rl.resume();
+      if (wasProcessing && !this.exitRequested) {
+        this.inputEditor?.pause();
       }
     }
   }

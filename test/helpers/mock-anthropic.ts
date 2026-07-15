@@ -40,13 +40,17 @@ function inferStopReason(events: StreamEventLike[]): StopReason {
   return 'end_turn';
 }
 
-/** 按调用顺序返回不同 stream 场景 */
-export function createMockAnthropicClient(scenarios: MockStreamScenario[]): Anthropic {
+/** 按调用顺序返回不同 stream 场景；可选捕获 stream 参数 */
+export function createMockAnthropicClient(
+  scenarios: MockStreamScenario[],
+  onStream?: (params: Record<string, unknown>, callIndex: number) => void
+): Anthropic {
   let callIndex = 0;
 
   return {
     messages: {
-      stream: () => {
+      stream: (params: Record<string, unknown>) => {
+        onStream?.(params, callIndex);
         const scenario = scenarios[callIndex] ?? scenarios[scenarios.length - 1]!;
         callIndex++;
         return createMockMessageStream(scenario);

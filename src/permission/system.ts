@@ -9,7 +9,7 @@ import {
   ToolCall,
   ToolDefinition,
 } from '../pkg/types.js';
-import { matchPermissionRules, PermissionRules } from './rules.js';
+import { matchDenyRules, matchAllowAskRules, PermissionRules } from './rules.js';
 import { classifyToolCall } from './classifier.js';
 import { checkToolPermissionGate } from './tool-gate.js';
 
@@ -27,18 +27,26 @@ export class PermissionSystem {
     this.getToolDefinition = options.getToolDefinition;
   }
 
+  getRules(): PermissionRules | undefined {
+    return this.rules;
+  }
+
   check(request: PermissionCheckRequest): PermissionCheckResult {
     const { tool, mode } = request;
 
-    // Layer 1: Rule engine (deny-first)
-    const ruleResult = matchPermissionRules(tool, this.rules);
-    if (ruleResult) return ruleResult;
+    // Layer 1: deny 规则（始终生效）
+    const denyResult = matchDenyRules(tool, this.rules);
+    if (denyResult) return denyResult;
 
-    const definition = this.getToolDefinition?.(tool.name);
-
+    // Layer 2: PLAN 模式 — 在 allow/ask 规则之前拦截，防止规则绕过
     if (mode === PermissionMode.PLAN) {
       return { allowed: false, reason: 'Plan mode: no execution' };
     }
+
+    const allowAskResult = matchAllowAskRules(tool, this.rules);
+    if (allowAskResult) return allowAskResult;
+
+    const definition = this.getToolDefinition?.(tool.name);
 
     // Layer 4: tool.permissionMode 门禁
     const toolGate = checkToolPermissionGate(mode, definition?.permissionMode);

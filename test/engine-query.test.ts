@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { QueryEngine } from '../src/agent/engine.js';
+import { serializeMessagesForApi } from '../src/agent/message-serializer.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 import { HookRegistry } from '../src/hooks/registry.js';
 import { PermissionSystem } from '../src/permission/system.js';
@@ -268,6 +269,260 @@ describe('QueryEngine.query()', () => {
       true
     );
   });
+
+  it('DAG prefetch asks permission once in DEFAULT mode (batch confirm)', async () => {
+    registerBootstrapStubs(registry);
+    const permissionPrompt = vi.fn().mockResolvedValue(true);
+
+    const client = createMockAnthropicClient([textEndTurnScenario('分析完成')]);
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+      permissionPrompt,
+    });
+
+    const state = createState(PermissionMode.DEFAULT);
+    for await (const _ of engine.query({ message: '检查这个项目' }, state)) {
+      /* drain */
+    }
+
+    expect(permissionPrompt.mock.calls.length).toBe(1);
+  });
+
+  it('DAG prefetch respects denied batch confirm', async () => {
+    registerBootstrapStubs(registry);
+    const permissionPrompt = vi.fn().mockResolvedValue(false);
+
+    const client = createMockAnthropicClient([textEndTurnScenario('无法预取')]);
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+      permissionPrompt,
+    });
+
+    const state = createState(PermissionMode.DEFAULT);
+    for await (const _ of engine.query({ message: '检查这个项目' }, state)) {
+      /* drain */
+    }
+
+    expect(permissionPrompt).toHaveBeenCalled();
+    const audit = state.messages.find(
+      (m) => typeof m.content === 'string' && m.content.includes('项目检查已完成')
+    );
+    expect(String(audit?.content ?? '')).toMatch(/Permission denied|User denied permission/);
+  });
+
+  it('keeps tools available after DAG prefetch (CC-aligned agent loop)', async () => {
+    registerBootstrapStubs(registry);
+    registry.register(createEchoTool());
+
+    const streamParams: Record<string, unknown>[] = [];
+    const client = createMockAnthropicClient(
+      [textEndTurnScenario('分析完成')],
+      (params) => streamParams.push(params)
+    );
+
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+      permissionPrompt: async () => true,
+    });
+
+    const state = createState(PermissionMode.DEFAULT);
+    state.messages.push({ role: 'user', content: '分析这个项目', timestamp: Date.now() });
+
+    const events = [];
+    for await (const event of engine.query({}, state)) {
+      events.push(event);
+    }
+
+    expect(Array.isArray(streamParams[0]?.tools)).toBe(true);
+    expect((streamParams[0]?.tools as unknown[]).length).toBeGreaterThan(0);
+    const prefetch = events.find((e) => e.type === 'prefetch_complete');
+    expect(prefetch?.prefetchTools?.length).toBe(15);
+    expect(events.some((e) => e.type === 'message_stop')).toBe(true);
+  });
+
+  it('stores bootstrap as user text not tool_result blocks', async () => {
+    registerBootstrapStubs(registry);
+
+    const client = createMockAnthropicClient([textEndTurnScenario('总结')]);
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+    });
+
+    const state = createState(PermissionMode.BYPASS);
+    state.messages.push({ role: 'user', content: '检查这个项目', timestamp: Date.now() });
+
+    for await (const _event of engine.query({}, state)) {
+      /* drain */
+    }
+
+    const bootstrapMsg = state.messages.find(
+      (m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('项目检查已完成')
+    );
+    expect(bootstrapMsg).toBeTruthy();
+    expect(serializeMessagesForApi(state.messages).some((m) => {
+      const c = m.content;
+      return Array.isArray(c) && c.some((b) => typeof b === 'object' && b !== null && 'tool_use_id' in b);
+    })).toBe(false);
+  });
+
+  it('runs review_implementation prefetch with expanded tool set', async () => {
+    registerBootstrapStubs(registry);
+    registry.register({
+      name: 'Glob',
+      description: 'glob',
+      inputSchema: {},
+      concurrencySafe: true,
+      permissionMode: PermissionMode.BYPASS,
+      async execute() {
+        return { content: [{ type: 'text', text: 'src/agent/engine.ts' }] };
+      },
+    });
+
+    const client = createMockAnthropicClient([textEndTurnScenario('优化建议')]);
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+    });
+
+    const state = createState(PermissionMode.BYPASS);
+    state.messages.push({
+      role: 'user',
+      content: '你检查一下当前项目的实现情况，看哪里可以优化？',
+      timestamp: Date.now(),
+    });
+
+    const events = [];
+    for await (const event of engine.query({}, state)) {
+      events.push(event);
+    }
+
+    const prefetch = events.find((e) => e.type === 'prefetch_complete');
+    expect(prefetch?.prefetchTools?.length).toBe(16);
+    expect(
+      state.messages.some(
+        (m) =>
+          m.role === 'user' &&
+          typeof m.content === 'string' &&
+          m.content.includes('实现评估已完成')
+      )
+    ).toBe(true);
+  });
+
+  it('runs bootstrap before model when inspecting project', async () => {
+    registerBootstrapStubs(registry);
+    registry.register({
+      name: 'Glob',
+      description: 'glob',
+      inputSchema: {},
+      concurrencySafe: true,
+      permissionMode: PermissionMode.BYPASS,
+      async execute() {
+        return { content: [{ type: 'text', text: 'src/agent/engine.ts' }] };
+      },
+    });
+
+    const streamParams: Record<string, unknown>[] = [];
+    const client = createMockAnthropicClient(
+      [textEndTurnScenario('根据检查结果总结')],
+      (params) => streamParams.push(params)
+    );
+
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+    });
+
+    const state = createState(PermissionMode.BYPASS);
+    state.messages.push({ role: 'user', content: '检查当前项目', timestamp: Date.now() });
+
+    const events = [];
+    for await (const event of engine.query({}, state)) {
+      events.push(event);
+    }
+
+    expect(events.some((e) => e.type === 'prefetch_complete' && e.prefetchTools?.some((t) => t.name === 'Read'))).toBe(
+      true
+    );
+    const prefetch = events.find((e) => e.type === 'prefetch_complete');
+    expect(prefetch?.prefetchTools?.length).toBe(15);
+    expect(streamParams.length).toBe(1);
+    expect(events.some((e) => e.type === 'message_stop')).toBe(true);
+  });
+
+  it('omits tools from API request in PLAN mode', async () => {
+    registry.register(createEchoTool());
+
+    const streamParams: Record<string, unknown>[] = [];
+    const client = createMockAnthropicClient(
+      [textEndTurnScenario('Planning only')],
+      (params) => streamParams.push(params)
+    );
+
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+    });
+    const state = createState(PermissionMode.PLAN);
+
+    for await (const _event of engine.query({ message: 'plan' }, state)) {
+      /* drain */
+    }
+
+    expect(streamParams[0]?.tools).toBeUndefined();
+    expect(streamParams[0]?.tool_choice).toBeUndefined();
+  });
+
+  it('aborts query when shouldAbort returns true', async () => {
+    const client = createMockAnthropicClient([
+      textEndTurnScenario('Should not finish'),
+      textEndTurnScenario('Second turn'),
+    ]);
+
+    let abortAfterFirstDelta = false;
+    const engine = new QueryEngine({
+      anthropicClient: client,
+      toolRegistry: registry,
+      contextAssembler: stubAssembler(),
+      compactionPipeline: passthroughCompaction(),
+    });
+
+    const events = [];
+    for await (const event of engine.query(
+      {
+        message: 'abort me',
+        options: {
+          shouldAbort: () => abortAfterFirstDelta,
+        },
+      },
+      createState()
+    )) {
+      events.push(event);
+      if (event.type === 'content_block_delta') {
+        abortAfterFirstDelta = true;
+      }
+    }
+
+    expect(events.some((e) => e.type === 'error' && e.error?.code === 'ABORTED')).toBe(true);
+    expect(events.filter((e) => e.type === 'message_stop')).toHaveLength(0);
+  });
 });
 
 function createEchoTool(): ToolDefinition {
@@ -281,4 +536,20 @@ function createEchoTool(): ToolDefinition {
       return { content: [{ type: 'text', text: String((input as { msg: string }).msg) }] };
     },
   };
+}
+
+function registerBootstrapStubs(registry: ToolRegistry): void {
+  const stub = (name: string) => ({
+    name,
+    description: name,
+    inputSchema: {},
+    concurrencySafe: true,
+    permissionMode: PermissionMode.DEFAULT,
+    async execute() {
+      return { content: [{ type: 'text', text: `${name}-ok` }] };
+    },
+  });
+  registry.register(stub('Read'));
+  registry.register(stub('Bash'));
+  registry.register(stub('Glob'));
 }

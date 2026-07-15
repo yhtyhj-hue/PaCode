@@ -14,8 +14,11 @@ export interface Worktree {
   isMain: boolean;
 }
 
-/** 校验 worktree / 分支名，防止 shell 注入 */
+/** 校验 worktree / 分支名，防止 shell 注入与路径逃逸 */
 export function validateWorktreeName(name: string): boolean {
+  if (typeof name !== 'string' || name.length === 0) return false;
+  if (name === '.' || name === '..') return false;
+  if (name.includes('/') || name.includes('\\')) return false;
   return /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
 }
 

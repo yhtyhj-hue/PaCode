@@ -7,8 +7,8 @@ import { exec } from 'node:child_process';
 export const DEFAULT_BASH_MAX_OUTPUT_LINES = 500;
 
 const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /rm\s+(-[^\s]*\s+)*-[^\s]*r[^\s]*f|rm\s+(-[^\s]*\s+)*-[^\s]*f[^\s]*r/, reason: 'Recursive force delete' },
-  { pattern: /rm\s+-rf\s+\//, reason: 'Dangerous command detected' },
+  { pattern: /rm\s+(-[^\s]*\s+)*-[^\s]*r[^\s]*f|rm\s+(-[^\s]*\s+)*-[^\s]*f[^\s]*r/i, reason: 'Recursive force delete' },
+  { pattern: /rm\s+-rf\s+\//i, reason: 'Dangerous command detected' },
   { pattern: /DROP\s+TABLE/i, reason: 'SQL destructive operation' },
   { pattern: /git\s+push\s+(--force|-f)\b/i, reason: 'Force push blocked' },
   { pattern: /:\(\)\s*\{\s*:\|:&\s*\};:/, reason: 'Fork bomb pattern' },
@@ -24,27 +24,14 @@ const PIPE_TO_SHELL_PATTERNS = [
   /\bwget\b[^\n|]*\|\s*(sh|bash)/i,
 ];
 
-const READONLY_COMMANDS = [
-  /^ls\b/,
-  /^pwd\b/,
-  /^cat\b/,
-  /^head\b/,
-  /^tail\b/,
-  /^grep\b/,
-  /^find\b/,
-  /^git\s+status\b/,
-  /^git\s+diff\b/,
-  /^git\s+log\b/,
-  /^echo\b/,
-  /^which\b/,
-  /^whoami\b/,
-  /^wc\b/,
-  /^file\b/,
-  /^stat\b/,
-  /^seq\b/,
-];
-
-const NETWORK_COMMANDS = [/^curl\b/, /^wget\b/, /^nc\b/, /^ssh\b/, /^scp\b/];
+/** 已知可执行命令白名单（精确等值匹配 base command）。
+ *  防止 startswith 误匹配（如 `lsmine` 被 ^ls 命中）。 */
+const READONLY_BASES = new Set([
+  'ls', 'pwd', 'cat', 'head', 'tail', 'grep', 'find',
+  'echo', 'which', 'whoami', 'wc', 'file', 'stat', 'seq',
+  'git',
+]);
+const NETWORK_BASES = new Set(['curl', 'wget', 'nc', 'ssh', 'scp']);
 
 /** 禁止的 shell 元语法（全命令检查） */
 const FORBIDDEN_CONSTRUCTS: Array<{ pattern: RegExp; reason: string }> = [
@@ -52,6 +39,12 @@ const FORBIDDEN_CONSTRUCTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /`[^`]*`/, reason: 'Command substitution (backticks) not allowed' },
   { pattern: /<\([^)]+\)/, reason: 'Process substitution not allowed' },
   { pattern: />\s*\/dev\/(?!null|stdout|stderr|tty)/i, reason: 'Write to device blocked' },
+  { pattern: /\beval\b/i, reason: 'eval is blocked' },
+  { pattern: /\bexec\b/i, reason: 'exec is blocked' },
+  { pattern: /\bxargs\b/i, reason: 'xargs is blocked' },
+  { pattern: /-exec\s+/i, reason: 'find -exec is blocked' },
+  { pattern: /-execdir\s+/i, reason: 'find -execdir is blocked' },
+  { pattern: /\benv\s+-[i0]/i, reason: 'env -i/-0 (clean env) is blocked' },
 ];
 
 export interface SecurityCheck {
@@ -215,19 +208,22 @@ function checkSegment(segment: string): SecurityCheck | null {
     return { safe: false, reason: 'Chained delete command blocked', category: 'destructive' };
   }
 
-  const base = getSegmentBaseCommand(segment);
+  const base = getSegmentBaseCommand(segment).toLowerCase();
   if (!base) return null;
 
-  for (const pattern of READONLY_COMMANDS) {
-    if (pattern.test(base) || pattern.test(normalized)) {
-      return { safe: true, category: 'readonly' };
+  if (READONLY_BASES.has(base)) {
+    // git 子命令：仅 status/diff/log/show 类只读动作免确认
+    if (base === 'git') {
+      if (/^git\s+(status|diff|log|show|branch|remote|tag)\b/i.test(normalized)) {
+        return { safe: true, category: 'readonly' };
+      }
+      return null;
     }
+    return { safe: true, category: 'readonly' };
   }
 
-  for (const pattern of NETWORK_COMMANDS) {
-    if (pattern.test(base) || pattern.test(normalized)) {
-      return { safe: true, category: 'network' };
-    }
+  if (NETWORK_BASES.has(base)) {
+    return { safe: true, category: 'network' };
   }
 
   if (/^git\s+push\b/i.test(normalized)) {

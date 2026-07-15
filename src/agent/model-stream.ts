@@ -4,9 +4,18 @@
 
 import { StopReason, ToolCall } from '../pkg/types.js';
 
+type ToolUseBlock = {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  /** 累积 input_json_delta 片段，流结束后再 parse */
+  jsonParts: string;
+};
+
 export type ModelContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
+  | ToolUseBlock;
 
 export type ModelStreamEvent =
   | { type: 'content_block_delta'; delta: { index: number; text: string } }
@@ -52,6 +61,7 @@ export async function* consumeModelStream(
           id: event.content_block.id ?? '',
           name: event.content_block.name ?? '',
           input: {},
+          jsonParts: '',
         });
       }
     }
@@ -66,11 +76,7 @@ export async function* consumeModelStream(
         };
       }
       if (event.delta.type === 'input_json_delta' && last?.type === 'tool_use') {
-        try {
-          Object.assign(last.input, JSON.parse(event.delta.partial_json ?? '{}'));
-        } catch {
-          /* partial JSON */
-        }
+        last.jsonParts += event.delta.partial_json ?? '';
       }
     }
 
@@ -91,6 +97,13 @@ export async function* consumeModelStream(
 
   for (const block of content) {
     if (block.type === 'tool_use') {
+      if (block.jsonParts) {
+        try {
+          block.input = JSON.parse(block.jsonParts) as Record<string, unknown>;
+        } catch {
+          block.input = {};
+        }
+      }
       toolCalls.push({ id: block.id, name: block.name, input: block.input });
     }
   }

@@ -18,6 +18,19 @@ describe('PermissionSystem', () => {
     expect(result.allowed).toBe(false);
   });
 
+  it('PLAN mode blocks even when allow rule matches', () => {
+    const withAllow = new PermissionSystem({
+      rules: { allow: ['Read', 'Bash(*)'] },
+    });
+    const result = withAllow.check({
+      tool: { id: '1', name: 'Read', input: { path: 'x.ts' } },
+      mode: PermissionMode.PLAN,
+      context: {} as any,
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('Plan mode');
+  });
+
   it('BYPASS mode allows all', () => {
     const result = ps.check({
       tool: { id: '1', name: 'Bash', input: { command: 'ls' } },

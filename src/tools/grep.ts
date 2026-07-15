@@ -2,7 +2,7 @@
  * Grep Tool
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { ToolDefinition, PermissionMode } from '../pkg/types.js';
 
 export function registerGrepTool(registry: { register: (t: ToolDefinition) => void }) {
@@ -19,7 +19,7 @@ export function registerGrepTool(registry: { register: (t: ToolDefinition) => vo
     async execute(input) {
       const { pattern, path = '.' } = input as { pattern: string; path?: string };
       return new Promise((resolve) => {
-        exec(`rg "${pattern}" ${path}`, { timeout: 30000 }, (err, stdout, stderr) => {
+        execFile('rg', ['--', pattern, path], { timeout: 30000 }, (err, stdout, stderr) => {
           if (err && !stdout) {
             resolve({ content: [{ type: 'text', text: stderr || 'No matches' }] });
           } else {

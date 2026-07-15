@@ -54,6 +54,21 @@ describe('classifyToolCall', () => {
     const r = classifyToolCall({ id: '1', name: 'Read', input: { path: 'x' } });
     expect(r.risk).toBe('safe');
   });
+
+  it('classifies Grep as safe (execFile rg, no shell)', () => {
+    const r = classifyToolCall({ id: '1', name: 'Grep', input: { pattern: '$(id)', path: '.' } });
+    expect(r.risk).toBe('safe');
+  });
+
+  it('classifies Glob as safe', () => {
+    const r = classifyToolCall({ id: '1', name: 'Glob', input: { pattern: '*.ts' } });
+    expect(r.risk).toBe('safe');
+  });
+
+  it('classifies TodoWrite as safe', () => {
+    const r = classifyToolCall({ id: '1', name: 'TodoWrite', input: { todos: [] } });
+    expect(r.risk).toBe('safe');
+  });
 });
 
 describe('PermissionSystem AUTO mode', () => {

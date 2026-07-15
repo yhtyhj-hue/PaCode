@@ -65,4 +65,36 @@ describe('consumeModelStream', () => {
     expect(complete!.toolCalls).toHaveLength(1);
     expect(complete!.toolCalls[0]?.name).toBe('Read');
   });
+
+  it('accumulates fragmented input_json_delta before parse', async () => {
+    const events: StreamEventLike[] = [
+      {
+        type: 'content_block_start',
+        content_block: { type: 'tool_use', id: 'tu_2', name: 'Read' },
+      },
+      {
+        type: 'content_block_delta',
+        delta: { type: 'input_json_delta', partial_json: '{"path":' },
+      },
+      {
+        type: 'content_block_delta',
+        delta: { type: 'input_json_delta', partial_json: '"src/a.ts"}' },
+      },
+      { type: 'message_delta', delta: { stop_reason: 'tool_use' } },
+    ];
+
+    let complete: Awaited<ReturnType<typeof consumeModelStream>> extends AsyncGenerator<
+      infer E
+    >
+      ? Extract<E, { type: 'model_complete' }>
+      : never;
+
+    for await (const event of consumeModelStream(mockStream(events))) {
+      if (event.type === 'model_complete') {
+        complete = event as typeof complete;
+      }
+    }
+
+    expect(complete!.toolCalls[0]?.input).toEqual({ path: 'src/a.ts' });
+  });
 });

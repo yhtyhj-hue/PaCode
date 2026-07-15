@@ -5,8 +5,8 @@
 import { ToolCall, ToolDefinition } from '../pkg/types.js';
 import { checkBashSecurity } from '../tools/bash-secure.js';
 
-/** 只读工具：AUTO 模式下免确认 */
-const READONLY_TOOLS = new Set(['Read', 'Grep', 'Glob', 'TodoWrite']);
+/** 只读工具：AUTO 模式下免确认。Grep 已改为 execFile('rg', [...]) 参数化执行。 */
+const READONLY_TOOLS = new Set(['Read', 'Glob', 'Grep', 'TodoWrite']);
 
 export type RiskLevel = 'safe' | 'moderate' | 'destructive';
 

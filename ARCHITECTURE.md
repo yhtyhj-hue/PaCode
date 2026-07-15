@@ -10,15 +10,15 @@
 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
-| Query Engine | ~90% | 全循环 + mock 集成测试；Subagent + SubagentStop hook |
+| Query Engine | ~92% | 全循环；L1 预取后仍保留 tools（CC 对齐）；Subagent + SubagentStop |
 | Context Assembly | ~85% | 9 源组装；Skills 结构化 catalog |
 | Compaction | ~90% | L1–L5 全实现；阈值/maxTokens 可配置 |
 | Tool Registry | ~85% | 8 核心工具 + Plugin 工具 + 并行调度 |
 | Permission System | ~80% | 7 modes + AUTO 分类器 + Layer 4 tool-gate |
 | Memory | ~85% | 用户 `.paude/memory/` + 项目 `.paude/projects/{hash}/` |
 | Hooks / Skills / Plugins / MCP | ~75% | Hooks ✅；Skills ✅；Plugin tools/agents ✅；MCP stdio ✅ |
-| CLI / REPL | ~80% | handlers 可测试化；Plan 模式；worktree；cc-switch |
-| 测试 | 80.3% | 310 gate tests；Vitest 覆盖率门禁 |
+| CLI / REPL | ~85% | Shift+Tab 切模式；Plan/worktree；图片粘贴 🔜 |
+| 测试 | ≥80% | 397 gate tests；Vitest 覆盖率门禁 |
 | Eval harness | ✅ | `evals/gate` + `evals/periodic` 分离 |
 
 **Defer:** Ink/React TUI、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器
@@ -1191,7 +1191,7 @@ PaCode/
 │
 ├── plugins/                      # 插件目录（example/tools、greet.json）
 ├── evals/                        # Eval harness（gate + periodic）
-├── test/                         # Vitest gate tests（310+）
+├── test/                         # Vitest gate tests（396+）
 ├── docs/                         # ROADMAP 等文档
 │
 ├── .paude/                       # 运行时数据 (gitignored)

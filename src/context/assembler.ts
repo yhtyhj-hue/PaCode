@@ -18,6 +18,7 @@ import {
 import { SkillsLoader } from '../skills/loader.js';
 import type { Skill } from '../skills/loader.js';
 import { countContextTokens } from './compaction-utils.js';
+import { getDefaultAgentSystemPrompt } from '../agent/system-prompt.js';
 
 export interface AssembleOptions {
   systemPrompt?: string;
@@ -41,10 +42,9 @@ export class ContextAssembler {
   async assemble(state: SessionState, options: AssembleOptions = {}): Promise<ModelContext> {
     const parts: string[] = [];
 
-    // 1. System Prompt
-    if (options.systemPrompt) {
-      parts.push(options.systemPrompt);
-    }
+    // 1. System Prompt — 默认 Agent 指令；可追加自定义段落
+    const basePrompt = getDefaultAgentSystemPrompt();
+    parts.push(options.systemPrompt ? `${basePrompt}\n\n${options.systemPrompt}` : basePrompt);
 
     // 2. CLAUDE.md
     const claudeMd = await this.loadFile('CLAUDE.md');

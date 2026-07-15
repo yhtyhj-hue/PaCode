@@ -116,6 +116,12 @@ export interface QueryOptions {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
+  /** auto=默认；any=必须调用至少一个工具；none=禁止模型调工具（预取后总结专用） */
+  toolChoice?: 'auto' | 'any' | 'none';
+  /** 预取完成后不向 API 暴露 tools，防止模型重复 Read 触发权限失败 */
+  suppressTools?: boolean;
+  /** 返回 true 时中止 query 循环 */
+  shouldAbort?: () => boolean;
 }
 
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'error';
@@ -131,12 +137,39 @@ export interface QueryEvent {
     | 'content_block_delta'
     | 'tool_use'
     | 'tool_result'
+    | 'prefetch_complete'
+    | 'prefetch_progress'
+    | 'skill_loaded'
+    | 'agents_running'
+    | 'agent_started'
+    | 'agent_progress'
+    | 'agent_complete'
+    | 'agents_complete'
     | 'content_block_stop'
     | 'message_stop'
     | 'error';
   delta?: { index: number; text: string };
   tool?: ToolCall;
   result?: ToolResult;
+  /** DAG 预取完成 — UI 只显示一行摘要 */
+  prefetchTools?: ToolCall[];
+  /** 预取进度 */
+  prefetchDone?: number;
+  prefetchTotal?: number;
+  /** 已加载 skill 目录名 */
+  skills?: string[];
+  /** 并行 agent 快照 */
+  parallelAgents?: Array<{
+    id: string;
+    label: string;
+    agentType: string;
+    status: string;
+    toolCalls: number;
+    currentTool?: string;
+    error?: string;
+  }>;
+  agentId?: string;
+  agentLabel?: string;
   stopReason?: StopReason;
   usage?: TokenUsage;
   error?: { code: string; message: string };

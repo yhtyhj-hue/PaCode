@@ -73,6 +73,23 @@ export class SubagentManager {
       description: 'Planning agent - generates implementation plans without executing',
       mode: PermissionMode.PLAN,
     });
+
+    this.register({
+      name: 'security-review',
+      description: 'Read-only agent focused on security review of git diffs',
+      mode: PermissionMode.DEFAULT,
+      tools: ['Read', 'Glob', 'Grep', 'Bash'],
+    });
+  }
+
+  /** 并行运行多个子代理 — 统一调度入口 */
+  async runParallel(
+    items: Array<{ config: SubagentConfig; prompt: string; label?: string }>,
+    options: SubagentRunOptions = {}
+  ): Promise<SubagentResult[]> {
+    return Promise.all(
+      items.map((item) => this.run(item.config, item.prompt, options))
+    );
   }
 
   async run(

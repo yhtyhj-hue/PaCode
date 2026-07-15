@@ -72,7 +72,7 @@ describe('MCP Loader', () => {
       configPath,
       JSON.stringify({
         servers: {
-          srv1: { type: 'stdio', command: 'echo', args: ['hi'] },
+          srv1: { type: 'stdio', command: 'node', args: ['server.js'] },
         },
       })
     );
@@ -88,7 +88,7 @@ describe('MCP Loader', () => {
 
     expect(mockClient.connect).toHaveBeenCalledOnce();
     expect(mockClient.connect).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'srv1', command: 'echo' })
+      expect.objectContaining({ name: 'srv1', command: 'node' })
     );
 
     if (existsSync(configDir)) rmSync(configDir, { recursive: true, force: true });

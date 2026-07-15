@@ -82,8 +82,14 @@ async function main() {
   });
 
   const model = appConfig.model;
+  const activeProvider = cc.getActive();
 
-  await bootAnimation.show(model);
+  await bootAnimation.show({
+    model,
+    apiKeyConfigured: Boolean(appConfig.apiKey),
+    providerCount: cc.list().length,
+    activeProvider: activeProvider?.name,
+  });
 
   const apiKey = appConfig.apiKey;
   const baseUrl = appConfig.baseUrl;
@@ -105,7 +111,6 @@ Get a key at: https://console.anthropic.com/
     process.exit(1);
   }
 
-  const activeProvider = cc.getActive();
   const mode = appConfig.mode;
 
   if (activeProvider) {

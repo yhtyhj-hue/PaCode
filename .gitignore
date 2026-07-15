@@ -59,3 +59,7 @@ venv/
 # PaCode session data
 .paude/sessions/
 .paude/memory/
+
+# Reference / vendor trees (not part of PaCode)
+claude-code-sourcemap-main/
+.claude/worktrees/

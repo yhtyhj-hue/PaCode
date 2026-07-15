@@ -1,10 +1,11 @@
 /**
  * Claude Code Style Boot Animation
  *
- * Figlet PACODE logo + status display
+ * Figlet PACODE logo + 真实启动自检（非写死 OK）
  */
 
 import figlet from 'figlet';
+import { formatBox, getUiWidth, visibleWidth } from './repl-ui.js';
 
 const figletAsync = (text: string): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -23,18 +24,63 @@ const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const BLUE = '\x1b[34m';
 const MAGENTA = '\x1b[35m';
+const RED = '\x1b[31m';
+
+export interface BootStatusInput {
+  model?: string;
+  apiKeyConfigured?: boolean;
+  providerCount?: number;
+  activeProvider?: string;
+}
+
+export interface BootCheck {
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+/** 基于真实配置生成启动检查项（禁止写死全部 OK） */
+export function buildBootChecks(input: BootStatusInput): BootCheck[] {
+  const providerCount = input.providerCount ?? 0;
+  const hasKey = Boolean(input.apiKeyConfigured);
+  const model = input.model?.trim() || '';
+
+  return [
+    {
+      label: 'API credentials',
+      ok: hasKey,
+      detail: hasKey ? 'configured' : 'missing',
+    },
+    {
+      label: 'Provider registry',
+      ok: providerCount > 0,
+      detail:
+        providerCount > 0
+          ? `${providerCount} provider${providerCount === 1 ? '' : 's'}${
+              input.activeProvider ? ` · active ${input.activeProvider}` : ''
+            }`
+          : 'none configured',
+    },
+    {
+      label: 'Model',
+      ok: model.length > 0,
+      detail: model || 'unset',
+    },
+  ];
+}
 
 export class BootAnimation {
-  constructor() {}
+  async show(input: string | BootStatusInput = {}): Promise<void> {
+    const status: BootStatusInput =
+      typeof input === 'string' ? { model: input } : input;
 
-  async show(model?: string): Promise<void> {
     this.clearScreen();
     await this.delay(100);
     await this.printLogo();
     await this.delay(300);
-    this.printInfo(model);
+    this.printInfo(status.model);
     await this.delay(200);
-    this.printStatus();
+    this.printStatus(status);
     await this.delay(200);
     this.printReady();
   }
@@ -59,53 +105,55 @@ export class BootAnimation {
   }
 
   private printInfo(model?: string): void {
-    const displayModel = model || 'claude-sonnet-4-0';
-    const dash = '-';
-    const info = [
-      '',
-      `+${dash.repeat(60)}+`,
-      `|  ${BOLD}PaCode${RESET} ${DIM}v0.1.0${RESET}                                          |`,
-      `|  ${DIM}Claude Code-like AI Programming Assistant${RESET}              |`,
-      `|  ${DIM}Model:${RESET} ${CYAN}${displayModel}${RESET}                                  |`,
-      `+${dash.repeat(60)}+`,
-      '',
-    ].join('\n');
-    console.log(info);
+    const displayModel = model || '(unset)';
+    const width = getUiWidth();
+    console.log('');
+    console.log(
+      formatBox(
+        [
+          `${BOLD}PaCode${RESET} ${DIM}v0.1.0${RESET}`,
+          `${DIM}Claude Code-like AI Programming Assistant${RESET}`,
+          `${DIM}Model:${RESET} ${CYAN}${displayModel}${RESET}`,
+        ],
+        { width }
+      )
+    );
+    console.log('');
   }
 
-  private printStatus(): void {
-    const checks = [
-      { label: 'Session Manager', status: 'OK', color: GREEN },
-      { label: 'Tool Registry', status: 'OK', color: GREEN },
-      { label: 'Permission System', status: 'OK', color: GREEN },
-      { label: 'Context Engine', status: 'OK', color: GREEN },
-      { label: 'Compaction Pipeline', status: 'OK', color: GREEN },
-    ];
+  private printStatus(input: BootStatusInput): void {
+    const checks = buildBootChecks(input);
 
-    console.log(`\n${DIM}Initializing components...${RESET}`);
+    console.log(`\n${DIM}Startup checks...${RESET}`);
 
+    const labelWidth = Math.max(...checks.map((c) => visibleWidth(c.label)));
     for (const check of checks) {
-      const dot = `${check.color}●${RESET}`;
-      const line = `  ${dot} ${check.label.padEnd(28)} ${DIM}[${RESET}${check.color}${check.status}${RESET}${DIM}]${RESET}`;
-      console.log(line);
+      const pad = ' '.repeat(Math.max(0, labelWidth - visibleWidth(check.label)));
+      const color = check.ok ? GREEN : RED;
+      const status = check.ok ? 'OK' : 'FAIL';
+      console.log(
+        `  ${color}●${RESET} ${check.label}${pad}  ${DIM}[${RESET}${color}${status}${RESET}${DIM}]${RESET} ${DIM}${check.detail}${RESET}`
+      );
     }
   }
 
   private printReady(): void {
-    const dash = '-';
-    const ready = [
-      '',
-      `${GREEN}${BOLD}  ✓ Ready${RESET} ${DIM}— Type your message to begin${RESET}`,
-      '',
-      `  +${dash.repeat(60)}+`,
-      `  |  ${CYAN}Quick commands:${RESET}                                     |`,
-      `  |  ${YELLOW}pacode -m plan${RESET} ${DIM}Planning mode (no execution)${RESET}      |`,
-      `  |  ${YELLOW}pacode -m acceptEdits${RESET} ${DIM}Auto-approve edits${RESET}         |`,
-      `  |  ${YELLOW}pacode --help${RESET} ${DIM}Show all options${RESET}                |`,
-      `  +${dash.repeat(60)}+`,
-      '',
-    ].join('\n');
-    console.log(ready);
+    const width = getUiWidth();
+    console.log('');
+    console.log(`${GREEN}${BOLD}✓ Ready${RESET} ${DIM}— Type your message to begin${RESET}`);
+    console.log('');
+    console.log(
+      formatBox(
+        [
+          `${CYAN}Quick commands:${RESET}`,
+          `${YELLOW}/help${RESET} ${DIM}REPL slash commands (inside chat)${RESET}`,
+          `${YELLOW}/mode plan${RESET} ${DIM}Planning mode (no tool execution)${RESET}`,
+          `${YELLOW}Ctrl+D${RESET} ${DIM}Exit interactive mode${RESET}`,
+        ],
+        { width }
+      )
+    );
+    console.log('');
   }
 
   private delay(ms: number): Promise<void> {
