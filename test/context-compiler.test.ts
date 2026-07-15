@@ -15,7 +15,7 @@ describe('repairToolResultPairing', () => {
           {
             type: 'tool_result',
             toolUseId: 'bootstrap_glob_1',
-            toolResult: { content: [{ type: 'text', text: 'x' }] },
+            toolResult: { content: [{ type: 'text' as const, text: 'x' }] },
           },
         ],
         timestamp: 1,
@@ -67,7 +67,7 @@ describe('repairToolResultPairing', () => {
           {
             type: 'tool_result',
             toolUseId: 'tu_1',
-            toolResult: { content: [{ type: 'text', text: 'ok' }] },
+            toolResult: { content: [{ type: 'text' as const, text: 'ok' }] },
           },
         ],
         timestamp: 2,
@@ -91,7 +91,7 @@ describe('compileMessagesForApi', () => {
               {
                 type: 'tool_result',
                 toolUseId: 'orphan',
-                toolResult: { content: [{ type: 'text', text: 'x' }] },
+                toolResult: { content: [{ type: 'text' as const, text: 'x' }] },
               },
             ],
             timestamp: 1,

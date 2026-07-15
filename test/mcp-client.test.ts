@@ -41,7 +41,7 @@ describe('MCPClient', () => {
     const client = new MCPClient();
     const result = await client.callTool('missing', 'tool', {});
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('not connected');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('not connected');
   });
 
   it('registered MCP tool execute binds to MCPClient instance', async () => {

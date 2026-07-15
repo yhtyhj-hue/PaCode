@@ -6,7 +6,7 @@ import { registerReadTool } from '../src/tools/read.js';
 import { registerWriteTool } from '../src/tools/write.js';
 import { registerEditTool } from '../src/tools/edit.js';
 import { registerTodoWriteTool } from '../src/tools/todowrite.js';
-import { writeFileSync, existsSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -89,7 +89,7 @@ describe('Tool Registry - Deep', () => {
         { workingDirectory: workDir, sessionState: {} as never, hooks: {} as never }
       );
       expect(r.isError).toBeFalsy();
-      expect(r.content[0]?.text).toBe('hello');
+      expect((r.content[0] as { type: 'text'; text: string }).text).toBe('hello');
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
@@ -102,7 +102,7 @@ describe('Tool Registry - Deep', () => {
       { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
     );
     expect(r.isError).toBe(true);
-    expect(r.content[0]?.text).toContain('escapes workspace');
+    expect((r.content[0] as { type: 'text'; text: string }).text).toContain('escapes workspace');
   });
 
   it('Write writes a file within workspace', async () => {
@@ -149,10 +149,10 @@ describe('Tool Registry - Deep', () => {
       { id: '2', name: 'TodoWrite', input: { action: 'list' } },
       { workingDirectory: process.cwd(), sessionState: { sessionId: 'other' } as any, hooks: {} as any }
     );
-    expect(list.content[0]?.text).toBe('No tasks');
+    expect((list.content[0] as { type: 'text'; text: string }).text).toBe('No tasks');
   });
 
   function createTool(name: string, description: string): ToolDefinition {
-    return { name, description, inputSchema: {}, concurrencySafe: true, permissionMode: PermissionMode.DEFAULT, async execute() { return { content: [{ type: 'text', text: 'ok' }] }; } };
+    return { name, description, inputSchema: {}, concurrencySafe: true, permissionMode: PermissionMode.DEFAULT, async execute() { return { content: [{ type: 'text' as const, text: 'ok' }] }; } };
   }
 });

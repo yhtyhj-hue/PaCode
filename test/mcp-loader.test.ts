@@ -31,7 +31,7 @@ describe('MCP Loader', () => {
       concurrencySafe: false,
       permissionMode: PermissionMode.DEFAULT,
       async execute() {
-        return { content: [{ type: 'text', text: 'ok' }] };
+        return { content: [{ type: 'text' as const, text: 'ok' }] };
       },
     };
 
@@ -144,7 +144,7 @@ function createNamedTool(name: string) {
     concurrencySafe: name !== 'Bash',
     permissionMode: PermissionMode.DEFAULT,
     async execute() {
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     },
   };
 }

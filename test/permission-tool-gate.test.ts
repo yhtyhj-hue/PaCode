@@ -50,7 +50,7 @@ describe('PermissionSystem — tool permissionMode gate', () => {
     concurrencySafe: false,
     permissionMode: PermissionMode.ACCEPT_EDITS,
     async execute() {
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     },
   };
 
@@ -61,7 +61,7 @@ describe('PermissionSystem — tool permissionMode gate', () => {
     concurrencySafe: true,
     permissionMode: PermissionMode.DEFAULT,
     async execute() {
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     },
   };
 

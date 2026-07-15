@@ -49,7 +49,7 @@ describe('loadPluginTool', () => {
     expect(tool?.permissionMode).toBe(PermissionMode.DEFAULT);
 
     const result = await tool!.execute({ name: 'PaCode' }, {} as never);
-    expect(result.content[0]?.text).toBe('Hi PaCode!');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toBe('Hi PaCode!');
   });
 
   it('loads echo handler with static message', async () => {
@@ -64,7 +64,7 @@ describe('loadPluginTool', () => {
 
     const tool = loadPluginTool(pluginDir, 'ping', 'demo');
     const result = await tool!.execute({}, {} as never);
-    expect(result.content[0]?.text).toBe('pong');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toBe('pong');
   });
 
   it('returns null for missing file', () => {
@@ -123,7 +123,7 @@ describe('registerPluginTools', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.DEFAULT,
       async execute() {
-        return { content: [{ type: 'text', text: 'ok' }] };
+        return { content: [{ type: 'text' as const, text: 'ok' }] };
       },
     });
 

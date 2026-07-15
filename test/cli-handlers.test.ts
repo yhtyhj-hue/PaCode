@@ -60,8 +60,8 @@ describe('handleMcp', () => {
 
   beforeEach(() => {
     configPath = join(tmpdir(), `pacode-cli-mcp-${Date.now()}.json`);
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logSpy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
+    errSpy = (vi.spyOn(console, 'error').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
@@ -115,7 +115,7 @@ describe('handleInit', () => {
 
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), 'pacode-cli-init-'));
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
@@ -149,8 +149,8 @@ describe('handleResume', () => {
   beforeEach(() => {
     resetSessionResume();
     sessionsDir = mkdtempSync(join(tmpdir(), 'pacode-cli-resume-'));
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logSpy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
+    errSpy = (vi.spyOn(console, 'error').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
@@ -234,7 +234,7 @@ describe('handleResume', () => {
 
 describe('showHelp', () => {
   it('prints usage text', () => {
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const spy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
     showHelp();
     expect(spy.mock.calls[0]?.[0]).toContain('PaCode CLI');
     expect(spy.mock.calls[0]?.[0]).toContain('worktree');
@@ -251,8 +251,8 @@ describe('handleCCSwitch', () => {
 
   beforeEach(() => {
     configPath = join(tmpdir(), `pacode-ccs-${Date.now()}.json`);
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logSpy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
+    errSpy = (vi.spyOn(console, 'error').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {

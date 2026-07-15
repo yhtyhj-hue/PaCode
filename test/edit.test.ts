@@ -37,7 +37,7 @@ describe('Edit tool', () => {
     const tool = registry.get('Edit')!;
     const result = await tool.execute(
       { path, oldText: 'const x = 1;', newText: 'const x = 10;' },
-      { workingDirectory: dir }
+      { workingDirectory: dir, sessionState: {} as never, hooks: {} as never }
     );
     expect(result.isError).toBeFalsy();
     expect(readFileSync(path, 'utf-8')).toBe('const x = 10;\nconst y = 2;\n');
@@ -49,7 +49,7 @@ describe('Edit tool', () => {
     const tool = registry.get('Edit')!;
     const result = await tool.execute(
       { path, oldText: 'foo', newText: 'bar' },
-      { workingDirectory: dir }
+      { workingDirectory: dir, sessionState: {} as never, hooks: {} as never }
     );
     expect(result.isError).toBe(true);
     expect(result.content[0]).toMatchObject({ type: 'text' });
@@ -57,7 +57,7 @@ describe('Edit tool', () => {
 
     const all = await tool.execute(
       { path, oldText: 'foo', newText: 'bar', replaceAll: true },
-      { workingDirectory: dir }
+      { workingDirectory: dir, sessionState: {} as never, hooks: {} as never }
     );
     expect(all.isError).toBeFalsy();
     expect(readFileSync(path, 'utf-8')).toBe('bar\nbar\n');

@@ -34,7 +34,7 @@ describe('EnhancedRenderer CC style', () => {
   const r = new EnhancedRenderer();
 
   beforeEach(() => {
-    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
@@ -97,7 +97,7 @@ describe('QueryProgressLine CC style', () => {
   let writeSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {

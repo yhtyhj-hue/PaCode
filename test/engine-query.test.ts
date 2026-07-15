@@ -6,7 +6,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { QueryEngine } from '../src/agent/engine.js';
 import { serializeMessagesForApi } from '../src/agent/message-serializer.js';
 import { ToolRegistry } from '../src/tools/registry.js';
-import { HookRegistry } from '../src/hooks/registry.js';
 import { PermissionSystem } from '../src/permission/system.js';
 import { ContextAssembler } from '../src/context/assembler.js';
 import { CompactionPipeline } from '../src/context/compaction.js';
@@ -32,7 +31,7 @@ function createState(mode = PermissionMode.BYPASS): SessionState {
 
 function stubAssembler(): ContextAssembler {
   return {
-    async assemble(state) {
+    async assemble(state: any) {
       return {
         systemPrompt: 'test-system',
         messages: state.messages,
@@ -45,7 +44,7 @@ function stubAssembler(): ContextAssembler {
 }
 
 function passthroughCompaction(): CompactionPipeline {
-  return { async run(ctx) { return ctx; } } as unknown as CompactionPipeline;
+  return { async run(ctx: any) { return ctx; } } as unknown as CompactionPipeline;
 }
 
 describe('QueryEngine.query()', () => {
@@ -106,7 +105,7 @@ describe('QueryEngine.query()', () => {
 
     expect(events.some((e) => e.type === 'tool_use' && e.tool?.name === 'Echo')).toBe(true);
     const toolResult = events.find((e) => e.type === 'tool_result');
-    expect(toolResult?.result?.content[0]?.text).toBe('ping');
+    expect((toolResult?.result?.content[0] as { type: 'text'; text: string })?.text).toBe('ping');
     expect(events.some((e) => e.type === 'message_stop')).toBe(true);
 
     // assistant + tool results user msg + final assistant
@@ -137,7 +136,7 @@ describe('QueryEngine.query()', () => {
 
     const denied = events.find((e) => e.type === 'tool_result');
     expect(denied?.result?.isError).toBe(true);
-    expect(denied?.result?.content[0]?.text).toContain('Permission denied');
+    expect((denied?.result?.content[0] as { type: 'text'; text: string })?.text).toContain('Permission denied');
   });
 
   it('blocks tool when permission prompt returns false', async () => {
@@ -164,7 +163,7 @@ describe('QueryEngine.query()', () => {
     }
 
     const denied = events.find((e) => e.type === 'tool_result');
-    expect(denied?.result?.content[0]?.text).toContain('User denied permission');
+    expect((denied?.result?.content[0] as { type: 'text'; text: string })?.text).toContain('User denied permission');
   });
 
   it('retries after max_tokens then completes', async () => {
@@ -204,7 +203,7 @@ describe('QueryEngine.query()', () => {
         order.push('start-read');
         await Promise.resolve();
         order.push('end-read');
-        return { content: [{ type: 'text', text: 'read-ok' }] };
+        return { content: [{ type: 'text' as const, text: 'read-ok' }] };
       },
     });
 
@@ -218,7 +217,7 @@ describe('QueryEngine.query()', () => {
         order.push('start-grep');
         await Promise.resolve();
         order.push('end-grep');
-        return { content: [{ type: 'text', text: 'grep-ok' }] };
+        return { content: [{ type: 'text' as const, text: 'grep-ok' }] };
       },
     });
 
@@ -386,7 +385,7 @@ describe('QueryEngine.query()', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.BYPASS,
       async execute() {
-        return { content: [{ type: 'text', text: 'src/agent/engine.ts' }] };
+        return { content: [{ type: 'text' as const, text: 'src/agent/engine.ts' }] };
       },
     });
 
@@ -431,7 +430,7 @@ describe('QueryEngine.query()', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.BYPASS,
       async execute() {
-        return { content: [{ type: 'text', text: 'src/agent/engine.ts' }] };
+        return { content: [{ type: 'text' as const, text: 'src/agent/engine.ts' }] };
       },
     });
 
@@ -533,7 +532,7 @@ function createEchoTool(): ToolDefinition {
     concurrencySafe: true,
     permissionMode: PermissionMode.DEFAULT,
     async execute(input) {
-      return { content: [{ type: 'text', text: String((input as { msg: string }).msg) }] };
+      return { content: [{ type: 'text' as const, text: String((input as { msg: string }).msg) }] };
     },
   };
 }
@@ -546,7 +545,7 @@ function registerBootstrapStubs(registry: ToolRegistry): void {
     concurrencySafe: true,
     permissionMode: PermissionMode.DEFAULT,
     async execute() {
-      return { content: [{ type: 'text', text: `${name}-ok` }] };
+      return { content: [{ type: 'text' as const, text: `${name}-ok` }] };
     },
   });
   registry.register(stub('Read'));

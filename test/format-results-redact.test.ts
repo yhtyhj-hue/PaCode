@@ -7,7 +7,7 @@ function makeRun(name: string, command: string, stdout: string): { tool: ToolCal
   return {
     tool: { id: 'r1', name, input: { command } },
     result: {
-      content: [{ type: 'text', text: stdout }],
+      content: [{ type: 'text' as const, text: stdout }],
       isError: false,
     },
   };
@@ -77,7 +77,7 @@ describe('formatDagResults — SECURITY_DIFF_SCAN redaction', () => {
   it('does NOT mask other tool outputs even if they mention secrets', () => {
     const run = {
       tool: { id: 'r1', name: 'Read', input: { path: 'config.ts' } },
-      result: { content: [{ type: 'text', text: 'api_key=literal_in_file' }], isError: false },
+      result: { content: [{ type: 'text' as const, text: 'api_key=literal_in_file' }], isError: false },
     };
     const out = formatDagResults('code_audit', [run as { tool: ToolCall; result: ToolResult }]);
     expect(out).toContain('api_key=literal_in_file');

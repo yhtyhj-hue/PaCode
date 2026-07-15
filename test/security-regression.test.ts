@@ -2,8 +2,8 @@
  * Security regression tests — P0 fixes from deep QA
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { checkBashSecurity, parseShellSegments } from '../src/tools/bash-secure.js';
@@ -135,7 +135,7 @@ describe('QueryEngine security', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.BYPASS,
       async execute() {
-        return { content: [{ type: 'text', text: 'ran' }] };
+        return { content: [{ type: 'text' as const, text: 'ran' }] };
       },
     });
 
@@ -168,6 +168,6 @@ describe('QueryEngine security', () => {
       state
     );
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('PreToolUse hook failed');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('PreToolUse hook failed');
   });
 });

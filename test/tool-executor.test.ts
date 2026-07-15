@@ -14,7 +14,7 @@ function makeDef(name: string, safe: boolean): ToolDefinition {
     concurrencySafe: safe,
     permissionMode: PermissionMode.DEFAULT,
     async execute() {
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     },
   };
 }
@@ -26,7 +26,7 @@ describe('executeToolCallsInOrder', () => {
       order.push(`start-${call.name}`);
       await new Promise((r) => setTimeout(r, 20));
       order.push(`end-${call.name}`);
-      return { content: [{ type: 'text', text: call.name }] };
+      return { content: [{ type: 'text' as const, text: call.name }] };
     });
 
     const defs = new Map([
@@ -53,7 +53,7 @@ describe('executeToolCallsInOrder', () => {
 
   it('runs unsafe tools sequentially after safe batch', async () => {
     const executeOne = vi.fn(async (call: ToolCall) => ({
-      content: [{ type: 'text', text: call.name }],
+      content: [{ type: 'text' as const, text: call.name }],
     }));
 
     const defs = new Map([
@@ -89,7 +89,7 @@ describe('executeToolCallsInOrder', () => {
         { id: '3', name: 'Glob', input: {} },
       ],
       getDefinition: (n) => defs.get(n),
-      executeOne: async (call) => ({ content: [{ type: 'text', text: call.name }] }),
+      executeOne: async (call) => ({ content: [{ type: 'text' as const, text: call.name }] }),
     });
 
     expect(outcomes.map((o) => o.toolCall.name)).toEqual(['Read', 'Edit', 'Glob']);

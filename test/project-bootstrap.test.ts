@@ -23,7 +23,7 @@ describe('project-bootstrap', () => {
     const text = formatDagResults('inspect_project', [
       {
         tool: { id: 'b1', name: 'Read', input: { path: 'package.json' } },
-        result: { content: [{ type: 'text', text: '{"name":"pacode"}' }] },
+        result: { content: [{ type: 'text' as const, text: '{"name":"pacode"}' }] },
       },
     ]);
 

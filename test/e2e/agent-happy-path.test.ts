@@ -24,7 +24,7 @@ function registerPrefetchStubs(registry: ToolRegistry): void {
     concurrencySafe: true,
     permissionMode: PermissionMode.BYPASS,
     async execute() {
-      return { content: [{ type: 'text', text: `${name}-ok` }] };
+      return { content: [{ type: 'text' as const, text: `${name}-ok` }] };
     },
   });
   registry.register(stub('Read'));

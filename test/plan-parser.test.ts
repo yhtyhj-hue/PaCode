@@ -57,7 +57,7 @@ describe('extractLastAssistantText', () => {
     const messages: Message[] = [
       {
         role: 'assistant',
-        content: [{ type: 'text', text: 'block text' }],
+        content: [{ type: 'text' as const, text: 'block text' }],
         timestamp: 1,
       },
     ];

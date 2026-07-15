@@ -34,7 +34,7 @@ function registerStubs(registry: ToolRegistry): void {
     concurrencySafe: true,
     permissionMode: PermissionMode.BYPASS,
     async execute(input) {
-      return { content: [{ type: 'text', text: `content:${(input as { path: string }).path}` }] };
+      return { content: [{ type: 'text' as const, text: `content:${(input as { path: string }).path}` }] };
     },
   });
   registry.register({
@@ -44,7 +44,7 @@ function registerStubs(registry: ToolRegistry): void {
     concurrencySafe: true,
     permissionMode: PermissionMode.BYPASS,
     async execute() {
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     },
   });
   registry.register({
@@ -54,7 +54,7 @@ function registerStubs(registry: ToolRegistry): void {
     concurrencySafe: true,
     permissionMode: PermissionMode.BYPASS,
     async execute() {
-      return { content: [{ type: 'text', text: 'src/a.ts' }] };
+      return { content: [{ type: 'text' as const, text: 'src/a.ts' }] };
     },
   });
 }
@@ -123,7 +123,7 @@ describe('multi-turn query execution', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.BYPASS,
       async execute(input) {
-        return { content: [{ type: 'text', text: String((input as { msg: string }).msg) }] };
+        return { content: [{ type: 'text' as const, text: String((input as { msg: string }).msg) }] };
       },
     });
 

@@ -44,7 +44,7 @@ describe('executeDagPlan', () => {
       order.push(`start-${call.name}`);
       await Promise.resolve();
       order.push(`end-${call.name}`);
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     };
 
     const events = [];
@@ -66,7 +66,7 @@ describe('formatDagResults', () => {
     const text = formatDagResults('inspect_project', [
       {
         tool: { id: 'd1', name: 'Read', input: { path: 'package.json' } },
-        result: { content: [{ type: 'text', text: '{"name":"pacode"}' }] },
+        result: { content: [{ type: 'text' as const, text: '{"name":"pacode"}' }] },
       },
     ]);
     expect(text).toContain('项目检查已完成');
@@ -77,7 +77,7 @@ describe('formatDagResults', () => {
     const text = formatDagResults('review_implementation', [
       {
         tool: { id: 'd2', name: 'Bash', input: { command: 'find src/services' } },
-        result: { content: [{ type: 'text', text: 'src/services/agent-scheduler/intents.ts' }] },
+        result: { content: [{ type: 'text' as const, text: 'src/services/agent-scheduler/intents.ts' }] },
       },
     ]);
     expect(text).toContain('实现评估已完成');

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SessionManager } from '../src/session/manager.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 
 describe('SessionManager - Deep Tests', () => {
   let testDir: string;

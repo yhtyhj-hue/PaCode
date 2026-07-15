@@ -52,7 +52,7 @@ describe('REPL slash commands', () => {
 
   beforeEach(() => {
     sessionDir = mkdtempSync(join(tmpdir(), 'pacode-repl-slash-'));
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
     vi.mocked(compactSession).mockClear();
   });
 

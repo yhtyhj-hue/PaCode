@@ -13,7 +13,7 @@ describe('Glob tool', () => {
       { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
     );
     expect(result.isError).toBeFalsy();
-    expect(result.content[0]?.text).toContain('package.json');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('package.json');
   });
 });
 
@@ -25,7 +25,7 @@ describe('Grep tool', () => {
       { id: '1', name: 'Grep', input: { pattern: 'MemoryStore', path: 'src/memory' } },
       { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
     );
-    expect(result.content[0]?.text).toMatch(/MemoryStore|No matches/);
+    expect((result.content[0] as { type: 'text'; text: string }).text).toMatch(/MemoryStore|No matches/);
   });
 
   it('uses DEFAULT permission mode', () => {
@@ -49,7 +49,7 @@ describe('Grep tool', () => {
       },
       { workingDirectory: process.cwd(), sessionState: {} as never, hooks: {} as never }
     );
-    const text = result.content[0]?.text ?? '';
+    const text = (result.content[0] as { type: 'text'; text: string }).text ?? '';
     expect(text).not.toMatch(/uid=\d+\(/); // no `id` command execution leak
     expect(result.isError).toBeFalsy();
   });

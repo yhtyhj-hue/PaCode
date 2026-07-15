@@ -104,7 +104,7 @@ describe('SubagentManager', () => {
     manager.register({ name: 'hooked', description: 'h', mode: PermissionMode.BYPASS });
 
     const hooks = new HookRegistry();
-    const executeSpy = vi.spyOn(hooks, 'execute').mockResolvedValue({ exitCode: 0 });
+    const executeSpy = vi.spyOn(hooks, 'execute').mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' }) as any;
     hooks.register({
       name: 'on-subagent-stop',
       type: HookType.SUBAGENT_STOP,
@@ -140,7 +140,7 @@ describe('SubagentManager', () => {
     manager.register({ name: 'err-agent', description: 'e', mode: PermissionMode.BYPASS });
 
     const hooks = new HookRegistry();
-    const executeSpy = vi.spyOn(hooks, 'execute').mockResolvedValue({ exitCode: 0 });
+    const executeSpy = vi.spyOn(hooks, 'execute').mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' }) as any;
     hooks.register({
       name: 'on-subagent-error',
       type: HookType.SUBAGENT_STOP,
@@ -179,7 +179,7 @@ function createStubTool(name: string): ToolDefinition {
     concurrencySafe: true,
     permissionMode: PermissionMode.BYPASS,
     async execute() {
-      return { content: [{ type: 'text', text: `${name}-ok` }] };
+      return { content: [{ type: 'text' as const, text: `${name}-ok` }] };
     },
   };
 }

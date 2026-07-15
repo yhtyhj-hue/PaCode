@@ -47,7 +47,7 @@ describe('QueryEngine tool pipeline', () => {
       concurrencySafe: true,
       permissionMode: PermissionMode.DEFAULT,
       async execute(input) {
-        return { content: [{ type: 'text', text: String((input as { msg: string }).msg) }] };
+        return { content: [{ type: 'text' as const, text: String((input as { msg: string }).msg) }] };
       },
     });
 
@@ -57,7 +57,7 @@ describe('QueryEngine tool pipeline', () => {
     );
 
     expect(result.isError).toBeFalsy();
-    expect(result.content[0]?.text).toBe('hello');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toBe('hello');
   });
 
   it('blocks tool when PreToolUse hook exits with code 2', async () => {
@@ -76,7 +76,7 @@ describe('QueryEngine tool pipeline', () => {
     );
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('blocked by hook');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('blocked by hook');
   });
 
   it('runs PostToolUse hook after successful execution', async () => {
@@ -95,7 +95,7 @@ describe('QueryEngine tool pipeline', () => {
     );
 
     expect(result.isError).toBeFalsy();
-    expect(result.content[0]?.text).toBe('ok');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toBe('ok');
   });
 
   it('returns error for unknown tool', async () => {
@@ -104,7 +104,7 @@ describe('QueryEngine tool pipeline', () => {
       state
     );
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('Tool not found');
+    expect((result.content[0] as { type: 'text'; text: string }).text).toContain('Tool not found');
   });
 
   it('uses injected permissionPrompt callback', async () => {
@@ -149,7 +149,7 @@ function createOkTool(name: string): ToolDefinition {
     concurrencySafe: true,
     permissionMode: PermissionMode.DEFAULT,
     async execute() {
-      return { content: [{ type: 'text', text: 'ok' }] };
+      return { content: [{ type: 'text' as const, text: 'ok' }] };
     },
   };
 }

@@ -76,8 +76,8 @@ describe('handleWorktree', () => {
   let errSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logSpy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
+    errSpy = (vi.spyOn(console, 'error').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
