@@ -50,7 +50,10 @@ export const MAX_AGENT_TURNS = 50;
 const TOOL_NUDGE_MESSAGE =
   'You must call at least one tool (Read, Glob, Grep, or Bash) before answering. Do not reply with text only.';
 
-export type PermissionPromptFn = (tool: ToolCall) => Promise<boolean>;
+export type PermissionPromptFn = (
+  tool: ToolCall,
+  batchTools?: ToolCall[]
+) => Promise<boolean>;
 
 /** max_tokens 重试上限 */
 export const MAX_OUTPUT_TOKEN_RECOVERY = 3;
@@ -115,6 +118,8 @@ export class QueryEngine {
     let toolsUsedInQuery = false;
     let dagPrefetched = false;
     let deferredText: string[] = [];
+    /** 本 query 已确认过的工具名（预取批通过后复用，避免反复弹窗） */
+    const approvedToolNames = new Set<string>();
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
     const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
 
@@ -206,6 +211,10 @@ export class QueryEngine {
               batchConfirm: prefetchBatchConfirm,
             });
             if (blocked) return blocked;
+            const need = this.permissionSystem.check({ tool: call, mode, context: state });
+            if (need.requiresInteraction) {
+              approvedToolNames.add(call.name);
+            }
             return this.executeTool(call, state);
           };
           const prefetchGen = useParallelPrefetch
@@ -380,6 +389,10 @@ export class QueryEngine {
             }
 
             if (allowed.requiresInteraction) {
+              if (approvedToolNames.has(toolCall.name)) {
+                approvedCalls.push(toolCall);
+                continue;
+              }
               if (shouldAbort()) {
                 resultById.set(toolCall.id, {
                   content: [{ type: 'text', text: 'Interrupted during permission prompt' }],
@@ -402,6 +415,7 @@ export class QueryEngine {
                 });
                 continue;
               }
+              approvedToolNames.add(toolCall.name);
             }
 
             approvedCalls.push(toolCall);
@@ -643,7 +657,10 @@ const stream = await withRetry(
     }
   }
 
-  private async defaultPermissionPrompt(tool: ToolCall): Promise<boolean> {
+  private async defaultPermissionPrompt(
+    tool: ToolCall,
+    _batchTools?: ToolCall[]
+  ): Promise<boolean> {
     if (!process.stdin.isTTY) {
       if (process.env['PACODE_AUTO_APPROVE'] === '1') {
         this.log.info(`Non-TTY with PACODE_AUTO_APPROVE: allowing ${tool.name}`);

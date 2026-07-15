@@ -54,10 +54,6 @@ export async function authorizePrefetchTool(
     context: ctx.state,
   });
 
-  process.stderr.write(
-    `[prefetch-gate] tool=${tool.name} batchSize=${ctx.batchConfirm.tools.length} allowed=${decision.allowed} requiresInteraction=${decision.requiresInteraction}\n`
-  );
-
   if (!decision.allowed) {
     return denied(`Permission denied: ${decision.reason ?? 'unknown'}`);
   }
@@ -67,16 +63,19 @@ export async function authorizePrefetchTool(
   }
 
   // 并行安全：第一个 caller 创建 promise，其余 await 同一份
-  // batch tools 列表由 engine 创建 batchConfirm 时已预填完整
+  // 只把仍需确认的工具放进批摘要（Read/Glob 已在 DEFAULT 自动放行）
   if (!ctx.batchConfirm.promise) {
     ctx.batchConfirm.promise = (async () => {
       if (ctx.shouldAbort?.()) return false;
-      // 把 batch tools 也传给 prompt，让 UI 显示完整批摘要
-      const batchTools =
-        ctx.batchConfirm.tools.length > 1 ? ctx.batchConfirm.tools : undefined;
-      process.stderr.write(
-        `[prefetch-gate] firing prompt with batchSize=${batchTools?.length ?? 0}\n`
-      );
+      const needingConfirm = ctx.batchConfirm.tools.filter((t) => {
+        const d = ctx.permissionSystem.check({
+          tool: t,
+          mode: ctx.mode,
+          context: ctx.state,
+        });
+        return d.allowed && Boolean(d.requiresInteraction);
+      });
+      const batchTools = needingConfirm.length > 1 ? needingConfirm : undefined;
       return ctx.prompt(tool, batchTools);
     })();
   }

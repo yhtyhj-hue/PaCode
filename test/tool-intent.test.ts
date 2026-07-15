@@ -34,6 +34,12 @@ describe('requiresToolExecution', () => {
     expect(requiresToolExecution('向代码库详细调查')).toBe(true);
   });
 
+  it('matches 深度质检 phrasing including screenshot case', () => {
+    expect(requiresToolExecution('深度质检')).toBe(true);
+    expect(requiresToolExecution('给这个项目做一次深度质检')).toBe(true);
+    expect(requiresToolExecution('项目质检')).toBe(true);
+  });
+
   it('ignores casual chat and subagent-style prompts', () => {
     expect(requiresToolExecution('你好')).toBe(false);
     expect(requiresToolExecution('thanks')).toBe(false);

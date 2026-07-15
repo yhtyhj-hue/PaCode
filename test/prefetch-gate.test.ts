@@ -8,8 +8,11 @@ import { PermissionSystem } from '../src/permission/system.js';
 import { authorizePrefetchTool, PrefetchBatchConfirm } from '../src/permission/prefetch-gate.js';
 
 function tool(name: string, input: Record<string, unknown> = {}) {
-  return { id: 't1', name, input };
+  return { id: `t_${Math.random().toString(36).slice(2, 8)}`, name, input };
 }
+
+/** npm run 不是 readonly bash，DEFAULT 下需确认 */
+const BASH_NEED_CONFIRM = { command: 'npm test' };
 
 describe('authorizePrefetchTool', () => {
   it('denies via deny rules without prompting', async () => {
@@ -28,7 +31,21 @@ describe('authorizePrefetchTool', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('batch-confirms only once under parallel callers', async () => {
+  it('auto-allows Read in DEFAULT without prompting', async () => {
+    const prompt = vi.fn();
+    const batch: PrefetchBatchConfirm = { promise: null, tools: [] };
+    const allowed = await authorizePrefetchTool(tool('Read', { path: 'a.ts' }), {
+      permissionSystem: new PermissionSystem(),
+      mode: PermissionMode.DEFAULT,
+      state: { sessionId: 's' } as never,
+      prompt,
+      batchConfirm: batch,
+    });
+    expect(allowed).toBeNull();
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('batch-confirms only once under parallel Bash callers', async () => {
     let resolvePrompt!: (v: boolean) => void;
     const prompt = vi.fn(
       () =>
@@ -36,7 +53,12 @@ describe('authorizePrefetchTool', () => {
           resolvePrompt = resolve;
         })
     );
-    const batch: PrefetchBatchConfirm = { promise: null, tools: [] };
+    const tools = [
+      tool('Bash', BASH_NEED_CONFIRM),
+      tool('Bash', { command: 'npm run build' }),
+      tool('Bash', { command: 'node script.js' }),
+    ];
+    const batch: PrefetchBatchConfirm = { promise: null, tools };
     const sys = new PermissionSystem();
     const state = { sessionId: 's' } as never;
     const ctx = {
@@ -47,11 +69,10 @@ describe('authorizePrefetchTool', () => {
       batchConfirm: batch,
     };
 
-    const p1 = authorizePrefetchTool(tool('Read', { path: 'a.ts' }), ctx);
-    const p2 = authorizePrefetchTool(tool('Bash', { command: 'ls' }), ctx);
-    const p3 = authorizePrefetchTool(tool('Glob', { pattern: '**/*' }), ctx);
+    const p1 = authorizePrefetchTool(tools[0]!, ctx);
+    const p2 = authorizePrefetchTool(tools[1]!, ctx);
+    const p3 = authorizePrefetchTool(tools[2]!, ctx);
 
-    // 让出 microtask，确保三者都挂上同一 promise
     await Promise.resolve();
     expect(prompt).toHaveBeenCalledTimes(1);
     resolvePrompt(true);
@@ -63,7 +84,7 @@ describe('authorizePrefetchTool', () => {
   it('skips prompt in BYPASS mode', async () => {
     const prompt = vi.fn();
     const batch: PrefetchBatchConfirm = { promise: null, tools: [] };
-    const allowed = await authorizePrefetchTool(tool('Bash', { command: 'ls' }), {
+    const allowed = await authorizePrefetchTool(tool('Bash', BASH_NEED_CONFIRM), {
       permissionSystem: new PermissionSystem(),
       mode: PermissionMode.BYPASS,
       state: { sessionId: 's' } as never,
@@ -76,21 +97,20 @@ describe('authorizePrefetchTool', () => {
 });
 
 describe('batch tools pre-population', () => {
-  it('passes full batch list to prompt when tools pre-populated', async () => {
-    let receivedBatch: unknown = undefined;
-    const prompt = vi.fn().mockImplementation((_t, batch) => {
+  it('passes interactive-only batch list to prompt', async () => {
+    let receivedBatch: unknown;
+    const prompt = vi.fn(async (_t, batch) => {
       receivedBatch = batch;
-      return Promise.resolve(true);
+      return true;
     });
-    const batch: PrefetchBatchConfirm = {
-      promise: null,
-      tools: [
-        { id: 'a', name: 'Bash', input: { command: 'ls' } },
-        { id: 'b', name: 'Read', input: { path: 'a.ts' } },
-        { id: 'c', name: 'Glob', input: { pattern: '*.ts' } },
-      ],
-    };
-    await authorizePrefetchTool(batch.tools[0]!, {
+    const tools = [
+      tool('Read', { path: 'a.ts' }),
+      tool('Bash', BASH_NEED_CONFIRM),
+      tool('Bash', { command: 'npm run lint' }),
+      tool('Glob', { pattern: '**/*' }),
+    ];
+    const batch: PrefetchBatchConfirm = { promise: null, tools };
+    await authorizePrefetchTool(tools[1]!, {
       permissionSystem: new PermissionSystem(),
       mode: PermissionMode.DEFAULT,
       state: { sessionId: 's' } as never,
@@ -98,6 +118,8 @@ describe('batch tools pre-population', () => {
       batchConfirm: batch,
     });
     expect(prompt).toHaveBeenCalledTimes(1);
-    expect(receivedBatch).toEqual(batch.tools);
+    expect(Array.isArray(receivedBatch)).toBe(true);
+    expect((receivedBatch as { name: string }[]).every((t) => t.name === 'Bash')).toBe(true);
+    expect((receivedBatch as unknown[]).length).toBe(2);
   });
 });

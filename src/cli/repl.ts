@@ -31,6 +31,7 @@ import { StreamingMarkdownWriter, summarizeToolAction } from './streaming-markdo
 import { ReplLineEditor } from './repl-line-editor.js';
 import { formatUserMessage } from './repl-ui.js';
 import { formatCostReport } from './cost-estimate.js';
+import { confirmYesNo } from './confirm-prompt.js';
 import { formatPermissionsReport } from '../permission/format-display.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
 import type { SlashMenuEntry } from './slash-menu.js';
@@ -106,7 +107,7 @@ export class REPL {
       sessionManager: this.sessionManager,
       hookRegistry: this.hookRegistry,
       contextAssembler: new ContextAssembler({ skillsLoader: this.skillsLoader }),
-      permissionPrompt: async (tool) => this.promptForPermission(tool),
+      permissionPrompt: async (tool, batchTools) => this.promptForPermission(tool, batchTools),
     });
 
     if (options.initialSession) {
@@ -1141,19 +1142,9 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     tool: ToolCall,
     batchTools?: ToolCall[]
   ): Promise<boolean> {
-    if (!process.stdin.isTTY) {
-      if (process.env['PACODE_AUTO_APPROVE'] === '1') return true;
-      return false;
-    }
-
-    const action = summarizeToolAction(tool);
-    const preview = action.length > 72 ? `${action.slice(0, 69)}…` : action;
-
+    // 保持 inputEditor pause：绝不用 readLine 抢 raw mode（否则确认框像卡死）
     if (batchTools && batchTools.length > 1) {
-      // 批模式：显示全部工具 + 各自摘要
-      process.stdout.write(
-        `\n${YELLOW}?${RESET} ${BOLD}Allow ${batchTools.length} prefetch tools?${RESET}\n`
-      );
+      const lines: string[] = [];
       const seen = new Set<string>();
       for (const t of batchTools) {
         if (seen.has(t.name)) continue;
@@ -1162,31 +1153,24 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
         const label = count > 1 ? `${t.name} ×${count}` : t.name;
         const a = summarizeToolAction(t);
         const p = a.length > 64 ? `${a.slice(0, 61)}…` : a;
-        process.stdout.write(
-          `  ${DIM}·${RESET} ${BOLD}${label}${RESET} ${DIM}· ${p}${RESET}\n`
-        );
+        lines.push(`${label}  ${p}`);
       }
-    } else {
-      process.stdout.write(
-        `\n${YELLOW}?${RESET} Allow ${BOLD}${tool.name}${RESET} ${DIM}· ${preview}${RESET}\n`
-      );
+      return confirmYesNo({
+        title: `Allow ${batchTools.length} tools that need confirmation?`,
+        lines,
+        defaultYes: true,
+        shouldAbort: () => this.interruptRequested || this.exitRequested,
+      });
     }
 
-    const wasProcessing = this.isProcessing;
-    if (wasProcessing) {
-      this.inputEditor?.resume();
-    }
-
-    try {
-      const answer = await this.readConfirmationLine();
-      const normalized = answer.trim().toLowerCase();
-      // 明确语义：仅 y/yes 批准；空输入视为 deny（deny-first）。
-      return normalized === 'y' || normalized === 'yes';
-    } finally {
-      if (wasProcessing && !this.exitRequested) {
-        this.inputEditor?.pause();
-      }
-    }
+    const action = summarizeToolAction(tool);
+    const preview = action.length > 72 ? `${action.slice(0, 69)}…` : action;
+    return confirmYesNo({
+      title: `Allow ${tool.name}`,
+      lines: [preview],
+      defaultYes: true,
+      shouldAbort: () => this.interruptRequested || this.exitRequested,
+    });
   }
 
   private getOrCreateSession() {
