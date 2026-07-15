@@ -54,6 +54,10 @@ export async function authorizePrefetchTool(
     context: ctx.state,
   });
 
+  process.stderr.write(
+    `[prefetch-gate] tool=${tool.name} batchSize=${ctx.batchConfirm.tools.length} allowed=${decision.allowed} requiresInteraction=${decision.requiresInteraction}\n`
+  );
+
   if (!decision.allowed) {
     return denied(`Permission denied: ${decision.reason ?? 'unknown'}`);
   }
@@ -70,6 +74,9 @@ export async function authorizePrefetchTool(
       // 把 batch tools 也传给 prompt，让 UI 显示完整批摘要
       const batchTools =
         ctx.batchConfirm.tools.length > 1 ? ctx.batchConfirm.tools : undefined;
+      process.stderr.write(
+        `[prefetch-gate] firing prompt with batchSize=${batchTools?.length ?? 0}\n`
+      );
       return ctx.prompt(tool, batchTools);
     })();
   }
