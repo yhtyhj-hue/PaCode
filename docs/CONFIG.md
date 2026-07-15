@@ -14,7 +14,7 @@
   "version": "1.0.0",
   "model": {
     "provider": "anthropic",
-    "model": "claude-sonnet-4-0",
+    "model": "claude-sonnet-4-5",
     "maxTokens": 8192,
     "temperature": 0.7
   },

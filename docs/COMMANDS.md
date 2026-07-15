@@ -13,7 +13,7 @@ pacode [options] [message]
 | `-h, --help` | 显示帮助 | - |
 | `-v, --version` | 显示版本 | - |
 | `-m, --mode <mode>` | 权限模式 | `default` |
-| `-M, --model <model>` | 指定模型 | claude-sonnet-4-0 |
+| `-M, --model <model>` | 指定模型 | claude-sonnet-4-5 |
 | `--max-tokens <n>` | 最大输出tokens | 8192 |
 | `--api-key <key>` | API密钥 | 环境变量 |
 

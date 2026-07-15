@@ -2,9 +2,9 @@
 
 > 基于 Claude Code v2.1.88 源码分析验证的 AI 编程助手框架
 
-**版本:** 1.0.0
-**日期:** 2026-07-06
-**状态:** 实施完成（Phase A–F，路线图 18/18 ✅）
+**版本:** 1.1.0
+**日期:** 2026-07-15
+**状态:** Stage 0–2 完成；14 工具集成 + 8 service + C 适配器；ahead origin/main 7 commits
 
 ### 实施状态快照
 
@@ -13,15 +13,43 @@
 | Query Engine | ~92% | 全循环；L1 预取后仍保留 tools（CC 对齐）；Subagent + SubagentStop |
 | Context Assembly | ~85% | 9 源组装；Skills 结构化 catalog |
 | Compaction | ~90% | L1–L5 全实现；阈值/maxTokens 可配置 |
-| Tool Registry | ~85% | 8 核心工具 + Plugin 工具 + 并行调度 |
-| Permission System | ~80% | 7 modes + AUTO 分类器 + Layer 4 tool-gate |
+| Tool Registry | ~95% | **14 核心工具**（Bash/Read/Write/Edit/Glob/Grep/Task/TodoWrite + WebFetch/WebSearch/McpSse/McpHttp/McpAuth/AskUser）+ Plugin 工具 + 并行调度 |
+| Permission System | ~90% | 7 modes + AUTO 分类器 + Layer 4 tool-gate + bash-secure 静态分析（FORBIDDEN_CONSTRUCTS/eval/exec/xargs/-exec deny）|
 | Memory | ~85% | 用户 `.paude/memory/` + 项目 `.paude/projects/{hash}/` |
-| Hooks / Skills / Plugins / MCP | ~75% | Hooks ✅；Skills ✅；Plugin tools/agents ✅；MCP stdio ✅ |
-| CLI / REPL | ~85% | Shift+Tab 切模式；Plan/worktree；图片粘贴 🔜 |
-| 测试 | ≥80% | 397 gate tests；Vitest 覆盖率门禁 |
+| Hooks / Skills / Plugins / MCP | ~85% | Hooks ✅；Skills ✅（含 everything-claude-code 挂载层）；Plugin tools/agents ✅；MCP stdio + SSE + StreamableHTTP ✅ |
+| CLI / REPL | ~90% | Shift+Tab 切模式；Plan/worktree；REPL 框自适应终端宽度；/mode / /plan execute 二次确认 |
+| 模型/Retry | ✅ | SDK 0.111；model-stream 指数退避（429/529/网络错误自动重试，base 500ms cap 8s jitter 20%）|
+| 测试 | ≥80% | 662 gate tests + 1 skipped；Vitest 覆盖率门禁 |
 | Eval harness | ✅ | `evals/gate` + `evals/periodic` 分离 |
 
-**Defer:** Ink/React TUI、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器
+### 8 项安全修复（commit bdd7555）
+
+1. Grep 工具 `exec` → `execFile('rg', ['--', pattern, path])` — 消除 shell 注入
+2. SECURITY_DIFF_SCAN 输出 `redactSecrets`（api_key / bearer / PEM 块）— 凭证外泄
+3. worktree validator 拒 `.` / `..` / `/` / `\` — 路径逃逸
+4. bash-secure rm regex 加 `/i` flag — 大小写 bypass
+5. bash-secure base command：startswith → 精确等值匹配 — `lsmine` 不再被误判为 `ls`
+6. bash-secure FORBIDDEN_CONSTRUCTS：deny `eval` / `exec` / `xargs` / `-exec` / `-execdir` / `env -i`
+7. path-utils realpath 防止 symlink 跳出 workspace
+8. engine DAG 旁路（**已回退**——bash-secure + deny 已足够；guard 过度收紧）
+
+### 8 个 service 目录
+
+- `src/services/agent-scheduler/` — DAG 预取 + 并行 agent
+- `src/services/context-compiler/` — 消息编译 + pairing
+- `src/services/web-fetch/` — HTML→text + prompt injection sanitization
+- `src/services/web-search/` — Brave API + mock fallback
+- `src/services/mcp-sse-http/` — SSE + StreamableHTTP transport
+- `src/services/mcp-auth/` — OAuth PKCE + AES-256-GCM token store
+- `src/services/skill-mount/` — everything-claude-code skill 挂载
+- `src/services/ask-user/` — REPL 交互式问题（对标 CC AskUserQuestionTool）
+
+**Defer:** Ink/React TUI、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、CC `auto-memory`、`/rewind` checkpoint、多模态 image upload、CC `LSP` / `TaskCreate*` / `Team*` / `McpAuth` OAuth provider 流程、CC `BashOutput` (background) / `Cron` / `Voice`
+
+**已知遗留：**
+- claude-sonnet-4-0 EOL → 4-5（commit fe9f320 之后）
+- 2 个 locked worktree（早期 audit 残留，harness 内部）
+- 第二次 query 偶发 500 proxy 错误（待用 4-5 复测）
 
 ---
 

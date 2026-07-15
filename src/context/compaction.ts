@@ -161,7 +161,7 @@ export class CompactionPipeline {
     const apiKey = this.llmOptions.apiKey ?? process.env['ANTHROPIC_API_KEY'];
     const client = new Anthropic({ apiKey, baseURL: this.llmOptions.baseUrl });
     const response = await client.messages.create({
-      model: this.llmOptions.model ?? 'claude-sonnet-4-0',
+      model: this.llmOptions.model ?? 'claude-sonnet-4-5',
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     });

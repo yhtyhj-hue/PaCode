@@ -38,7 +38,7 @@ Options:
   --session-id <id>       Resume specific session id
   --api-key <key>         Anthropic API key
   --base-url <url>        Custom API base URL (for proxy)
-  --model <model>         Model name (default: claude-sonnet-4-0)
+  --model <model>         Model name (default: claude-sonnet-4-5)
 
 CC-Switch Commands:
   pacode cc-switch list              List all configured providers
@@ -290,7 +290,7 @@ export async function handleResume(
     (values.model as string | undefined) ??
     activeProvider?.model ??
     process.env['CLAUDE_MODEL'] ??
-    'claude-sonnet-4-0';
+    'claude-sonnet-4-5';
 
   const repl = new REPL({
     apiKey,

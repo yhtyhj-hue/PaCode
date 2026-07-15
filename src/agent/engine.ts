@@ -504,7 +504,7 @@ export class QueryEngine {
     const { messages } = compileMessagesForApi(context.messages);
 
     const streamParams: Anthropic.Messages.MessageCreateParams = {
-      model: options.model ?? 'claude-sonnet-4-0',
+      model: options.model ?? 'claude-sonnet-4-5',
       max_tokens: Math.min(options.maxTokens ?? 8192, context.maxTokens),
       temperature: options.temperature ?? 0.7,
       system,

@@ -38,7 +38,7 @@ export const PaudeConfigSchema = z.object({
   // Model settings
   model: z.object({
     provider: z.enum(['anthropic', 'openai', 'local']).default('anthropic'),
-    model: z.string().default('claude-sonnet-4-0'),
+    model: z.string().default('claude-sonnet-4-5'),
     maxTokens: z.number().default(8192),
     temperature: z.number().default(0.7),
     apiKey: z.string().optional(),
