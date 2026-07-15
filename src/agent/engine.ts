@@ -36,6 +36,7 @@ import {
   runIntentPrefetch,
   isParallelAgentsEnabled,
   runParallelAgentPrefetch,
+  buildParallelAgentTasks,
 } from '../services/agent-scheduler/index.js';
 
 const DAG_PREFETCH_NOTE = 'Running intent DAG prefetch before model summary.';
@@ -171,7 +172,7 @@ export class QueryEngine {
             yield { type: 'skill_loaded', skills: skillCtx.loadedNames };
           }
 
-          const useParallel =
+          const useParallelPrefetch =
             isParallelAgentsEnabled() &&
             (dagPlan.intent === 'inspect_project' ||
               dagPlan.intent === 'review_implementation' ||
@@ -179,8 +180,14 @@ export class QueryEngine {
 
           const queryId = `q_${state.sessionId}_${Date.now()}`;
           // L1 预取：与主循环同一 PermissionSystem；交互确认整批一次（并行安全）
-          // 预填 batch tools 列表（基于 dagPlan 节点），保证 prompt 触发时列表已完整
-          const prefetchBatchTools: ToolCall[] = dagPlan.nodes.map((node, i) => ({
+          // 预填 batch tools 列表，保证 prompt 触发时列表已完整。
+          // 关键：runParallelAgentPrefetch 不走 dagPlan.nodes，而是走
+          // buildParallelAgentTasks(intent).nodes（sub-agent 节点）。
+          // 必须按实际执行路径预填，否则 batchTools 永远是空。
+          const batchNodeSpecs = useParallelPrefetch
+            ? buildParallelAgentTasks(dagPlan.intent).flatMap((t) => t.nodes)
+            : dagPlan.nodes;
+          const prefetchBatchTools: ToolCall[] = batchNodeSpecs.map((node, i) => ({
             id: `dag_${node.id}_${i + 1}`,
             name: node.name,
             input: node.input,
@@ -201,7 +208,7 @@ export class QueryEngine {
             if (blocked) return blocked;
             return this.executeTool(call, state);
           };
-          const prefetchGen = useParallel
+          const prefetchGen = useParallelPrefetch
             ? runParallelAgentPrefetch(dagPlan.intent, prefetchExecute, queryId)
             : runIntentPrefetch(dagPlan, prefetchExecute);
           let runs: Array<{ tool: ToolCall; result: ToolResult }> = [];
