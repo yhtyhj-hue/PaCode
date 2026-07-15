@@ -1,17 +1,30 @@
 /**
  * Prefetch 权限门控：与主循环同一 PermissionSystem，交互确认整批只问一次
  * （并行 worker 共用同一个 Promise，避免竞态多次弹窗）
+ *
+ * 设计说明：engine 在创建 PrefetchBatchConfirm 时**预先填入**所有 DAG 节点的
+ * ToolCall 到 tools 列表（不依赖 worker 后续 push），保证 prompt 触发时列表
+ * 已完整。worker 调 authorizePrefetchTool 时只传单个 tool 用于决策，全列表
+ * 传给 prompt 让 UI 显示完整批摘要。
  */
 
 import { PermissionMode, SessionState, ToolCall, ToolResult } from '../pkg/types.js';
 import { PermissionSystem } from './system.js';
 
-export type PrefetchPermissionPrompt = (tool: ToolCall) => Promise<boolean>;
+export type PrefetchPermissionPrompt = (
+  tool: ToolCall,
+  batchTools?: ToolCall[]
+) => Promise<boolean>;
 
 /** 批确认状态：并行安全 */
 export interface PrefetchBatchConfirm {
   /** 进行中的确认 Promise；null 表示尚未发起 */
   promise: Promise<boolean> | null;
+  /**
+   * 批内全部 tool 列表（engine 创建时预填）。
+   * 长度 = 0 时表示单 tool 模式（无批）。
+   */
+  tools: ToolCall[];
 }
 
 export interface PrefetchAuthContext {
@@ -50,10 +63,14 @@ export async function authorizePrefetchTool(
   }
 
   // 并行安全：第一个 caller 创建 promise，其余 await 同一份
+  // batch tools 列表由 engine 创建 batchConfirm 时已预填完整
   if (!ctx.batchConfirm.promise) {
     ctx.batchConfirm.promise = (async () => {
       if (ctx.shouldAbort?.()) return false;
-      return ctx.prompt(tool);
+      // 把 batch tools 也传给 prompt，让 UI 显示完整批摘要
+      const batchTools =
+        ctx.batchConfirm.tools.length > 1 ? ctx.batchConfirm.tools : undefined;
+      return ctx.prompt(tool, batchTools);
     })();
   }
 

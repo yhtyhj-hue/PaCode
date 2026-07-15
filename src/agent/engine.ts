@@ -179,7 +179,16 @@ export class QueryEngine {
 
           const queryId = `q_${state.sessionId}_${Date.now()}`;
           // L1 预取：与主循环同一 PermissionSystem；交互确认整批一次（并行安全）
-          const prefetchBatchConfirm = { promise: null as Promise<boolean> | null };
+          // 预填 batch tools 列表（基于 dagPlan 节点），保证 prompt 触发时列表已完整
+          const prefetchBatchTools: ToolCall[] = dagPlan.nodes.map((node, i) => ({
+            id: `dag_${node.id}_${i + 1}`,
+            name: node.name,
+            input: node.input,
+          }));
+          const prefetchBatchConfirm = {
+            promise: null as Promise<boolean> | null,
+            tools: prefetchBatchTools,
+          };
           const prefetchExecute = async (call: ToolCall) => {
             const blocked = await authorizePrefetchTool(call, {
               permissionSystem: this.permissionSystem,

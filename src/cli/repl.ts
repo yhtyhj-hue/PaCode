@@ -1137,7 +1137,10 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     }
   }
 
-  private async promptForPermission(tool: ToolCall): Promise<boolean> {
+  private async promptForPermission(
+    tool: ToolCall,
+    batchTools?: ToolCall[]
+  ): Promise<boolean> {
     if (!process.stdin.isTTY) {
       if (process.env['PACODE_AUTO_APPROVE'] === '1') return true;
       return false;
@@ -1145,9 +1148,29 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
     const action = summarizeToolAction(tool);
     const preview = action.length > 72 ? `${action.slice(0, 69)}…` : action;
-    process.stdout.write(
-      `\n${YELLOW}?${RESET} Allow ${BOLD}${tool.name}${RESET} ${DIM}· ${preview}${RESET}\n`
-    );
+
+    if (batchTools && batchTools.length > 1) {
+      // 批模式：显示全部工具 + 各自摘要
+      process.stdout.write(
+        `\n${YELLOW}?${RESET} ${BOLD}Allow ${batchTools.length} prefetch tools?${RESET}\n`
+      );
+      const seen = new Set<string>();
+      for (const t of batchTools) {
+        if (seen.has(t.name)) continue;
+        seen.add(t.name);
+        const count = batchTools.filter((x) => x.name === t.name).length;
+        const label = count > 1 ? `${t.name} ×${count}` : t.name;
+        const a = summarizeToolAction(t);
+        const p = a.length > 64 ? `${a.slice(0, 61)}…` : a;
+        process.stdout.write(
+          `  ${DIM}·${RESET} ${BOLD}${label}${RESET} ${DIM}· ${p}${RESET}\n`
+        );
+      }
+    } else {
+      process.stdout.write(
+        `\n${YELLOW}?${RESET} Allow ${BOLD}${tool.name}${RESET} ${DIM}· ${preview}${RESET}\n`
+      );
+    }
 
     const wasProcessing = this.isProcessing;
     if (wasProcessing) {
@@ -1157,7 +1180,8 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     try {
       const answer = await this.readConfirmationLine();
       const normalized = answer.trim().toLowerCase();
-      return normalized === 'y' || normalized === 'yes' || normalized === '';
+      // 明确语义：仅 y/yes 批准；空输入视为 deny（deny-first）。
+      return normalized === 'y' || normalized === 'yes';
     } finally {
       if (wasProcessing && !this.exitRequested) {
         this.inputEditor?.pause();
