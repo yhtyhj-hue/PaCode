@@ -25,6 +25,15 @@ describe('requiresToolExecution', () => {
     expect(requiresToolExecution('跑一下项目评估')).toBe(true);
   });
 
+  // 对项目深度质检 / 给代码库摸清：通用 "对/向/给 + 项目 + 深度/摸清" 变体
+  it('matches general "对/向/给 + project + action" patterns', () => {
+    expect(requiresToolExecution('对项目深度质检')).toBe(true);
+    expect(requiresToolExecution('对项目完整审查')).toBe(true);
+    expect(requiresToolExecution('给代码库摸清')).toBe(true);
+    expect(requiresToolExecution('对这个项目深度了解')).toBe(true);
+    expect(requiresToolExecution('向代码库详细调查')).toBe(true);
+  });
+
   it('ignores casual chat and subagent-style prompts', () => {
     expect(requiresToolExecution('你好')).toBe(false);
     expect(requiresToolExecution('thanks')).toBe(false);

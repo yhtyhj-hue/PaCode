@@ -9,6 +9,8 @@ const TOOL_REQUIRED_PATTERNS: RegExp[] = [
   // "做一次深度项目质检" / "做项目审计" / "执行代码扫描" 等中文变体
   /(?:做|进行|执行|跑|启动).{0,16}(?:质检|审计|扫描|评估|检查|review|audit)/,
   /(?:深度|完整|详细|彻底).{0,4}(?:项目|代码库|仓库).{0,8}(?:质检|审计|扫描|审查|review|audit)/,
+  // 通用 "对/向/给 + 项目/代码库 + 深度/完整/详细/彻底/了解/分析/调查/摸清/看/审/检/扫"
+  /(?:对|向|给|把|就|请)\s*.{0,16}(?:项目|代码库|仓库)\s*.{0,4}(?:深度|完整|详细|彻底|了解|分析|调查|摸清|质检|审查|扫描|审计)/,
   /inspect\s+(?:the\s+)?(?:current\s+)?(?:project|codebase|repo)/i,
   /analyze\s+(?:the\s+)?(?:current\s+)?(?:project|codebase|repo)/i,
   /check\s+(?:the\s+)?(?:current\s+)?(?:project|codebase|repo|status)/i,
