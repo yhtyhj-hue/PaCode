@@ -68,13 +68,20 @@ export interface SubagentRunOptions {
   shouldAbort?: () => boolean;
 }
 
-const NESTED_TASK_TOOLS = new Set(['Task', 'TaskList', 'TaskGet', 'TaskStop']);
+/** 禁止嵌套扇出；SendMessage 保留以便 Team 成员协作 */
+const NESTED_BLOCKED_TOOLS = new Set([
+  'Task',
+  'TaskList',
+  'TaskGet',
+  'TaskStop',
+  'TeamCreate',
+]);
 
-/** 禁止嵌套 Task*，避免 Subagent 无限扇出 */
+/** 禁止嵌套 Task 系列与 TeamCreate，避免 Subagent 无限扇出 */
 export function registryWithoutTask(source: ToolRegistry): ToolRegistry {
   const filtered = new ToolRegistry();
   for (const tool of source.list()) {
-    if (NESTED_TASK_TOOLS.has(tool.name)) continue;
+    if (NESTED_BLOCKED_TOOLS.has(tool.name)) continue;
     filtered.register(tool);
   }
   return filtered;

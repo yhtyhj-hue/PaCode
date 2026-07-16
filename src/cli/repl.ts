@@ -43,6 +43,7 @@ import { TranscriptBuffer, isCtrlOKey } from './transcript-buffer.js';
 import { QueryProgressLine } from './query-progress.js';
 import { getAgentPool } from '../services/agent-scheduler/index.js';
 import { getTaskStore } from '../services/task-registry/index.js';
+import { getTeamStore } from '../services/team/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -535,8 +536,9 @@ export class REPL {
   private async clearConversation(): Promise<void> {
     this.sessionManager.createSession({ mode: this.mode });
     getTaskStore().clear();
+    getTeamStore().clear();
     console.log(
-      `${GREEN}✓${RESET} Conversation cleared ${DIM}(session approvals + Task store reset)${RESET}`
+      `${GREEN}✓${RESET} Conversation cleared ${DIM}(approvals + Task/Team stores reset)${RESET}`
     );
   }
 
@@ -772,6 +774,7 @@ Project-specific instructions for PaCode/Claude Code.
     const running = pool.snapshot();
     const registered = getSubagentManager().list();
     const tasks = getTaskStore().list().slice(0, 12);
+    const teams = getTeamStore().list().slice(0, 8);
 
     console.log('');
     console.log(`${CYAN}${BOLD}Agents${RESET}`);
@@ -799,13 +802,23 @@ Project-specific instructions for PaCode/Claude Code.
       console.log('');
     }
 
+    if (teams.length > 0) {
+      console.log(`${DIM}Teams (TeamCreate / SendMessage):${RESET}`);
+      for (const t of teams) {
+        console.log(
+          `  ${CYAN}●${RESET} ${t.id} · ${t.name} · ${t.memberCount} members · ${t.unreadCount} unread`
+        );
+      }
+      console.log('');
+    }
+
     console.log(`${DIM}Registered subagent types:${RESET}`);
     for (const agent of registered) {
       console.log(`  ${CYAN}${agent.name}${RESET} — ${DIM}${agent.description}${RESET}`);
     }
     console.log('');
     console.log(
-      `${DIM}Task → SubagentManager (worktree). TaskList/Get/Stop for visibility. Prefetch ≠ subagents.${RESET}`
+      `${DIM}Task/Team → real subagents + inbox. Prefetch workers ≠ Team.${RESET}`
     );
     console.log('');
   }

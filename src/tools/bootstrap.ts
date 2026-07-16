@@ -11,6 +11,7 @@ import { registerGlobTool } from './glob.js';
 import { registerGrepTool } from './grep.js';
 import { registerTaskTool, TaskToolDeps } from './task.js';
 import { registerTaskControlTools } from './task-control.js';
+import { registerTeamTools } from './team.js';
 import { registerTodoWriteTool } from './todowrite.js';
 import { registerWebFetchTool } from '../services/web-fetch/index.js';
 import { registerWebSearchTool } from '../services/web-search/index.js';
@@ -38,6 +39,7 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
     registerTaskTool(registry, { toolRegistry: registry });
   }
   registerTaskControlTools(registry);
+  registerTeamTools(registry);
   registerTodoWriteTool(registry);
   registerWebFetchTool(registry);
   registerWebSearchTool(registry);

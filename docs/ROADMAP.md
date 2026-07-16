@@ -75,8 +75,8 @@
 
 | # | 任务 | 状态 |
 |---|------|------|
-| J1 | Task 结果可见性 + TaskGet/List/Stop（先 3 个，再视需要扩到 6） | ✅（TaskStore + TaskList/Get/Stop；sync 登记 + background+Stop；/agents 展示 Task runs；核心工具 16→19） |
-| J2 | TeamCreate / SendMessage（最小可用） | 🔜 |
+| J1 | Task 结果可见性 + TaskGet/List/Stop（先 3 个，再视需要扩到 6） | ✅（TaskStore + TaskList/Get/Stop；sync 登记 + background+Stop；/agents 展示 Task runs；曾 16→19） |
+| J2 | TeamCreate / SendMessage（最小可用） | ✅（TeamStore inbox；广播拆收件；嵌套保留 SendMessage、禁 TeamCreate；核心工具 19→21） |
 | J3 | Coordinator 模式（有限角色，强契约） | 🔜 |
 | J4 | Voice / Buddy | ❌ 默认不做，除非单独产品决策 |
 
@@ -151,6 +151,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | J2：TeamCreate + SendMessage（list/receive）最小协作总线 |
 | 2026-07-17 | J1：TaskList/Get/Stop + TaskStore 可见性（background Stop） |
 | 2026-07-17 | I6：真 Subagent + worktree 隔离（Task isolate_worktree、SubagentReport、工具 cwd） |
 | 2026-07-16 | 选项3：harness 测试验证 + H1 预取可关 + H2 会话权限记忆 |

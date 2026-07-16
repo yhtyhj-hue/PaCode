@@ -14,17 +14,19 @@ describe('P0: ToolRegistry wired to QueryEngine', () => {
     resetToolRegistry();
   });
 
-  it('QueryEngine sees all 19 core tools after bootstrap', () => {
+  it('QueryEngine sees all 21 core tools after bootstrap', () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry, { task: { toolRegistry: registry } });
 
     const engine = new QueryEngine({ apiKey: 'test', toolRegistry: registry });
-    expect(engine.getToolRegistry().list()).toHaveLength(19);
+    expect(engine.getToolRegistry().list()).toHaveLength(21);
     expect(engine.getToolRegistry().has('Bash')).toBe(true);
     expect(engine.getToolRegistry().has('Task')).toBe(true);
     expect(engine.getToolRegistry().has('TaskList')).toBe(true);
     expect(engine.getToolRegistry().has('TaskGet')).toBe(true);
     expect(engine.getToolRegistry().has('TaskStop')).toBe(true);
+    expect(engine.getToolRegistry().has('TeamCreate')).toBe(true);
+    expect(engine.getToolRegistry().has('SendMessage')).toBe(true);
   });
 
   it('createFilteredRegistry keeps only allowed tools', () => {
