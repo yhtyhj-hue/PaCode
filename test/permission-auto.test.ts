@@ -113,12 +113,13 @@ describe('PermissionSystem AUTO mode', () => {
     expect(result.requiresInteraction).toBe(true);
   });
 
-  it('DEFAULT still requires interaction for Read', () => {
+  it('DEFAULT auto-allows Read (Claude Code-like)', () => {
     const result = ps.check({
       tool: { id: '1', name: 'Read', input: { path: 'x.ts' } },
       mode: PermissionMode.DEFAULT,
       context: {} as any,
     });
-    expect(result.requiresInteraction).toBe(true);
+    expect(result.allowed).toBe(true);
+    expect(result.requiresInteraction).toBeFalsy();
   });
 });

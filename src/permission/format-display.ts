@@ -11,7 +11,7 @@ export function describePermissionMode(mode: PermissionMode): string {
     case PermissionMode.PLAN:
       return 'no tool execution';
     case PermissionMode.DEFAULT:
-      return 'confirm each tool (prefetch: once per batch)';
+      return 'auto-allow Read/Glob/Grep; confirm Bash/Edit/Write (CC-like)';
     case PermissionMode.ACCEPT_EDITS:
       return 'auto-approve Read/Edit/Write/Glob/Grep; confirm others';
     case PermissionMode.AUTO:

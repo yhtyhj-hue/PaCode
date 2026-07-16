@@ -88,14 +88,14 @@ describe('PermissionSystem — tool permissionMode gate', () => {
     expect(result.allowed).toBe(true);
   });
 
-  it('allows Read in DEFAULT session', () => {
+  it('allows Read in DEFAULT session without confirm', () => {
     const result = ps.check({
       tool: { id: '1', name: 'Read', input: { path: 'a.ts' } },
       mode: PermissionMode.DEFAULT,
       context: {} as never,
     });
     expect(result.allowed).toBe(true);
-    expect(result.requiresInteraction).toBe(true);
+    expect(result.requiresInteraction).toBeFalsy();
   });
 
   it('plan mode still blocks before tool gate', () => {

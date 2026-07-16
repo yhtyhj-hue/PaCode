@@ -28,6 +28,10 @@ export function classifyToolCall(
     const command = String(tool.input['command'] ?? '');
     const check = checkBashSecurity(command);
     if (!check.safe) {
+      // bash-secure 对未知命令返回 safe:false + “requires confirmation” → 应弹窗，非硬拒绝
+      if (/requires confirmation/i.test(check.reason ?? '')) {
+        return { risk: 'moderate', reason: check.reason };
+      }
       return { risk: 'destructive', reason: check.reason };
     }
     if (check.category === 'readonly') {

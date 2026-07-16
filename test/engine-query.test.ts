@@ -269,7 +269,7 @@ describe('QueryEngine.query()', () => {
     );
   });
 
-  it('DAG prefetch asks permission once in DEFAULT mode (batch confirm)', async () => {
+  it('DAG prefetch asks permission once for Bash in DEFAULT mode', async () => {
     registerBootstrapStubs(registry);
     const permissionPrompt = vi.fn().mockResolvedValue(true);
 
@@ -287,10 +287,11 @@ describe('QueryEngine.query()', () => {
       /* drain */
     }
 
+    // Read/Glob 免确认；Bash 批确认最多一次
     expect(permissionPrompt.mock.calls.length).toBe(1);
   });
 
-  it('DAG prefetch respects denied batch confirm', async () => {
+  it('DAG prefetch respects denied batch confirm for Bash', async () => {
     registerBootstrapStubs(registry);
     const permissionPrompt = vi.fn().mockResolvedValue(false);
 
