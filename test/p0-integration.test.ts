@@ -14,14 +14,17 @@ describe('P0: ToolRegistry wired to QueryEngine', () => {
     resetToolRegistry();
   });
 
-  it('QueryEngine sees all 16 core tools after bootstrap', () => {
+  it('QueryEngine sees all 19 core tools after bootstrap', () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry, { task: { toolRegistry: registry } });
 
     const engine = new QueryEngine({ apiKey: 'test', toolRegistry: registry });
-    expect(engine.getToolRegistry().list()).toHaveLength(16);
+    expect(engine.getToolRegistry().list()).toHaveLength(19);
     expect(engine.getToolRegistry().has('Bash')).toBe(true);
     expect(engine.getToolRegistry().has('Task')).toBe(true);
+    expect(engine.getToolRegistry().has('TaskList')).toBe(true);
+    expect(engine.getToolRegistry().has('TaskGet')).toBe(true);
+    expect(engine.getToolRegistry().has('TaskStop')).toBe(true);
   });
 
   it('createFilteredRegistry keeps only allowed tools', () => {
@@ -72,9 +75,18 @@ describe('P0: Task tool delegates to SubagentManager', () => {
     const runSpy = vi.spyOn(getSubagentManager(), 'run').mockResolvedValue({
       name: 'explore',
       success: true,
-      output: 'found 3 files',
+      output:
+        '[Subagent: explore] isolation=worktree (100ms, 2 tools)\n\nfound 3 files\n\n---\n{"agent":"explore"}',
       toolCalls: 2,
       duration: 100,
+      report: {
+        agent: 'explore',
+        success: true,
+        summary: 'found 3 files',
+        toolCalls: 2,
+        durationMs: 100,
+        isolation: 'worktree',
+      },
     });
 
     registerTaskTool(registry, { toolRegistry: registry, apiKey: 'k', model: 'test-model' });
@@ -93,6 +105,7 @@ describe('P0: Task tool delegates to SubagentManager', () => {
     );
 
     expect(runSpy).toHaveBeenCalledOnce();
+    expect(runSpy.mock.calls[0]?.[2]).toMatchObject({ isolateWorktree: true });
     expect(result.isError).toBeFalsy();
     expect((result.content[0] as { type: 'text'; text: string }).text).toContain('found 3 files');
     expect((result.content[0] as { type: 'text'; text: string }).text).toContain('explore');

@@ -42,6 +42,7 @@ import { ToolCall, ToolResult } from '../pkg/types.js';
 import { TranscriptBuffer, isCtrlOKey } from './transcript-buffer.js';
 import { QueryProgressLine } from './query-progress.js';
 import { getAgentPool } from '../services/agent-scheduler/index.js';
+import { getTaskStore } from '../services/task-registry/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -533,7 +534,10 @@ export class REPL {
 
   private async clearConversation(): Promise<void> {
     this.sessionManager.createSession({ mode: this.mode });
-    console.log(`${GREEN}✓${RESET} Conversation cleared ${DIM}(session approvals reset)${RESET}`);
+    getTaskStore().clear();
+    console.log(
+      `${GREEN}✓${RESET} Conversation cleared ${DIM}(session approvals + Task store reset)${RESET}`
+    );
   }
 
   private async compact(instructions: string): Promise<void> {
@@ -767,12 +771,13 @@ Project-specific instructions for PaCode/Claude Code.
     const pool = getAgentPool();
     const running = pool.snapshot();
     const registered = getSubagentManager().list();
+    const tasks = getTaskStore().list().slice(0, 12);
 
     console.log('');
     console.log(`${CYAN}${BOLD}Agents${RESET}`);
 
     if (pool.activeQueryId() && running.length > 0) {
-      console.log(`${DIM}Active query: ${pool.activeQueryId()}${RESET}`);
+      console.log(`${DIM}Prefetch workers (same-process DAG): ${pool.activeQueryId()}${RESET}`);
       for (const run of running) {
         const marker =
           run.status === 'done' ? `${GREEN}●${RESET}` : run.status === 'error' ? `${RED}●${RESET}` : `${YELLOW}●${RESET}`;
@@ -782,12 +787,26 @@ Project-specific instructions for PaCode/Claude Code.
       console.log('');
     }
 
+    if (tasks.length > 0) {
+      console.log(`${DIM}Task runs (Subagent / TaskGet):${RESET}`);
+      for (const t of tasks) {
+        const marker =
+          t.status === 'done' ? `${GREEN}●${RESET}` : t.status === 'error' || t.status === 'stopped' ? `${RED}●${RESET}` : `${YELLOW}●${RESET}`;
+        console.log(
+          `  ${marker} ${t.id} · ${t.status} · ${t.subagentType} · ${t.description}${t.background ? ' (bg)' : ''}`
+        );
+      }
+      console.log('');
+    }
+
     console.log(`${DIM}Registered subagent types:${RESET}`);
     for (const agent of registered) {
       console.log(`  ${CYAN}${agent.name}${RESET} — ${DIM}${agent.description}${RESET}`);
     }
     console.log('');
-    console.log(`${DIM}Prefetch workers run automatically on 检查/优化 queries (same-process DAG, not subagents).${RESET}`);
+    console.log(
+      `${DIM}Task → SubagentManager (worktree). TaskList/Get/Stop for visibility. Prefetch ≠ subagents.${RESET}`
+    );
     console.log('');
   }
 

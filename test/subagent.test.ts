@@ -51,7 +51,8 @@ describe('SubagentManager', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.output).toBe('Found 3 files');
+    expect(result.report.summary).toBe('Found 3 files');
+    expect(result.output).toContain('Found 3 files');
     expect(result.name).toBe('test-agent');
   });
 

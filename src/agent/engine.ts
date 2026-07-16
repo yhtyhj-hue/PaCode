@@ -79,6 +79,8 @@ export class QueryEngine {
   private permissionPrompt: PermissionPromptFn;
   private contextMaxTokens: number;
   private prefetchConfig: import('../pkg/app-config.js').ResolvedAppConfig['prefetch'];
+  /** 工具执行根目录（Subagent worktree 隔离时覆盖 process.cwd） */
+  private workingDirectory: string;
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
@@ -88,6 +90,7 @@ export class QueryEngine {
     const appConfig = resolveAppConfig();
     this.contextMaxTokens = appConfig.contextMaxTokens;
     this.prefetchConfig = options.prefetch ?? appConfig.prefetch;
+    this.workingDirectory = options.workingDirectory ?? process.cwd();
     this.contextAssembler = options.contextAssembler ?? new ContextAssembler();
     this.compactionPipeline =
       options.compactionPipeline ??
@@ -631,7 +634,7 @@ const stream = await withRetry(
 
   private buildToolContext(toolCall: ToolCall, state: SessionState): ToolContext {
     return {
-      workingDirectory: process.cwd(),
+      workingDirectory: this.workingDirectory,
       sessionState: state,
       hooks: this.hookRegistry,
       currentTool: toolCall,
@@ -774,4 +777,6 @@ export interface QueryEngineOptions {
   permissionPrompt?: PermissionPromptFn;
   /** 覆盖 resolveAppConfig().prefetch（测试用） */
   prefetch?: import('../pkg/app-config.js').ResolvedAppConfig['prefetch'];
+  /** 工具 cwd；Subagent 隔离 worktree 时注入，默认 process.cwd() */
+  workingDirectory?: string;
 }

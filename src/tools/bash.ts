@@ -2,7 +2,7 @@
  * Bash Tool - shell execution with security checks
  */
 
-import { ToolDefinition, PermissionMode } from '../pkg/types.js';
+import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
 import { createSecureBashExecutor } from './bash-secure.js';
 
 const secureBash = createSecureBashExecutor({ timeoutMs: 60000 });
@@ -18,9 +18,12 @@ export function registerBashTool(registry: { register: (t: ToolDefinition) => vo
     },
     concurrencySafe: false,
     permissionMode: PermissionMode.DEFAULT,
-    async execute(input) {
+    async execute(input, ctx?: ToolContext) {
       const { command } = input as { command: string };
-      const { stdout, stderr, exitCode, truncated } = await secureBash(command);
+      // 核心：在 ToolContext.workingDirectory 执行，支持 Subagent worktree 隔离
+      const { stdout, stderr, exitCode, truncated } = await secureBash(command, {
+        cwd: ctx?.workingDirectory,
+      });
 
       const body = stdout || stderr;
       const suffix = truncated

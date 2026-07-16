@@ -34,7 +34,7 @@
 | Edit 唯一匹配 / replaceAll | ✅ |
 | 5 层 compact 管道形态 | ✅ 仍可加深 |
 | MCP stdio | ✅；HTTP/SSE 🔜 |
-| Subagent / Worktree CLI | ⚠️ 浅 |
+| Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
 | Ink TUI / Voice / Team / LSP | ❌ defer 或靠后 |
 
 ---
@@ -67,7 +67,7 @@
 | I3 | **Reflection 绑证据**：改码后强制/可选跑测或 lint，失败则继续 loop | 有信号的反思，不是空复读 | ✅（end_turn 时若 toolCallHistory 含 Edit/Write/NotebookEdit 且 reflectionCount < 2 触发；npm/cargo/go/pytest 项目自动检测；失败输出注入 user message 强制下一轮；12 测试覆盖） |
 | I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | ✅（EnterPlanMode/ExitPlanMode 两个新工具注册到 bootstrap；PlanManager.createPlan/approve/startExecution 复用；5 测试 + p0 工具数 14→16） |
 | I5 | **Output styles + Compact 策略**（auto / forced / manual + 焦点） | 体感与可控性 | ✅（output-styles.ts：4 风格预设 default/cost/full/minimal；/style slash 切换 + 列表；7 测试覆盖。Compact 策略：auto/forced/manual 三模式 policy 锁定） |
-| I6 | **真 Subagent + worktree 隔离**（替换「prefetch = agents」认知） | 多代理有边界，无戏服 | 🔜 |
+| I6 | **真 Subagent + worktree 隔离**（替换「prefetch = agents」认知） | 多代理有边界，无戏服 | ✅（QueryEngine.workingDirectory；Task 默认 ephemeral worktree + 固定 SubagentReport JSON；禁嵌套 Task；Bash/Glob/Grep 尊重 cwd；不 chdir） |
 
 ---
 
@@ -75,7 +75,7 @@
 
 | # | 任务 | 状态 |
 |---|------|------|
-| J1 | Task 结果可见性 + TaskGet/List/Stop（先 3 个，再视需要扩到 6） | 🔜 |
+| J1 | Task 结果可见性 + TaskGet/List/Stop（先 3 个，再视需要扩到 6） | ✅（TaskStore + TaskList/Get/Stop；sync 登记 + background+Stop；/agents 展示 Task runs；核心工具 16→19） |
 | J2 | TeamCreate / SendMessage（最小可用） | 🔜 |
 | J3 | Coordinator 模式（有限角色，强契约） | 🔜 |
 | J4 | Voice / Buddy | ❌ 默认不做，除非单独产品决策 |
@@ -151,6 +151,8 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | J1：TaskList/Get/Stop + TaskStore 可见性（background Stop） |
+| 2026-07-17 | I6：真 Subagent + worktree 隔离（Task isolate_worktree、SubagentReport、工具 cwd） |
 | 2026-07-16 | 选项3：harness 测试验证 + H1 预取可关 + H2 会话权限记忆 |
 | 2026-07-16 | 重写现行主线 Phase H–K（超越 CC）；否决数量优先排期 |
 | 2026-07-16 | H3：PostToolUseFailure + Stop hook 接线（engine.executeTool 失败触发，REPL finally 触发 Stop） |

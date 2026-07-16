@@ -308,11 +308,19 @@ export function checkBashSecurity(command: string): SecurityCheck {
   };
 }
 
+export interface SecureBashExecOptions {
+  /** 在指定目录执行（Subagent worktree 隔离） */
+  cwd?: string;
+}
+
 export function createSecureBashExecutor(config: BashSecurityConfig = {}) {
   const timeoutMs = config.timeoutMs ?? 60000;
   const maxOutputLines = config.maxOutputLines ?? DEFAULT_BASH_MAX_OUTPUT_LINES;
 
-  return function secureBash(command: string): Promise<BashExecutionResult> {
+  return function secureBash(
+    command: string,
+    options: SecureBashExecOptions = {}
+  ): Promise<BashExecutionResult> {
     return new Promise((resolve) => {
       const security = checkBashSecurity(command);
       if (!security.safe) {
@@ -320,17 +328,25 @@ export function createSecureBashExecutor(config: BashSecurityConfig = {}) {
         return;
       }
 
-      exec(command, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-        const out = truncateBashOutput(stdout ?? '', maxOutputLines);
-        const errOut = truncateBashOutput(stderr ?? '', maxOutputLines);
+      exec(
+        command,
+        {
+          timeout: timeoutMs,
+          maxBuffer: 10 * 1024 * 1024,
+          cwd: options.cwd,
+        },
+        (err, stdout, stderr) => {
+          const out = truncateBashOutput(stdout ?? '', maxOutputLines);
+          const errOut = truncateBashOutput(stderr ?? '', maxOutputLines);
 
-        resolve({
-          stdout: out.text,
-          stderr: errOut.text,
-          exitCode: typeof err?.code === 'number' ? err.code : err ? 1 : 0,
-          truncated: out.truncated || errOut.truncated,
-        });
-      });
+          resolve({
+            stdout: out.text,
+            stderr: errOut.text,
+            exitCode: typeof err?.code === 'number' ? err.code : err ? 1 : 0,
+            truncated: out.truncated || errOut.truncated,
+          });
+        }
+      );
     });
   };
 }

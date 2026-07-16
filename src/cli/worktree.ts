@@ -128,7 +128,16 @@ export class WorktreeManager {
     }
   }
 
-  remove(name: string): boolean {
+  /** I6: 为 Subagent 创建唯一 ephemeral worktree（不 chdir，调用方传 path 给工具） */
+  createEphemeral(prefix = 'pacode-sub'): Worktree | null {
+    const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const raw = `${prefix}-${stamp}`.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const name = raw.slice(0, 64);
+    if (!validateWorktreeName(name)) return null;
+    return this.create(name);
+  }
+
+  remove(name: string, options: { deleteBranch?: boolean } = {}): boolean {
     if (!validateWorktreeName(name)) {
       this.log.error(`Invalid worktree name: ${name}`);
       return false;
@@ -141,15 +150,26 @@ export class WorktreeManager {
         cwd: this.repoRoot,
         stdio: 'ignore',
       });
-      return true;
     } catch {
       try {
         if (existsSync(worktreePath)) rmSync(worktreePath, { recursive: true, force: true });
-        return true;
       } catch {
         return false;
       }
     }
+
+    // ephemeral 分支默认删除，避免 .claude/worktrees 堆积孤儿分支
+    if (options.deleteBranch !== false && name.startsWith('pacode-sub-')) {
+      try {
+        execFileSync('git', ['branch', '-D', name], {
+          cwd: this.repoRoot,
+          stdio: 'ignore',
+        });
+      } catch {
+        /* branch may already be gone */
+      }
+    }
+    return true;
   }
 
   runInWorktree<T>(worktreeName: string, fn: () => T): T {

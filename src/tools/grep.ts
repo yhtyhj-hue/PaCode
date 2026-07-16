@@ -3,7 +3,8 @@
  */
 
 import { execFile } from 'node:child_process';
-import { ToolDefinition, PermissionMode } from '../pkg/types.js';
+import { isAbsolute, resolve as resolvePath } from 'node:path';
+import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
 
 export function registerGrepTool(registry: { register: (t: ToolDefinition) => void }) {
   registry.register({
@@ -31,7 +32,7 @@ export function registerGrepTool(registry: { register: (t: ToolDefinition) => vo
     },
     concurrencySafe: true,
     permissionMode: PermissionMode.DEFAULT,
-    async execute(input) {
+    async execute(input, ctx?: ToolContext) {
       const {
         pattern,
         path = '.',
@@ -56,6 +57,9 @@ export function registerGrepTool(registry: { register: (t: ToolDefinition) => vo
         max_results?: number;
       };
 
+      const root = ctx?.workingDirectory ?? process.cwd();
+      const searchPath = isAbsolute(path) ? path : resolvePath(root, path);
+
       // Build ripgrep argv (flags first, then path, then -- pattern)
       const args: string[] = [];
       if (ignore_case) args.push('-i');
@@ -69,10 +73,14 @@ export function registerGrepTool(registry: { register: (t: ToolDefinition) => vo
       }
       if (output_mode === 'files_with_matches') args.push('-l');
       if (output_mode === 'count') args.push('-c');
-      args.push('--', pattern, path);
+      args.push('--', pattern, searchPath);
 
       return new Promise((resolve) => {
-        execFile('rg', args, { timeout: 30000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+        execFile(
+          'rg',
+          args,
+          { timeout: 30000, maxBuffer: 10 * 1024 * 1024, cwd: root },
+          (err, stdout, stderr) => {
           if (err && !stdout) {
             resolve({ content: [{ type: 'text', text: stderr || 'No matches' }] });
             return;
