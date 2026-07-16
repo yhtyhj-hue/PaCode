@@ -30,11 +30,24 @@ describe('MCPClient', () => {
     const client = new MCPClient();
     await expect(
       client.connect({
-        name: 'sse-server',
-        type: 'sse',
-        url: 'http://localhost:9999',
+        name: 'ws-bad',
+        type: 'websocket',
       })
-    ).rejects.toThrow(/Unsupported MCP transport/);
+    ).rejects.toThrow(/only stdio\/sse\/http implemented/i);
+  });
+
+  it('sse transport attempts connection (and fails on bad URL)', async () => {
+    // H5: sse is now supported; verify it actually attempts the
+    // connection rather than throwing 'Unsupported MCP transport'.
+    // (ECONNREFUSED is expected on localhost:9999.)
+    const client = new MCPClient();
+    await expect(
+      client.connect({
+        name: 'sse-bad-url',
+        type: 'sse',
+        url: 'http://127.0.0.1:9999',
+      })
+    ).rejects.toThrow(); // any network-level error
   });
 
   it('callTool returns error when server not connected', async () => {

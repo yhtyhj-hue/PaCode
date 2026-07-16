@@ -1,9 +1,12 @@
 /**
  * MCP Client - Model Context Protocol via @modelcontextprotocol/sdk
+ * Supports stdio / sse / streamableHttp transports (H5: G5 ROADMAP).
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
   MCPServerConfig,
   MCPServerConnection,
@@ -14,10 +17,15 @@ import {
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 
+type AnyTransport =
+  | StdioClientTransport
+  | SSEClientTransport
+  | StreamableHTTPClientTransport;
+
 interface MCPRuntime {
   connection: MCPServerConnection;
   client: Client;
-  transport: StdioClientTransport;
+  transport: AnyTransport;
 }
 
 export class MCPClient {
@@ -40,21 +48,7 @@ export class MCPClient {
     };
 
     try {
-      if (config.type !== 'stdio') {
-        throw new Error(`Unsupported MCP transport: ${config.type}`);
-      }
-      if (!config.command) {
-        throw new Error('stdio MCP server requires command');
-      }
-
-      this.log.info(`Connecting to ${config.name}...`);
-
-      const transport = new StdioClientTransport({
-        command: config.command,
-        args: config.args,
-        env: config.env,
-        stderr: 'ignore',
-      });
+      const transport = this.createTransport(config);
 
       const client = new Client(
         { name: 'pacode', version: '0.1.0' },
@@ -72,12 +66,50 @@ export class MCPClient {
       connection.status = 'connected' as ConnectionStatus;
 
       this.servers.set(config.name, { connection, client, transport });
-      this.log.info(`Connected to ${config.name} (${connection.tools.length} tools)`);
+      this.log.info(`Connected to ${serverName} (${connection.tools.length} tools)`);
     } catch (error) {
       connection.status = 'failed' as ConnectionStatus;
       connection.lastError = error instanceof Error ? error.message : String(error);
       this.log.error(`Failed to connect to ${config.name}:`, error);
       throw error;
+    }
+  }
+
+  /** Factory: produce the right transport for the configured type. */
+  private createTransport(config: MCPServerConfig): AnyTransport {
+    switch (config.type) {
+      case 'stdio': {
+        if (!config.command) {
+          throw new Error('stdio MCP server requires command');
+        }
+        return new StdioClientTransport({
+          command: config.command,
+          args: config.args,
+          env: config.env,
+          stderr: 'ignore',
+        });
+      }
+      case 'sse': {
+        if (!config.url) {
+          throw new Error('sse MCP server requires url');
+        }
+        return new SSEClientTransport(new URL(config.url), {
+          requestInit: { headers: config.headers },
+        });
+      }
+      case 'http': {
+        if (!config.url) {
+          throw new Error('http MCP server requires url');
+        }
+        return new StreamableHTTPClientTransport(new URL(config.url), {
+          requestInit: { headers: config.headers },
+        });
+      }
+      default: {
+        throw new Error(
+          `Unsupported MCP transport: ${String(config.type)} (only stdio/sse/http implemented)`
+        );
+      }
     }
   }
 
