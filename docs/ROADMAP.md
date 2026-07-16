@@ -52,7 +52,7 @@
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | ✅（client.ts createTransport switch on type: stdio/sse/http 全部接线；MCPServerConfig 加 headers 字段；transport 字段类型 union AnyTransport） |
 | H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ⚠️ 部分（tool 已注册 + 30 测试；REPL 未在 tool dispatch 处拦截/转发 stdin — 模型调 AskUser 会与 ReplLineEditor 抢 raw mode。短期方案：工具标注 ACCEPT_EDITS 但 REPL 不 pause line editor；长期：REPL 在 tool dispatch 时显式 pause+delegate stdin） |
 | H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | ✅（evals/gate/m1-m4.eval.ts 4 个 gate eval 覆盖 M1 假完成率/M2 单次批 confirm/M3 深读触发/M4 Ctrl+C 取消；M3 同步加 完整读/逐行读/全读 正则；npm run test 跑 705 通过即可阻断） |
-| H8 | **主循环失败可恢复**：中断、权限拒绝后可续跑同一任务 | 无卡死确认框；会话可 resume | ⚠️ 部分（确认 UX ✅） |
+| H8 | **主循环失败可恢复**：中断、权限拒绝后可续跑同一任务 | 无卡死确认框；会话可 resume | ✅（engine 8 处 shouldAbort ABORTED 检查 + confirm-prompt Ctrl+C 取消 + `/resume` slash command 接入 SessionResume.list/load + SessionManager.restoreSession 替换当前会话） |
 
 **Phase H 明确不做：** LSP、Notebook、Cron、Voice、Buddy、Team、刷 slash 到 80+、Ink TUI。
 
