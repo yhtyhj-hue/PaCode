@@ -155,4 +155,15 @@ export async function runStopHooks(
       // Stop hook errors must never escape this loop
     }
   }
+
+  // I1: auditable auto-memory — fire AFTER user-configured
+  // Stop hooks so user hooks see the session, but extraction
+  // errors never block the loop. Writes to
+  // ~/.paude/memory/auto/<date>.jsonl (git-friendly diff/rollback).
+  try {
+    const { recordAutoMemory } = await import('../memory/auto-extract.js');
+    await recordAutoMemory(session.messages);
+  } catch {
+    // Auto-memory failures must never propagate to REPL finally
+  }
 }

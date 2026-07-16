@@ -62,7 +62,7 @@
 
 | # | 任务 | 差异化点 | 状态 |
 |---|------|----------|------|
-| I1 | **可审计 auto-memory**：对话事实写入 `.paude/memory/`，可 diff / 回滚 | 比黑盒记忆更可检查 | 🔜 |
+| I1 | **可审计 auto-memory**：对话事实写入 `.paude/memory/`，可 diff / 回滚 | 比黑盒记忆更可检查 | ✅（heuristic 提取 is-def-zh/project-uses/set-config/decision 4 类；写入 ~/.paude/memory/auto/<date>.jsonl；Stop hook 自动触发；14 测试覆盖） |
 | I2 | **/rewind + 工作区 checkpoint**（按 tool 批次，慎重） | 强恢复；需快照权限与测试 | 🔜 |
 | I3 | **Reflection 绑证据**：改码后强制/可选跑测或 lint，失败则继续 loop | 有信号的反思，不是空复读 | 🔜 |
 | I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | 🔜 |
