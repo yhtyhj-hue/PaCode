@@ -17,6 +17,11 @@ import {
 import { Logger } from '../pkg/logger/index.js';
 import { ContextAssembler } from '../context/assembler.js';
 import { CompactionPipeline } from '../context/compaction.js';
+import {
+  hasCodeMutatingToolCall,
+  runReflection,
+  MAX_REFLECTIONS_PER_QUERY,
+} from './reflection.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { PermissionSystem } from '../permission/system.js';
 import { shouldRunPrefetch } from './prefetch-config.js';
@@ -127,6 +132,8 @@ export class QueryEngine {
     let deferredText: string[] = [];
     /** 本 query 已确认过的工具名（预取批通过后复用，避免反复弹窗） */
     const approvedToolNames = new Set<string>();
+    /** I3 reflection count within this query (capped at MAX_REFLECTIONS_PER_QUERY). */
+    let reflectionCount = 0;
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
     const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
 
@@ -306,6 +313,33 @@ export class QueryEngine {
 
         if (response.stopReason === 'end_turn') {
           const noToolsUsed = response.toolCalls.length === 0;
+
+          // I3: reflection — if the model just mutated code, run
+          // the project's test/lint and inject failures back so
+          // the next turn can act on real evidence. Bounded to
+          // MAX_REFLECTIONS_PER_QUERY to avoid infinite loops.
+          if (
+            !noToolsUsed &&
+            hasCodeMutatingToolCall(state.toolCallHistory) &&
+            reflectionCount < MAX_REFLECTIONS_PER_QUERY
+          ) {
+            reflectionCount += 1;
+            const summary = await runReflection();
+            if (summary.failureMessage) {
+              this.log.warn(
+                `I3 reflection ${reflectionCount}/${MAX_REFLECTIONS_PER_QUERY}: ${summary.failed} verifier(s) failed`
+              );
+              // Inject the failure evidence as a synthetic user
+              // message; force the next turn to act on it.
+              state.messages.push({
+                role: 'user',
+                content: summary.failureMessage,
+                timestamp: Date.now(),
+              });
+              effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+              continue;
+            }
+          }
 
           if (
             noToolsUsed &&
