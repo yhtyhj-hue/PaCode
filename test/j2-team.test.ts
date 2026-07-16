@@ -157,12 +157,12 @@ describe('J2 Team tools', () => {
     expect(nested.has('Task')).toBe(false);
   });
 
-  it('bootstrap registers 21 core tools', () => {
+  it('bootstrap registers Team tools among core set', () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry, { task: { toolRegistry: registry } });
-    expect(registry.list()).toHaveLength(21);
     expect(registry.has('TeamCreate')).toBe(true);
     expect(registry.has('SendMessage')).toBe(true);
+    expect(registry.list().length).toBeGreaterThanOrEqual(21);
   });
 });
 

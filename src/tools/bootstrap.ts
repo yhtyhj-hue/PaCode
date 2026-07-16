@@ -12,6 +12,7 @@ import { registerGrepTool } from './grep.js';
 import { registerTaskTool, TaskToolDeps } from './task.js';
 import { registerTaskControlTools } from './task-control.js';
 import { registerTeamTools } from './team.js';
+import { registerCoordinatorTool } from './coordinator.js';
 import { registerTodoWriteTool } from './todowrite.js';
 import { registerWebFetchTool } from '../services/web-fetch/index.js';
 import { registerWebSearchTool } from '../services/web-search/index.js';
@@ -33,13 +34,16 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
   registerEditTool(registry);
   registerGlobTool(registry);
   registerGrepTool(registry);
-  if (options.task) {
-    registerTaskTool(registry, options.task);
-  } else {
-    registerTaskTool(registry, { toolRegistry: registry });
-  }
+  const taskDeps = options.task ?? { toolRegistry: registry };
+  registerTaskTool(registry, taskDeps);
   registerTaskControlTools(registry);
   registerTeamTools(registry);
+  registerCoordinatorTool(registry, {
+    toolRegistry: taskDeps.toolRegistry,
+    apiKey: taskDeps.apiKey,
+    baseUrl: taskDeps.baseUrl,
+    model: taskDeps.model,
+  });
   registerTodoWriteTool(registry);
   registerWebFetchTool(registry);
   registerWebSearchTool(registry);

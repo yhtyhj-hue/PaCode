@@ -44,6 +44,7 @@ import { QueryProgressLine } from './query-progress.js';
 import { getAgentPool } from '../services/agent-scheduler/index.js';
 import { getTaskStore } from '../services/task-registry/index.js';
 import { getTeamStore } from '../services/team/index.js';
+import { getCoordinatorStore } from '../services/coordinator/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -537,8 +538,9 @@ export class REPL {
     this.sessionManager.createSession({ mode: this.mode });
     getTaskStore().clear();
     getTeamStore().clear();
+    getCoordinatorStore().clear();
     console.log(
-      `${GREEN}✓${RESET} Conversation cleared ${DIM}(approvals + Task/Team stores reset)${RESET}`
+      `${GREEN}✓${RESET} Conversation cleared ${DIM}(approvals + Task/Team/Coordinator reset)${RESET}`
     );
   }
 
@@ -803,10 +805,11 @@ Project-specific instructions for PaCode/Claude Code.
     }
 
     if (teams.length > 0) {
-      console.log(`${DIM}Teams (TeamCreate / SendMessage):${RESET}`);
+      console.log(`${DIM}Teams (TeamCreate / SendMessage / Coordinator):${RESET}`);
       for (const t of teams) {
+        const asn = getCoordinatorStore().listForTeam(t.id).length;
         console.log(
-          `  ${CYAN}●${RESET} ${t.id} · ${t.name} · ${t.memberCount} members · ${t.unreadCount} unread`
+          `  ${CYAN}●${RESET} ${t.id} · ${t.name} · ${t.memberCount} members · ${t.unreadCount} unread · ${asn} assignments`
         );
       }
       console.log('');

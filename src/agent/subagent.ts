@@ -75,9 +75,10 @@ const NESTED_BLOCKED_TOOLS = new Set([
   'TaskGet',
   'TaskStop',
   'TeamCreate',
+  'Coordinator',
 ]);
 
-/** 禁止嵌套 Task 系列与 TeamCreate，避免 Subagent 无限扇出 */
+/** 禁止嵌套 Task/TeamCreate/Coordinator，避免 Subagent 无限扇出 */
 export function registryWithoutTask(source: ToolRegistry): ToolRegistry {
   const filtered = new ToolRegistry();
   for (const tool of source.list()) {
