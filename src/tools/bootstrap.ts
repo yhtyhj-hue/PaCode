@@ -15,6 +15,9 @@ import { registerTeamTools } from './team.js';
 import { registerCoordinatorTool } from './coordinator.js';
 import { registerSkillTools } from './skill-tools.js';
 import { registerConfigTool } from './config-tool.js';
+import { registerNotebookEditTool } from './notebook-edit.js';
+import { registerScheduleCronTool } from './schedule-cron.js';
+import { registerLspTool } from './lsp.js';
 import { registerTodoWriteTool } from './todowrite.js';
 import { registerWebFetchTool } from '../services/web-fetch/index.js';
 import { registerWebSearchTool } from '../services/web-search/index.js';
@@ -37,6 +40,7 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
   registerReadTool(registry);
   registerWriteTool(registry);
   registerEditTool(registry);
+  registerNotebookEditTool(registry);
   registerGlobTool(registry);
   registerGrepTool(registry);
   const taskDeps = options.task ?? { toolRegistry: registry };
@@ -57,6 +61,8 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
   registerAskUserTool(registry);
   registerPlanModeTools(registry);
   registerConfigTool(registry);
+  registerScheduleCronTool(registry);
+  registerLspTool(registry);
   // K1: 最后注册，ToolSearch 执行时可见全部工具
   registerSkillTools(registry, {
     toolRegistry: registry,

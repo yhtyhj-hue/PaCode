@@ -89,7 +89,7 @@
 | K1 | SkillTool / ToolSearch（延迟加载技能目录） | ✅（SkillTool load/list/search；ToolSearch；assembler 默认 lazy index；skillsFullCatalog opt-in；核心工具 22→24） |
 | K2 | ConfigTool（薄封装现有 settings） | ✅（get/set/list；writable 白名单；apiKey 脱敏；写入 user/project/local；核心工具 24→25） |
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | ✅（`/brief` 确定性构建 + `.claude/skills/brief`；无 BriefTool） |
-| K4 | NotebookEdit / ScheduleCron / LSP | 🔜 P2 |
+| K4 | NotebookEdit / ScheduleCron / LSP | ✅ P2（NotebookEdit 改 .ipynb；ScheduleCron 进程内 every:@hourly + /cron；LSP=tsc/eslint 诊断非真 language server；核心工具 25→28） |
 | K5 | MCP 其余 transport；Bridge 远程会话 | ✅ 部分（sse/http 校验+headers+OAuth Bearer 合并；websocket/Bridge 明确 deferred；`/bridge` 状态） |
 | K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（菜单对齐 resume/rewind/style；新增 /doctor /diff；/reset /quit 别名；不对齐 101） |
 | K7 | Ink TUI | defer |
@@ -151,6 +151,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | K4 P2：NotebookEdit + ScheduleCron + LSP(diagnostics) |
 | 2026-07-17 | K5：MCP sse/http bootstrap 放行 + auth headers；Bridge deferred `/bridge` |
 | 2026-07-17 | K6：高频 slash（doctor/diff + 菜单对齐 resume/rewind/style） |
 | 2026-07-17 | K2+K3：ConfigTool + Brief（/brief slash + brief skill，无 BriefTool） |

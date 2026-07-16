@@ -49,6 +49,7 @@ import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.j
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
 import { formatBridgeStatus } from '../services/bridge/index.js';
+import { getCronStore } from '../services/cron/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -466,6 +467,9 @@ export class REPL {
       case '/bridge':
         this.handleBridge();
         break;
+      case '/cron':
+        this.handleCron(args);
+        break;
       case '/effort':
         console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
         break;
@@ -500,6 +504,7 @@ export class REPL {
         ['/doctor', 'Run local health checks'],
         ['/diff', 'git status + diff --stat (read-only)'],
         ['/bridge', 'Bridge remote session status (deferred)'],
+        ['/cron', 'List/create/delete in-process scheduled prompts'],
         ['/cost', 'Show token usage and cost'],
         ['/memory', 'Show memory file locations'],
         ['/mcp', 'Show MCP server connections'],
@@ -1024,6 +1029,8 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
   private async processMessage(message: string): Promise<void> {
     const session = this.getOrCreateSession();
+    // K4: 到期 cron 先注入，再处理当前用户消息
+    this.drainCronDue(session);
     session.messages.push({
       role: 'user',
       content: message,
@@ -1300,6 +1307,70 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     console.log('');
     console.log(formatBridgeStatus());
     console.log('');
+  }
+
+  /** K4: 进程内 cron 管理（无 OS daemon） */
+  private handleCron(args: string[]): void {
+    const store = getCronStore();
+    const sub = args[0] ?? 'list';
+    if (sub === 'list' || args.length === 0) {
+      console.log('');
+      console.log(JSON.stringify({ jobs: store.list() }, null, 2));
+      console.log('');
+      return;
+    }
+    if (sub === 'create') {
+      const expression = args[1];
+      const prompt = args.slice(2).join(' ').trim();
+      if (!expression || !prompt) {
+        console.log(`${YELLOW}?${RESET} Usage: /cron create <every:5m|@hourly> <prompt…>`);
+        return;
+      }
+      try {
+        const job = store.create({ expression, prompt });
+        console.log(`${GREEN}✓${RESET} Scheduled ${job.id} next=${new Date(job.nextRunAt).toISOString()}`);
+      } catch (e) {
+        console.log(`${RED}✗${RESET} ${e instanceof Error ? e.message : String(e)}`);
+      }
+      return;
+    }
+    if (sub === 'delete') {
+      const id = args[1];
+      if (!id) {
+        console.log(`${YELLOW}?${RESET} Usage: /cron delete <job_id>`);
+        return;
+      }
+      console.log(
+        store.delete(id)
+          ? `${GREEN}✓${RESET} Deleted ${id}`
+          : `${YELLOW}?${RESET} Unknown job ${id}`
+      );
+      return;
+    }
+    if (sub === 'due') {
+      const jobs = store.due();
+      console.log(JSON.stringify({ due_count: jobs.length, jobs }, null, 2));
+      return;
+    }
+    console.log(`${YELLOW}?${RESET} Usage: /cron [list|create|delete|due]`);
+  }
+
+  private drainCronDue(session: SessionState): void {
+    try {
+      const due = getCronStore().due();
+      for (const job of due) {
+        session.messages.push({
+          role: 'user',
+          content: `[ScheduledCron ${job.id}]\n${job.prompt}`,
+          timestamp: Date.now(),
+        });
+      }
+      if (due.length > 0) {
+        console.log(`${DIM}⏱ Injected ${due.length} due cron job(s)${RESET}`);
+      }
+    } catch {
+      /* cron store optional */
+    }
   }
 
   /** K3: 确定性项目 Brief（非核心工具；SkillTool("brief") 为文档入口） */

@@ -59,6 +59,7 @@ venv/
 # PaCode session data
 .paude/sessions/
 .paude/memory/
+.paude/cron.json
 
 # Reference / vendor trees (not part of PaCode)
 claude-code-sourcemap-main/
