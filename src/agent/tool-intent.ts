@@ -25,6 +25,10 @@ const TOOL_REQUIRED_PATTERNS: RegExp[] = [
   /(?:读|看|审查|检查).{0,12}(?:代码|实现|源文件|源码)/,
   /代码实现|完整代码|源文件|source\s+code/i,
   /(?:自检|自测).{0,8}(?:代码|实现)/,
+  // Deep-read intents: 完整读 / 逐行读 / 全读（disable shallow prefetch）
+  /(?:完整|逐行|全|全部)\s*(?:读|看|审|扫描)/,
+  /read\s+(?:the\s+)?(?:full|entire|complete|whole)\s+(?:code|file|source)/i,
+  /read\s+(?:line\s+by\s+line|every\s+line)/i,
 ];
 
 /** 需要从代码库/命令获取事实的任务 */
