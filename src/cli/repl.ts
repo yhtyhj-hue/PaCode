@@ -29,6 +29,7 @@ import { parsePlanFromMarkdown, extractLastAssistantText } from '../agent/plan-p
 import { ContextAssembler } from '../context/assembler.js';
 import { renderer } from './enhanced-renderer.js';
 import { StreamingMarkdownWriter, summarizeToolAction } from './streaming-markdown.js';
+import { listStyles, getStyleOptions } from './output-styles.js';
 import { ReplLineEditor } from './repl-line-editor.js';
 import { formatUserMessage } from './repl-ui.js';
 import { formatCostReport } from './cost-estimate.js';
@@ -435,6 +436,9 @@ export class REPL {
         break;
       case '/style':
         this.handleStyle(args);
+        break;
+      case '/rewind':
+        await this.handleRewind(args);
         break;
       case '/effort':
         console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
@@ -1201,7 +1205,6 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
   /** I5: /style <name> — switch REPL output style (default/cost/full/minimal). */
   private handleStyle(args: string[]): void {
-    const { listStyles, getStyleOptions } = require('./output-styles.js') as typeof import('./output-styles.js');
     if (args.length === 0) {
       console.log(`${CYAN}${BOLD}Output styles${RESET}`);
       for (const s of listStyles()) {
@@ -1220,6 +1223,24 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     }
     this.outputStyle = name as never;
     console.log(`${GREEN}✓${RESET} Output style: ${BOLD}${name}${RESET}`);
+  }
+
+  /** I2: /rewind — list checkpoints or roll back to a given one. */
+  private async handleRewind(args: string[]): Promise<void> {
+    const { listCheckpoints, rewindTo, formatCheckpointList } = await import(
+      '../services/checkpoint.js'
+    );
+    if (args.length === 0) {
+      console.log(formatCheckpointList(listCheckpoints()));
+      return;
+    }
+    const id = args[0]!;
+    const ok = rewindTo(id);
+    if (ok) {
+      console.log(`${GREEN}✓${RESET} Rewound to ${DIM}${id}${RESET}`);
+    } else {
+      console.log(`${YELLOW}?${RESET} Rewind failed for ${id}. Working tree may have conflicting changes.`);
+    }
   }
 
   /**
