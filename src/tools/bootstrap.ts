@@ -16,6 +16,7 @@ import { registerWebSearchTool } from '../services/web-search/index.js';
 import { registerMcpRemoteTools } from '../services/mcp-sse-http/index.js';
 import { registerMcpAuthTool } from '../services/mcp-auth/index.js';
 import { registerAskUserTool } from '../services/ask-user/index.js';
+import { registerPlanModeTools } from './plan-mode.js';
 
 export interface CoreToolsOptions {
   /** Task 子代理依赖（含共享 ToolRegistry） */
@@ -41,6 +42,7 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
   registerMcpRemoteTools(registry);
   registerMcpAuthTool(registry);
   registerAskUserTool(registry);
+  registerPlanModeTools(registry);
 }
 
 /** 从父 Registry 复制指定工具（子代理工具白名单） */

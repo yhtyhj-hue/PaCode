@@ -102,3 +102,7 @@ export function getPlanManager(): PlanModeManager {
   if (!instance) instance = new PlanModeManager();
   return instance;
 }
+
+export function resetPlanManager(): void {
+  instance = null;
+}
