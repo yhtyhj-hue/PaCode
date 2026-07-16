@@ -288,8 +288,32 @@ export class SkillsLoader {
     return this.skills.get(name);
   }
 
+  /** 按目录 id 或展示名解析（SkillTool 用） */
+  resolve(query: string): Skill | undefined {
+    const q = query.trim();
+    if (!q) return undefined;
+    const exact = this.skills.get(q);
+    if (exact) return exact;
+    const lower = q.toLowerCase();
+    for (const [id, skill] of this.skills) {
+      if (id.toLowerCase() === lower) return skill;
+      if (skill.name.toLowerCase() === lower) return skill;
+    }
+    const matches = this.match(q);
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+
   list(): Skill[] {
     return Array.from(this.skills.values());
+  }
+
+  /** 索引条目（不含全文） */
+  listIndex(): Array<{ id: string; name: string; description: string }> {
+    return Array.from(this.skills.entries()).map(([id, s]) => ({
+      id,
+      name: s.name,
+      description: s.description,
+    }));
   }
 
   match(query: string): Skill[] {
@@ -299,7 +323,8 @@ export class SkillsLoader {
       (s) =>
         s.name.toLowerCase().includes(lower) ||
         s.description.toLowerCase().includes(lower) ||
-        s.whenToUse.some((w) => w.toLowerCase().includes(lower))
+        s.whenToUse.some((w) => w.toLowerCase().includes(lower)) ||
+        (s.source?.toLowerCase().includes(lower) ?? false)
     );
   }
 }

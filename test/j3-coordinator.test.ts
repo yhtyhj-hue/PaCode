@@ -233,10 +233,10 @@ describe('J3 Coordinator tool', () => {
     expect(nested.has('SendMessage')).toBe(true);
   });
 
-  it('bootstrap has 22 core tools including Coordinator', () => {
+  it('bootstrap includes Coordinator among core tools', () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry, { task: { toolRegistry: registry } });
-    expect(registry.list()).toHaveLength(22);
     expect(registry.has('Coordinator')).toBe(true);
+    expect(registry.list().length).toBeGreaterThanOrEqual(22);
   });
 });

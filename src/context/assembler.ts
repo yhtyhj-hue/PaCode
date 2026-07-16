@@ -13,6 +13,7 @@ import {
   formatRecentToolResults,
   formatWorkingMemory,
   formatToolCatalog,
+  formatSkillsLazyIndex,
   formatSkillsCatalog,
 } from './assembler-helpers.js';
 import { SkillsLoader } from '../skills/loader.js';
@@ -28,6 +29,8 @@ export interface AssembleOptions {
   /** 注入 SkillsLoader（REPL 可共享同一实例） */
   skillsLoader?: SkillsLoader;
   skillsDir?: string;
+  /** true 时注入完整 catalog（含 workflow）；默认 lazy index + SkillTool */
+  skillsFullCatalog?: boolean;
 }
 
 export class ContextAssembler {
@@ -56,7 +59,7 @@ export class ContextAssembler {
     const rulesCombined = [projectRules, userRules].filter(Boolean).join('\n\n---\n\n');
     if (rulesCombined) parts.push(`## Rules\n\n${rulesCombined}`);
 
-    // 4. Skills（SkillsLoader 结构化元数据，非原始 markdown 拼接）
+    // 4. Skills（K1：默认 lazy index；完整正文走 SkillTool）
     const skillsContext = await this.loadSkillsContext(options);
     if (skillsContext) parts.push(`## Skills\n\n${skillsContext}`);
 
@@ -111,17 +114,22 @@ export class ContextAssembler {
   }
 
   private async loadSkillsContext(options: AssembleOptions): Promise<string | null> {
+    let skills: Skill[];
     if (options.skills) {
-      return formatSkillsCatalog(options.skills);
+      skills = options.skills;
+    } else {
+      const loader =
+        options.skillsLoader ?? this.defaultSkillsLoader ?? new SkillsLoader(options.skillsDir);
+      if (loader.list().length === 0) {
+        await loader.loadAll();
+      }
+      skills = loader.list();
     }
 
-    const loader =
-      options.skillsLoader ?? this.defaultSkillsLoader ?? new SkillsLoader(options.skillsDir);
-    if (loader.list().length === 0) {
-      await loader.loadAll();
+    if (options.skillsFullCatalog) {
+      return formatSkillsCatalog(skills);
     }
-
-    return formatSkillsCatalog(loader.list());
+    return formatSkillsLazyIndex(skills);
   }
 
   private async loadMemory(): Promise<string | null> {

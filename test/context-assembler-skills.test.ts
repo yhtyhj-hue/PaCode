@@ -95,7 +95,7 @@ describe('ContextAssembler — skills source', () => {
     if (existsSync(skillsDir)) rmSync(skillsDir, { recursive: true, force: true });
   });
 
-  it('includes structured skills via skillsLoader injection', async () => {
+  it('includes lazy skill index via skillsLoader (K1)', async () => {
     const loader = new SkillsLoader(skillsDir);
     await loader.loadAll();
 
@@ -103,22 +103,27 @@ describe('ContextAssembler — skills source', () => {
     const context = await assembler.assemble(emptyState);
 
     expect(context.systemPrompt).toContain('## Skills');
-    expect(context.systemPrompt).toContain('### Lint Fix');
-    expect(context.systemPrompt).toContain('ESLint failures');
-    expect(context.systemPrompt).not.toContain('## When to Use');
+    expect(context.systemPrompt).toContain('SkillTool');
+    expect(context.systemPrompt).toContain('lint-fix');
+    expect(context.systemPrompt).toContain('Fix lint issues');
+    expect(context.systemPrompt).not.toContain('**When to use:**');
+    expect(context.systemPrompt).not.toContain('**Workflow:**');
   });
 
-  it('includes bundled project skills by default', async () => {
+  it('includes bundled project skills as lazy index by default', async () => {
     const assembler = new ContextAssembler();
     const context = await assembler.assemble(emptyState);
 
     expect(context.systemPrompt).toContain('## Skills');
-    expect(context.systemPrompt).toContain('### Debug');
+    expect(context.systemPrompt).toContain('SkillTool');
+    expect(context.systemPrompt).toContain('debug');
+    expect(context.systemPrompt).not.toContain('**Workflow:**');
   });
 
-  it('accepts pre-loaded skills array', async () => {
+  it('skillsFullCatalog opt-in restores workflow blocks', async () => {
     const assembler = new ContextAssembler();
     const context = await assembler.assemble(emptyState, {
+      skillsFullCatalog: true,
       skills: [
         {
           name: 'Custom',
@@ -133,5 +138,6 @@ describe('ContextAssembler — skills source', () => {
 
     expect(context.systemPrompt).toContain('### Custom');
     expect(context.systemPrompt).toContain('custom tasks');
+    expect(context.systemPrompt).toContain('**Workflow:**');
   });
 });

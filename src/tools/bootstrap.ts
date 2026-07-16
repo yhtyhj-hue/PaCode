@@ -13,6 +13,7 @@ import { registerTaskTool, TaskToolDeps } from './task.js';
 import { registerTaskControlTools } from './task-control.js';
 import { registerTeamTools } from './team.js';
 import { registerCoordinatorTool } from './coordinator.js';
+import { registerSkillTools } from './skill-tools.js';
 import { registerTodoWriteTool } from './todowrite.js';
 import { registerWebFetchTool } from '../services/web-fetch/index.js';
 import { registerWebSearchTool } from '../services/web-search/index.js';
@@ -20,10 +21,13 @@ import { registerMcpRemoteTools } from '../services/mcp-sse-http/index.js';
 import { registerMcpAuthTool } from '../services/mcp-auth/index.js';
 import { registerAskUserTool } from '../services/ask-user/index.js';
 import { registerPlanModeTools } from './plan-mode.js';
+import type { SkillsLoader } from '../skills/loader.js';
 
 export interface CoreToolsOptions {
   /** Task 子代理依赖（含共享 ToolRegistry） */
   task?: TaskToolDeps;
+  /** K1: 共享 SkillsLoader（SkillTool / 延迟索引） */
+  skillsLoader?: SkillsLoader;
 }
 
 /** 注册核心工具到同一 Registry */
@@ -51,6 +55,11 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
   registerMcpAuthTool(registry);
   registerAskUserTool(registry);
   registerPlanModeTools(registry);
+  // K1: 最后注册，ToolSearch 执行时可见全部工具
+  registerSkillTools(registry, {
+    toolRegistry: registry,
+    skillsLoader: options.skillsLoader,
+  });
 }
 
 /** 从父 Registry 复制指定工具（子代理工具白名单） */

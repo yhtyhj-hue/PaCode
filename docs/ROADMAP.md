@@ -86,7 +86,7 @@
 
 | # | 任务 | 状态 |
 |---|------|------|
-| K1 | SkillTool / ToolSearch（延迟加载技能目录） | 🔜 |
+| K1 | SkillTool / ToolSearch（延迟加载技能目录） | ✅（SkillTool load/list/search；ToolSearch；assembler 默认 lazy index；skillsFullCatalog opt-in；核心工具 22→24） |
 | K2 | ConfigTool（薄封装现有 settings） | 🔜 |
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | 🔜 |
 | K4 | NotebookEdit / ScheduleCron / LSP | 🔜 P2 |
@@ -151,6 +151,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | K1：SkillTool + ToolSearch；Skills 上下文改为 lazy index |
 | 2026-07-17 | J3：Coordinator assign/poll/collect（j3/v1 强契约） |
 | 2026-07-17 | J2：TeamCreate + SendMessage（list/receive）最小协作总线 |
 | 2026-07-17 | J1：TaskList/Get/Stop + TaskStore 可见性（background Stop） |

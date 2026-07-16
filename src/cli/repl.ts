@@ -96,16 +96,18 @@ export class REPL {
     this.toolRegistry = options.toolRegistry ?? getToolRegistry();
     this.hookRegistry = options.hookRegistry ?? new HookRegistry();
 
+    this.skillsLoader = new SkillsLoader();
     const taskDeps = {
       apiKey: this.apiKey,
       baseUrl: this.baseUrl,
       model: this.model,
       toolRegistry: this.toolRegistry,
     };
-    registerCoreTools(this.toolRegistry, { task: taskDeps });
+    registerCoreTools(this.toolRegistry, {
+      task: taskDeps,
+      skillsLoader: this.skillsLoader,
+    });
     bootstrapHooks(this.hookRegistry);
-
-    this.skillsLoader = new SkillsLoader();
 
     this.engine = new QueryEngine({
       apiKey: this.apiKey,

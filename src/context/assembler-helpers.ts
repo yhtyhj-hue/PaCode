@@ -117,7 +117,7 @@ export function formatWorkingMemory(messages: Message[]): string | null {
     .join('\n');
 }
 
-/** Skills 结构化目录（供 assembler 第 4 源） */
+/** Skills 完整目录（测试 / 显式 opt-in；默认改用 lazy index） */
 export function formatSkillsCatalog(skills: Skill[]): string | null {
   if (skills.length === 0) return null;
 
@@ -144,6 +144,29 @@ export function formatSkillsCatalog(skills: Skill[]): string | null {
     '',
     ...blocks,
   ].join('\n\n');
+}
+
+/** K1: 仅索引名+简述；完整 SKILL.md 经 SkillTool 按需加载 */
+export function formatSkillsLazyIndex(skills: Skill[]): string {
+  if (skills.length === 0) {
+    return [
+      'Skills are lazy-loaded via SkillTool (no skills indexed yet).',
+      'Call SkillTool with a skill name or query when a workflow is needed.',
+    ].join('\n');
+  }
+
+  const lines = skills.map((skill) => {
+    const id = skill.source ?? skill.name;
+    const desc = skill.description || '(no description)';
+    return `- \`${id}\` (${skill.name}): ${desc}`;
+  });
+
+  return [
+    'Skills are lazy-loaded. Call **SkillTool** with a skill id/name (or query) to load full SKILL.md.',
+    'Use **ToolSearch** to find registered tools by name/description.',
+    'Indexed skills:',
+    ...lines,
+  ].join('\n');
 }
 
 /** MCP + 核心工具描述摘要 */
