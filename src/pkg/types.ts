@@ -81,6 +81,8 @@ export interface SessionState {
   mode: PermissionMode;
   hooks: HookConfig;
   compactionHistory: CompactionRecord[];
+  /** 本会话已批准的工具键（H2）：`Read` / `Bash:npm` 等 */
+  sessionApprovals?: string[];
 }
 
 export interface Message {

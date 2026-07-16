@@ -55,8 +55,17 @@ export class PermissionSystem {
     switch (mode) {
       case PermissionMode.BYPASS:
         return { allowed: true };
-      case PermissionMode.DEFAULT:
+      case PermissionMode.DEFAULT: {
+        // Claude Code 对齐：只读工具免确认；Bash/Edit 等需确认
+        const classification = classifyToolCall(tool, definition);
+        if (classification.risk === 'safe') {
+          return { allowed: true };
+        }
+        if (classification.risk === 'destructive') {
+          return { allowed: false, reason: classification.reason ?? 'Destructive operation' };
+        }
         return { allowed: true, requiresInteraction: true, interactionType: 'confirm' };
+      }
       case PermissionMode.AUTO:
         return this.checkAutoMode(tool, definition);
       case PermissionMode.ACCEPT_EDITS:

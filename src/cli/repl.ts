@@ -520,7 +520,7 @@ export class REPL {
 
   private async clearConversation(): Promise<void> {
     this.sessionManager.createSession({ mode: this.mode });
-    console.log(`${GREEN}✓${RESET} Conversation cleared`);
+    console.log(`${GREEN}✓${RESET} Conversation cleared ${DIM}(session approvals reset)${RESET}`);
   }
 
   private async compact(instructions: string): Promise<void> {

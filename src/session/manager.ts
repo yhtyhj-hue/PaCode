@@ -42,6 +42,7 @@ export class SessionManager {
       mode: options.mode ?? PermissionMode.DEFAULT,
       hooks: options.hooks ?? { hooks: {} },
       compactionHistory: [],
+      sessionApprovals: [],
     };
     this.currentSession = state;
     this.log.info(`Created session: ${sessionId}`);

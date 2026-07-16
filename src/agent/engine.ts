@@ -19,6 +19,11 @@ import { ContextAssembler } from '../context/assembler.js';
 import { CompactionPipeline } from '../context/compaction.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { PermissionSystem } from '../permission/system.js';
+import { shouldRunPrefetch } from './prefetch-config.js';
+import {
+  hasSessionApproval,
+  rememberSessionApproval,
+} from '../permission/session-memory.js';
 import { authorizePrefetchTool } from '../permission/prefetch-gate.js';
 import { SessionManager } from '../session/manager.js';
 import { HookRegistry } from '../hooks/registry.js';
@@ -68,6 +73,7 @@ export class QueryEngine {
   private hookRegistry: HookRegistry;
   private permissionPrompt: PermissionPromptFn;
   private contextMaxTokens: number;
+  private prefetchConfig: import('../pkg/app-config.js').ResolvedAppConfig['prefetch'];
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
@@ -76,6 +82,7 @@ export class QueryEngine {
     this.client = options.anthropicClient ?? new Anthropic({ apiKey, baseURL });
     const appConfig = resolveAppConfig();
     this.contextMaxTokens = appConfig.contextMaxTokens;
+    this.prefetchConfig = options.prefetch ?? appConfig.prefetch;
     this.contextAssembler = options.contextAssembler ?? new ContextAssembler();
     this.compactionPipeline =
       options.compactionPipeline ??
@@ -162,11 +169,15 @@ export class QueryEngine {
           effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
         }
 
-        // L1 调度：intent DAG 预取（结果以 user 文本注入，不走 tool_result 协议）
+        // L1 调度：intent DAG 预取（可关：prefetch.enabled / PACODE_PREFETCH=0）
         const dagPlan = !dagPrefetched
           ? resolveDagPlanWithHistory(pinnedIntent, state.messages)
           : null;
-        if (dagPlan && mode !== PermissionMode.PLAN) {
+        if (
+          dagPlan &&
+          mode !== PermissionMode.PLAN &&
+          shouldRunPrefetch(this.prefetchConfig, dagPlan.intent)
+        ) {
           dagPrefetched = true;
           deferredText = [];
           toolsUsedInQuery = true;
@@ -184,11 +195,6 @@ export class QueryEngine {
               dagPlan.intent === 'code_audit');
 
           const queryId = `q_${state.sessionId}_${Date.now()}`;
-          // L1 预取：与主循环同一 PermissionSystem；交互确认整批一次（并行安全）
-          // 预填 batch tools 列表，保证 prompt 触发时列表已完整。
-          // 关键：runParallelAgentPrefetch 不走 dagPlan.nodes，而是走
-          // buildParallelAgentTasks(intent).nodes（sub-agent 节点）。
-          // 必须按实际执行路径预填，否则 batchTools 永远是空。
           const batchNodeSpecs = useParallelPrefetch
             ? buildParallelAgentTasks(dagPlan.intent).flatMap((t) => t.nodes)
             : dagPlan.nodes;
@@ -214,6 +220,7 @@ export class QueryEngine {
             const need = this.permissionSystem.check({ tool: call, mode, context: state });
             if (need.requiresInteraction) {
               approvedToolNames.add(call.name);
+              rememberSessionApproval(state, call);
             }
             return this.executeTool(call, state);
           };
@@ -250,7 +257,6 @@ export class QueryEngine {
               content: formatDagResults(dagPlan.intent, runs, skillCtx.markdown),
               timestamp: Date.now(),
             });
-            // 保留 tools：预取是加速，不是关掉 agent 循环（CC 式）
             effectiveOptions = {
               ...effectiveOptions,
               toolChoice: 'auto',
@@ -265,6 +271,10 @@ export class QueryEngine {
             };
             break;
           }
+        } else if (dagPlan) {
+          // 命中 intent 但预取关闭：跳过 L1，纯模型 tool loop
+          dagPrefetched = true;
+          this.log.debug('Prefetch disabled; model-driven tool loop');
         }
 
         const context = await this.assembleContext(state, effectiveOptions, mode);
@@ -389,7 +399,10 @@ export class QueryEngine {
             }
 
             if (allowed.requiresInteraction) {
-              if (approvedToolNames.has(toolCall.name)) {
+              if (
+                approvedToolNames.has(toolCall.name) ||
+                hasSessionApproval(state, toolCall)
+              ) {
                 approvedCalls.push(toolCall);
                 continue;
               }
@@ -416,6 +429,7 @@ export class QueryEngine {
                 continue;
               }
               approvedToolNames.add(toolCall.name);
+              rememberSessionApproval(state, toolCall);
             }
 
             approvedCalls.push(toolCall);
@@ -707,4 +721,6 @@ export interface QueryEngineOptions {
   contextAssembler?: ContextAssembler;
   compactionPipeline?: CompactionPipeline;
   permissionPrompt?: PermissionPromptFn;
+  /** 覆盖 resolveAppConfig().prefetch（测试用） */
+  prefetch?: import('../pkg/app-config.js').ResolvedAppConfig['prefetch'];
 }
