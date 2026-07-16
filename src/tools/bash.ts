@@ -23,7 +23,9 @@ export function registerBashTool(registry: { register: (t: ToolDefinition) => vo
       const { stdout, stderr, exitCode, truncated } = await secureBash(command);
 
       const body = stdout || stderr;
-      const suffix = truncated ? '\n\n[output truncated]' : '';
+      const suffix = truncated
+        ? `\n\n[output truncated by PaCode; the original was longer. Use a narrower command or pipe to head/tail/grep to see specific parts.]`
+        : '';
 
       if (exitCode !== 0) {
         return {
