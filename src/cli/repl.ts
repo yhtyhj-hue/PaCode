@@ -46,6 +46,8 @@ import { getTaskStore } from '../services/task-registry/index.js';
 import { getTeamStore } from '../services/team/index.js';
 import { getCoordinatorStore } from '../services/coordinator/index.js';
 import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.js';
+import { formatDoctorReport, runDoctorChecks } from './doctor.js';
+import { formatGitDiffView } from './git-diff-view.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -454,6 +456,12 @@ export class REPL {
       case '/brief':
         this.handleBrief();
         break;
+      case '/doctor':
+        this.handleDoctor();
+        break;
+      case '/diff':
+        this.handleDiff();
+        break;
       case '/effort':
         console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
         break;
@@ -476,23 +484,30 @@ export class REPL {
     const groups: Record<string, [string, string][]> = {
       'Session Management': [
         ['/help', 'Show this help'],
-        ['/clear', 'Clear conversation history'],
+        ['/clear', 'Clear conversation history (/reset)'],
         ['/compact', 'Compress conversation to reduce tokens'],
         ['/context', 'Show context usage'],
-        ['/exit', 'Exit REPL'],
+        ['/resume', 'Resume a saved session'],
+        ['/rewind', 'Rewind workspace to a checkpoint'],
+        ['/exit', 'Exit REPL (/quit)'],
       ],
       Information: [
         ['/status', 'Show session info'],
+        ['/doctor', 'Run local health checks'],
+        ['/diff', 'git status + diff --stat (read-only)'],
         ['/cost', 'Show token usage and cost'],
         ['/memory', 'Show memory file locations'],
         ['/mcp', 'Show MCP server connections'],
         ['/permissions', 'Show permission rules'],
         ['/providers', 'List API providers'],
         ['/brief', 'Project brief (CLAUDE.md / package.json / README)'],
+        ['/agents', 'List subagents, tasks, and teams'],
+        ['/plan', 'Create or manage implementation plans'],
       ],
       Configuration: [
         ['/mode [name]', 'Change permission mode (or Shift+Tab)'],
         ['/model [name]', 'Show or change model'],
+        ['/style [name]', 'Output style: default/cost/full/minimal'],
         ['/init', 'Initialize project with CLAUDE.md'],
       ],
     };
@@ -1248,6 +1263,31 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       return existing;
     }
     return this.sessionManager.createSession({ mode: this.mode });
+  }
+
+  /** K6: 本地健康检查 */
+  private handleDoctor(): void {
+    const report = formatDoctorReport(
+      runDoctorChecks({
+        cwd: process.cwd(),
+        hasApiKey: Boolean(this.apiKey),
+        model: this.model,
+        mode: this.mode,
+        mcpConnected: this.mcpConnections.filter((c) => c.status === 'connected').length,
+        mcpTools: this.mcpConnections.reduce((n, c) => n + (c.tools?.length ?? 0), 0),
+        skillsCount: this.skillsLoader.list().length,
+      })
+    );
+    console.log('');
+    console.log(report);
+    console.log('');
+  }
+
+  /** K6: 只读 git diff 视图 */
+  private handleDiff(): void {
+    console.log('');
+    console.log(formatGitDiffView(process.cwd()));
+    console.log('');
   }
 
   /** K3: 确定性项目 Brief（非核心工具；SkillTool("brief") 为文档入口） */

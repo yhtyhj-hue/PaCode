@@ -13,14 +13,17 @@ export interface SlashMenuEntry {
   description: string;
 }
 
-/** 内置 slash 命令（与 repl.ts handleSlashCommand 对齐） */
+/** 内置 slash 命令（与 repl.ts handleSlashCommand 对齐；不对齐 CC 101） */
 export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/help', description: 'Show help and available commands' },
   { command: '/brief', description: 'Project brief (CLAUDE.md / package.json / README)' },
   { command: '/clear', description: 'Clear conversation history' },
+  { command: '/reset', description: 'Alias for /clear' },
   { command: '/compact', description: 'Compress conversation to reduce tokens' },
   { command: '/context', description: 'Show context usage' },
   { command: '/status', description: 'Show session info' },
+  { command: '/doctor', description: 'Run local health checks' },
+  { command: '/diff', description: 'Show git status and diff --stat (read-only)' },
   { command: '/cost', description: 'Show token usage and cost' },
   { command: '/memory', description: 'Show memory file locations' },
   { command: '/mcp', description: 'Show MCP server connections' },
@@ -28,10 +31,14 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/providers', description: 'List API providers' },
   { command: '/mode', description: 'Change permission mode' },
   { command: '/model', description: 'Show or change model' },
-  { command: '/agents', description: 'List available subagents' },
+  { command: '/style', description: 'Switch output style (default/cost/full/minimal)' },
+  { command: '/agents', description: 'List subagents, tasks, and teams' },
   { command: '/plan', description: 'Create or manage implementation plans' },
+  { command: '/resume', description: 'Resume a saved session' },
+  { command: '/rewind', description: 'Rewind workspace to a checkpoint' },
   { command: '/init', description: 'Initialize project with CLAUDE.md' },
   { command: '/exit', description: 'Exit the CLI' },
+  { command: '/quit', description: 'Alias for /exit' },
 ];
 
 /** 按输入过滤 slash 命令 */

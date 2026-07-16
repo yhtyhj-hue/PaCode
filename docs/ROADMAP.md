@@ -91,7 +91,7 @@
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | ✅（`/brief` 确定性构建 + `.claude/skills/brief`；无 BriefTool） |
 | K4 | NotebookEdit / ScheduleCron / LSP | 🔜 P2 |
 | K5 | MCP 其余 transport；Bridge 远程会话 | 🔜 |
-| K6 | 高频 slash 补齐（按使用统计，不对齐 101） | 🔜 |
+| K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（菜单对齐 resume/rewind/style；新增 /doctor /diff；/reset /quit 别名；不对齐 101） |
 | K7 | Ink TUI | defer |
 
 Windows PowerShellTool：非 macOS 主线，defer。
@@ -151,6 +151,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | K6：高频 slash（doctor/diff + 菜单对齐 resume/rewind/style） |
 | 2026-07-17 | K2+K3：ConfigTool + Brief（/brief slash + brief skill，无 BriefTool） |
 | 2026-07-17 | K1：SkillTool + ToolSearch；Skills 上下文改为 lazy index |
 | 2026-07-17 | J3：Coordinator assign/poll/collect（j3/v1 强契约） |
