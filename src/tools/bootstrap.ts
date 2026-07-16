@@ -14,6 +14,7 @@ import { registerTaskControlTools } from './task-control.js';
 import { registerTeamTools } from './team.js';
 import { registerCoordinatorTool } from './coordinator.js';
 import { registerSkillTools } from './skill-tools.js';
+import { registerConfigTool } from './config-tool.js';
 import { registerTodoWriteTool } from './todowrite.js';
 import { registerWebFetchTool } from '../services/web-fetch/index.js';
 import { registerWebSearchTool } from '../services/web-search/index.js';
@@ -55,6 +56,7 @@ export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOpti
   registerMcpAuthTool(registry);
   registerAskUserTool(registry);
   registerPlanModeTools(registry);
+  registerConfigTool(registry);
   // K1: 最后注册，ToolSearch 执行时可见全部工具
   registerSkillTools(registry, {
     toolRegistry: registry,

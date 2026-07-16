@@ -58,9 +58,9 @@ describe('Tool Registry - Deep', () => {
     expect(r.isError).toBe(true);
   });
 
-  it('all 24 tools register', () => {
+  it('all 25 tools register', () => {
     registerCoreTools(registry, { task: { toolRegistry: registry } });
-    expect(registry.list().length).toBe(24);
+    expect(registry.list().length).toBe(25);
   });
 
   it('Bash not concurrency safe', () => {

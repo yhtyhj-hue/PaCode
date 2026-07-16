@@ -16,6 +16,7 @@ export interface SlashMenuEntry {
 /** 内置 slash 命令（与 repl.ts handleSlashCommand 对齐） */
 export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/help', description: 'Show help and available commands' },
+  { command: '/brief', description: 'Project brief (CLAUDE.md / package.json / README)' },
   { command: '/clear', description: 'Clear conversation history' },
   { command: '/compact', description: 'Compress conversation to reduce tokens' },
   { command: '/context', description: 'Show context usage' },

@@ -45,6 +45,7 @@ import { getAgentPool } from '../services/agent-scheduler/index.js';
 import { getTaskStore } from '../services/task-registry/index.js';
 import { getTeamStore } from '../services/team/index.js';
 import { getCoordinatorStore } from '../services/coordinator/index.js';
+import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -339,6 +340,11 @@ export class REPL {
     const cmdName = trimmed.split(/\s+/)[0]!.slice(1);
     const arg = trimmed.includes(' ') ? trimmed.slice(trimmed.indexOf(' ') + 1).trim() : '';
 
+    // K3: /brief 优先于 .claude/commands，走确定性构建
+    if (cmdName === 'brief') {
+      return { kind: 'builtin', command: '/brief' };
+    }
+
     const customCmd = this.skillsLoader?.getSlashCommand(cmdName);
     if (customCmd) {
       return {
@@ -445,6 +451,9 @@ export class REPL {
       case '/rewind':
         await this.handleRewind(args);
         break;
+      case '/brief':
+        this.handleBrief();
+        break;
       case '/effort':
         console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
         break;
@@ -479,6 +488,7 @@ export class REPL {
         ['/mcp', 'Show MCP server connections'],
         ['/permissions', 'Show permission rules'],
         ['/providers', 'List API providers'],
+        ['/brief', 'Project brief (CLAUDE.md / package.json / README)'],
       ],
       Configuration: [
         ['/mode [name]', 'Change permission mode (or Shift+Tab)'],
@@ -1238,6 +1248,25 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       return existing;
     }
     return this.sessionManager.createSession({ mode: this.mode });
+  }
+
+  /** K3: 确定性项目 Brief（非核心工具；SkillTool("brief") 为文档入口） */
+  private handleBrief(): void {
+    const brief = buildProjectBrief(process.cwd());
+    const text = formatProjectBrief(brief);
+    console.log('');
+    console.log(text);
+    console.log(`${DIM}Tip: SkillTool name=brief loads the Brief skill workflow.${RESET}`);
+    console.log('');
+
+    const session = this.sessionManager.getCurrentSession();
+    if (session) {
+      session.messages.push({
+        role: 'user',
+        content: `[Project Brief — deterministic /brief]\n\n${text}`,
+        timestamp: Date.now(),
+      });
+    }
   }
 
   /** I5: /style <name> — switch REPL output style (default/cost/full/minimal). */
