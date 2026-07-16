@@ -50,7 +50,7 @@
 | H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PostToolUseFailure + Stop；PermissionRequest deferred — REPL 走 confirm-prompt 而非 hook 触发） |
 | H4 | **工具保真**：Grep 常用旗标；Read 大文件/分页体验；Bash 超时与截断产品化文案 | 对应 unit + 至少 1 条集成 | ✅（Grep: -i/--glob/--exclude/-A/-B/-C/output_mode；Read: offset+limit, 大文件拒绝 + 提示；Bash: truncate 提示加 PaCode 操作建议） |
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | ✅（client.ts createTransport switch on type: stdio/sse/http 全部接线；MCPServerConfig 加 headers 字段；transport 字段类型 union AnyTransport） |
-| H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | 🔜 |
+| H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ⚠️ 部分（tool 已注册 + 30 测试；REPL 未在 tool dispatch 处拦截/转发 stdin — 模型调 AskUser 会与 ReplLineEditor 抢 raw mode。短期方案：工具标注 ACCEPT_EDITS 但 REPL 不 pause line editor；长期：REPL 在 tool dispatch 时显式 pause+delegate stdin） |
 | H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | 🔜 |
 | H8 | **主循环失败可恢复**：中断、权限拒绝后可续跑同一任务 | 无卡死确认框；会话可 resume | ⚠️ 部分（确认 UX ✅） |
 
