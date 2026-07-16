@@ -57,6 +57,18 @@ export const PaudeConfigSchema = z.object({
     compactionThreshold: z.number().default(0.83),
   }).default({}),
 
+  /** L1 intent 预取：可关；可限制 intent */
+  prefetch: z
+    .object({
+      enabled: z.boolean().default(true),
+      intents: z
+        .array(
+          z.enum(['inspect_project', 'review_implementation', 'code_audit', 'run_tests'])
+        )
+        .optional(),
+    })
+    .default({}),
+
   // Hooks
   hooks: z.object({
     hooks: z.record(z.string(), z.array(HookSchema)).optional(),

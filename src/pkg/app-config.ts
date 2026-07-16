@@ -7,6 +7,11 @@ import { loadConfig, PaudeConfig, resetConfigCache } from './config/index.js';
 import { getSettingsManager, PaCodeSettings, SettingsManager } from './settings/index.js';
 import { getCCSwitch } from './ccswitch/index.js';
 import { PermissionRules } from '../permission/rules.js';
+import {
+  normalizePrefetchIntents,
+  PrefetchRuntimeConfig,
+} from '../agent/prefetch-config.js';
+import type { ToolIntent } from '../services/agent-scheduler/types.js';
 
 export interface AppConfigCliOverrides {
   mode?: string;
@@ -15,6 +20,8 @@ export interface AppConfigCliOverrides {
   baseUrl?: string;
   maxTokens?: number;
   temperature?: number;
+  /** CLI: --no-prefetch */
+  prefetchEnabled?: boolean;
 }
 
 export interface ResolvedAppConfig {
@@ -27,6 +34,7 @@ export interface ResolvedAppConfig {
   contextMaxTokens: number;
   compactionThreshold: number;
   permissions?: PermissionRules;
+  prefetch: PrefetchRuntimeConfig;
 }
 
 const MODE_MAP: Record<string, PermissionMode> = {
@@ -61,6 +69,12 @@ export function resolveAppConfig(
     paude.permission.mode ??
     PermissionMode.DEFAULT;
 
+  const prefetchEnabled =
+    cli.prefetchEnabled ?? paude.prefetch.enabled ?? true;
+  const prefetchIntents = normalizePrefetchIntents(
+    paude.prefetch.intents as string[] | undefined
+  ) as ToolIntent[] | undefined;
+
   return {
     model: cli.model ?? settings.model ?? paude.model.model ?? creds.model,
     apiKey: cli.apiKey ?? settings.apiKey ?? paude.model.apiKey ?? creds.apiKey,
@@ -71,6 +85,10 @@ export function resolveAppConfig(
     contextMaxTokens: paude.context.maxTokens,
     compactionThreshold: paude.context.compactionThreshold,
     permissions: settings.permissions,
+    prefetch: {
+      enabled: prefetchEnabled,
+      intents: prefetchIntents,
+    },
   };
 }
 
