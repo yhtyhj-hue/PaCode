@@ -66,7 +66,7 @@
 | I2 | **/rewind + 工作区 checkpoint**（按 tool 批次，慎重） | 强恢复；需快照权限与测试 | 🔜 |
 | I3 | **Reflection 绑证据**：改码后强制/可选跑测或 lint，失败则继续 loop | 有信号的反思，不是空复读 | ✅（end_turn 时若 toolCallHistory 含 Edit/Write/NotebookEdit 且 reflectionCount < 2 触发；npm/cargo/go/pytest 项目自动检测；失败输出注入 user message 强制下一轮；12 测试覆盖） |
 | I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | ✅（EnterPlanMode/ExitPlanMode 两个新工具注册到 bootstrap；PlanManager.createPlan/approve/startExecution 复用；5 测试 + p0 工具数 14→16） |
-| I5 | **Output styles + Compact 策略**（auto / forced / manual + 焦点） | 体感与可控性 | 🔜 |
+| I5 | **Output styles + Compact 策略**（auto / forced / manual + 焦点） | 体感与可控性 | ✅（output-styles.ts：4 风格预设 default/cost/full/minimal；/style slash 切换 + 列表；7 测试覆盖。Compact 策略：auto/forced/manual 三模式 policy 锁定） |
 | I6 | **真 Subagent + worktree 隔离**（替换「prefetch = agents」认知） | 多代理有边界，无戏服 | 🔜 |
 
 ---

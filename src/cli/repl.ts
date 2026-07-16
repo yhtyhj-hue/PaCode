@@ -71,6 +71,8 @@ export class REPL {
   private hookRegistry: HookRegistry;
   private pluginCommands: Map<string, PluginCommand> = new Map();
   private streamWriter = new StreamingMarkdownWriter(renderer);
+  /** I5: current output style. Mutated by /style command. */
+  private outputStyle: 'default' | 'cost' | 'full' | 'minimal' | undefined = undefined;
   private lastCtrlCAt = 0;
   private lastCtrlCHandledAt = 0;
   private isProcessing = false;
@@ -430,6 +432,9 @@ export class REPL {
         break;
       case '/providers':
         this.showProviders();
+        break;
+      case '/style':
+        this.handleStyle(args);
         break;
       case '/effort':
         console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
@@ -1192,6 +1197,29 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       return existing;
     }
     return this.sessionManager.createSession({ mode: this.mode });
+  }
+
+  /** I5: /style <name> — switch REPL output style (default/cost/full/minimal). */
+  private handleStyle(args: string[]): void {
+    const { listStyles, getStyleOptions } = require('./output-styles.js') as typeof import('./output-styles.js');
+    if (args.length === 0) {
+      console.log(`${CYAN}${BOLD}Output styles${RESET}`);
+      for (const s of listStyles()) {
+        const opts = getStyleOptions(s);
+        const active = this.outputStyle === s ? ' *' : '  ';
+        console.log(
+          `  ${active}${BOLD}${s}${RESET}  ${DIM}cost=${opts.showCost ? 'on' : 'off'} tool=${opts.showToolActivity ? 'on' : 'off'} prefetch=${opts.showPrefetch ? 'on' : 'off'}${RESET}`
+        );
+      }
+      return;
+    }
+    const name = args[0]!;
+    if (!listStyles().includes(name as never)) {
+      console.log(`${YELLOW}?${RESET} Unknown style: ${name}. Try one of: ${listStyles().join(', ')}`);
+      return;
+    }
+    this.outputStyle = name as never;
+    console.log(`${GREEN}✓${RESET} Output style: ${BOLD}${name}${RESET}`);
   }
 
   /**
