@@ -47,7 +47,7 @@
 |---|------|----------|------|
 | H1 | **预取可选加速**：配置 `prefetch.enabled` / intent 白名单 / `PACODE_PREFETCH=0` | 关预取时：质检纯 tool loop；开预取时：只加速且可继续 Read | ✅ |
 | H2 | **权限会话记忆**：批准写入 `sessionApprovals`（`Bash:npm` 指纹）；`/clear` 重置 | 同 session 不再对同类 Bash 连环确认；deny 仍最终 | ✅ |
-| H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | 🔜 |
+| H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PostToolUseFailure + Stop；PermissionRequest deferred — REPL 走 confirm-prompt 而非 hook 触发） |
 | H4 | **工具保真**：Grep 常用旗标；Read 大文件/分页体验；Bash 超时与截断产品化文案 | 对应 unit + 至少 1 条集成 | 🔜 |
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | 🔜 |
 | H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | 🔜 |
@@ -153,6 +153,7 @@ K* 按需插入（永不阻塞 H）
 |------|--------|
 | 2026-07-16 | 选项3：harness 测试验证 + H1 预取可关 + H2 会话权限记忆 |
 | 2026-07-16 | 重写现行主线 Phase H–K（超越 CC）；否决数量优先排期 |
+| 2026-07-16 | H3：PostToolUseFailure + Stop hook 接线（engine.executeTool 失败触发，REPL finally 触发 Stop） |
 | 2026-07-15 | 单键确认 UX、DEFAULT 只读免确认、质检意图、未知 bash 弹窗非硬拒 |
 | 2026-07-15 | G7–G8：预取批确认、/permissions、/cost 按模型计价 |
 | 2026-07-14 | 假逻辑清理；G1–G3；boot 真自检；MCP this；prefetch 文案 |

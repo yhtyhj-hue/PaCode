@@ -14,7 +14,7 @@ import { getToolRegistry, ToolRegistry } from '../tools/registry.js';
 import { registerCoreTools } from '../tools/bootstrap.js';
 import { bootstrapMcpTools } from '../mcp/loader.js';
 import { getMCPClient } from '../mcp/client.js';
-import { bootstrapHooks, runSessionHooks } from '../hooks/loader.js';
+import { bootstrapHooks, runSessionHooks, runStopHooks } from '../hooks/loader.js';
 import { bootstrapPlugins, PluginCommand } from '../plugins/bootstrap.js';
 import { HookRegistry } from '../hooks/registry.js';
 import { compactSession } from '../context/session-compactor.js';
@@ -1132,6 +1132,14 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       this.interruptRequested = false;
       this.queryTranscript = null;
       getAgentPool().clear();
+      // H3: Stop hook — fires every time the agent loop ends
+      // (normal end_turn, max_turns, abort, error). User-configured
+      // hooks can clean up, log, or trigger follow-up work.
+      try {
+        await runStopHooks(this.hookRegistry, session);
+      } catch (e) {
+        // Never let hook errors escape this finally block
+      }
       if (!this.exitRequested) {
         this.inputEditor?.resume();
       }

@@ -135,3 +135,24 @@ export async function runSessionHooks(
     await registry.execute(hook);
   }
 }
+
+/** H3: Stop hook — fires when an agent loop ends (any reason). */
+export async function runStopHooks(
+  registry: HookRegistry,
+  session: SessionState
+): Promise<void> {
+  const ctx = {
+    workingDirectory: process.cwd(),
+    sessionState: session,
+    hooks: registry,
+  };
+
+  const matching = registry.findMatching(HookType.STOP, ctx);
+  for (const hook of matching) {
+    try {
+      await registry.execute(hook);
+    } catch {
+      // Stop hook errors must never escape this loop
+    }
+  }
+}

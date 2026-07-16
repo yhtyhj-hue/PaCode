@@ -206,9 +206,13 @@ export interface CompactBoundary {
 export enum HookType {
   PRE_TOOL_USE = 'PreToolUse',
   POST_TOOL_USE = 'PostToolUse',
+  POST_TOOL_USE_FAILURE = 'PostToolUseFailure',
+  PERMISSION_REQUEST = 'PermissionRequest',
+  USER_PROMPT_SUBMIT = 'UserPromptSubmit',
   SESSION_START = 'SessionStart',
   SESSION_STOP = 'SessionStop',
   NOTIFICATION = 'Notification',
+  STOP = 'Stop',
   SUBAGENT_STOP = 'SubagentStop',
 }
 

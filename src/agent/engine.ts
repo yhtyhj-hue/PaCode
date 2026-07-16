@@ -664,8 +664,25 @@ const stream = await withRetry(
 
       return result;
     } catch (error) {
+      // H3: trigger PostToolUseFailure hook so users can react
+      // to tool crashes (vs. the tool returning isError itself).
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const failCtx = { ...ctx, errorMessage: errMsg };
+      const failHooks = this.hookRegistry.findMatching(
+        HookType.POST_TOOL_USE_FAILURE,
+        failCtx
+      );
+      for (const hook of failHooks) {
+        try {
+          await this.hookRegistry.execute(hook);
+        } catch (e) {
+          this.log.warn(
+            `PostToolUseFailure hook failed: ${e instanceof Error ? e.message : String(e)}`
+          );
+        }
+      }
       return {
-        content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+        content: [{ type: 'text', text: errMsg }],
         isError: true,
       };
     }
