@@ -22,8 +22,23 @@ describe('validateMcpServerEntry', () => {
     ).toBeNull();
   });
 
-  it('rejects unsupported transport', () => {
-    expect(validateMcpServerEntry({ type: 'sse', url: 'http://x' })).toContain('not supported');
+  it('allows sse/http with valid url (K5)', () => {
+    expect(validateMcpServerEntry({ type: 'sse', url: 'https://mcp.example/sse' })).toBeNull();
+    expect(
+      validateMcpServerEntry({
+        type: 'http',
+        url: 'https://mcp.example/mcp',
+        headers: { Authorization: 'Bearer x' },
+      })
+    ).toBeNull();
+  });
+
+  it('rejects sse/http without url', () => {
+    expect(validateMcpServerEntry({ type: 'http' })).toContain('requires a url');
+  });
+
+  it('defers websocket with clear message', () => {
+    expect(validateMcpServerEntry({ type: 'websocket', url: 'ws://x' })).toContain('deferred');
   });
 
   it('rejects missing command', () => {

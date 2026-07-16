@@ -48,6 +48,7 @@ import { getCoordinatorStore } from '../services/coordinator/index.js';
 import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.js';
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
+import { formatBridgeStatus } from '../services/bridge/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -462,6 +463,9 @@ export class REPL {
       case '/diff':
         this.handleDiff();
         break;
+      case '/bridge':
+        this.handleBridge();
+        break;
       case '/effort':
         console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
         break;
@@ -495,6 +499,7 @@ export class REPL {
         ['/status', 'Show session info'],
         ['/doctor', 'Run local health checks'],
         ['/diff', 'git status + diff --stat (read-only)'],
+        ['/bridge', 'Bridge remote session status (deferred)'],
         ['/cost', 'Show token usage and cost'],
         ['/memory', 'Show memory file locations'],
         ['/mcp', 'Show MCP server connections'],
@@ -1287,6 +1292,13 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
   private handleDiff(): void {
     console.log('');
     console.log(formatGitDiffView(process.cwd()));
+    console.log('');
+  }
+
+  /** K5: Bridge 状态（明确 deferred，不谎称可用） */
+  private handleBridge(): void {
+    console.log('');
+    console.log(formatBridgeStatus());
     console.log('');
   }
 

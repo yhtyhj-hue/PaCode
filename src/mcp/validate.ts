@@ -1,5 +1,5 @@
 /**
- * MCP 服务器配置校验 — 拦截 shell 命令误配为 MCP
+ * MCP 服务器配置校验 — 拦截 shell 命令误配；放行 stdio/sse/http（K5）
  */
 
 import { McpServerEntry } from './config.js';
@@ -35,34 +35,69 @@ const NON_MCP_COMMANDS = new Set([
   'zsh',
 ]);
 
+const SUPPORTED_TRANSPORTS = new Set(['stdio', 'sse', 'http']);
+
 function baseCommandName(command: string): string {
   const token = command.trim().split(/\s+/)[0] ?? '';
   const base = token.includes('/') ? (token.split('/').pop() ?? token) : token;
   return base.toLowerCase();
 }
 
+function isHttpUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** 返回错误信息；合法则 null */
 export function validateMcpServerEntry(entry: McpServerEntry): string | null {
   const transport = entry.type ?? 'stdio';
 
-  if (transport !== 'stdio') {
-    return `Transport "${transport}" is not supported yet (use stdio)`;
+  if (!SUPPORTED_TRANSPORTS.has(transport)) {
+    if (transport === 'websocket') {
+      return (
+        'Transport "websocket" is deferred (no MCP SDK WebSocket client). ' +
+        'Use type "sse" or "http" with a url.'
+      );
+    }
+    return `Unsupported MCP transport: "${transport}" (use stdio, sse, or http)`;
   }
 
-  const command = entry.command?.trim();
-  if (!command) {
-    return 'stdio MCP server requires a command';
+  if (transport === 'stdio') {
+    const command = entry.command?.trim();
+    if (!command) {
+      return 'stdio MCP server requires a command';
+    }
+
+    const base = baseCommandName(command);
+    if (NON_MCP_COMMANDS.has(base)) {
+      return (
+        `"${command}" is a shell utility, not an MCP server. ` +
+        'MCP needs a long-running process that speaks JSON-RPC over stdio ' +
+        '(e.g. npx -y @modelcontextprotocol/server-filesystem /path).'
+      );
+    }
+    return null;
   }
 
-  const base = baseCommandName(command);
-  if (NON_MCP_COMMANDS.has(base)) {
-    return (
-      `"${command}" is a shell utility, not an MCP server. ` +
-      'MCP needs a long-running process that speaks JSON-RPC over stdio ' +
-      '(e.g. npx -y @modelcontextprotocol/server-filesystem /path).'
-    );
+  // sse / http
+  const url = entry.url?.trim();
+  if (!url) {
+    return `${transport} MCP server requires a url`;
   }
-
+  if (!isHttpUrl(url)) {
+    return `${transport} MCP server url must be http(s)://…`;
+  }
+  if (entry.headers) {
+    for (const [k, v] of Object.entries(entry.headers)) {
+      if (typeof v !== 'string') {
+        return `header "${k}" must be a string`;
+      }
+    }
+  }
   return null;
 }
 

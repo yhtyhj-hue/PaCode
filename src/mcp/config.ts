@@ -13,6 +13,8 @@ export interface McpServerEntry {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  /** sse/http 请求头（K5）；可与 mcp-auth Bearer 合并 */
+  headers?: Record<string, string>;
 }
 
 export interface McpConfigFile {
@@ -54,5 +56,6 @@ export function toServerConfig(name: string, entry: McpServerEntry): MCPServerCo
     args: entry.args,
     env: entry.env,
     url: entry.url,
+    headers: entry.headers,
   };
 }

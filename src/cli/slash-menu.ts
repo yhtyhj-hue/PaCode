@@ -24,6 +24,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/status', description: 'Show session info' },
   { command: '/doctor', description: 'Run local health checks' },
   { command: '/diff', description: 'Show git status and diff --stat (read-only)' },
+  { command: '/bridge', description: 'Bridge remote session status (deferred)' },
   { command: '/cost', description: 'Show token usage and cost' },
   { command: '/memory', description: 'Show memory file locations' },
   { command: '/mcp', description: 'Show MCP server connections' },

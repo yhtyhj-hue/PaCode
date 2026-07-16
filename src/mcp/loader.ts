@@ -7,6 +7,7 @@ import { MCPServerConnection } from '../pkg/types.js';
 import { MCPClient, getMCPClient } from './client.js';
 import { loadMcpConfig, toServerConfig } from './config.js';
 import { validateMcpServerEntry, formatMcpConnectError } from './validate.js';
+import { mergeMcpAuthHeaders } from './auth-headers.js';
 import { Logger } from '../pkg/logger/index.js';
 
 const MCP_TOOL_PREFIX = 'mcp__';
@@ -64,7 +65,12 @@ export async function bootstrapMcpTools(
       }
 
       try {
-        await client.connect(toServerConfig(name, entry));
+        const server = toServerConfig(name, entry);
+        // K5: 远程 transport 合并 mcp-auth Bearer（不覆盖显式 Authorization）
+        if (server.type === 'sse' || server.type === 'http') {
+          server.headers = await mergeMcpAuthHeaders(server.url, server.headers);
+        }
+        await client.connect(server);
       } catch (error) {
         const raw = error instanceof Error ? error.message : String(error);
         const message = formatMcpConnectError(name, entry.command, raw);

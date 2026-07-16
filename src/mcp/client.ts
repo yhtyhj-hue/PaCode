@@ -1,6 +1,6 @@
 /**
  * MCP Client - Model Context Protocol via @modelcontextprotocol/sdk
- * Supports stdio / sse / streamableHttp transports (H5: G5 ROADMAP).
+ * Transports: stdio / sse / http (K5 bootstrap). websocket deferred (no SDK client).
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
