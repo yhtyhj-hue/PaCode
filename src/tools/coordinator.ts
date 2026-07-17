@@ -7,6 +7,7 @@ import {
   COORDINATOR_CONTRACT,
   coordinatorAssign,
   coordinatorAssignAwait,
+  coordinatorAssignMany,
   coordinatorCollect,
   coordinatorPoll,
   type CoordinatorRunDeps,
@@ -27,8 +28,8 @@ export function registerCoordinatorTool(
       properties: {
         action: {
           type: 'string',
-          enum: ['assign', 'poll', 'collect'],
-          description: 'assign | poll | collect',
+          enum: ['assign', 'assign_many', 'poll', 'collect'],
+          description: 'assign | assign_many | poll | collect',
         },
         team_id: { type: 'string' },
         from: { type: 'string', description: 'Must be lead member (assign)' },
@@ -44,6 +45,19 @@ export function registerCoordinatorTool(
           type: 'array',
           items: { type: 'string' },
           description: 'Optional filter for collect',
+        },
+        assignments: {
+          type: 'array',
+          description: 'assign_many: [{ to, description, prompt }, ...]',
+          items: {
+            type: 'object',
+            properties: {
+              to: { type: 'string' },
+              description: { type: 'string' },
+              prompt: { type: 'string' },
+            },
+            required: ['to', 'description', 'prompt'],
+          },
         },
       },
       required: ['action', 'team_id'],
@@ -91,6 +105,57 @@ export function registerCoordinatorTool(
         // 禁止把 task.output 原文塞进 collect
         return {
           content: [{ type: 'text', text: JSON.stringify(result.result, null, 2) }],
+        };
+      }
+
+      if (action === 'assign_many') {
+        if (!from) {
+          return {
+            content: [{ type: 'text', text: 'assign_many requires from (lead)' }],
+            isError: true,
+          };
+        }
+        const items = (input as { assignments?: Array<{ to: string; description: string; prompt: string }> })
+          .assignments;
+        if (!items?.length) {
+          return {
+            content: [{ type: 'text', text: 'assign_many requires assignments[]' }],
+            isError: true,
+          };
+        }
+        const many = await coordinatorAssignMany(
+          {
+            teamId,
+            from,
+            items,
+            background: background !== false,
+            isolateWorktree,
+          },
+          deps
+        );
+        if (!many.ok) {
+          return { content: [{ type: 'text', text: many.error }], isError: true };
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  contract: COORDINATOR_CONTRACT,
+                  action: 'assign_many',
+                  team_id: teamId,
+                  assignment_ids: many.assignments.map((a) => a.assignment_id),
+                  count: many.assignments.length,
+                  errors: many.errors,
+                  background: background !== false,
+                  hint: 'Use Coordinator poll/collect for results.',
+                },
+                null,
+                2
+              ),
+            },
+          ],
         };
       }
 

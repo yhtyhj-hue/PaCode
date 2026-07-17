@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **I4 step retry + J3 assign_many**：失败有界重试/skip；并行多 worker |
 | 2026-07-17 | **I4/I3/J3 补全**：plan step drive；reflection engine 环测；Coordinator live E2E |
 | 2026-07-17 | **M5-hard** + mutation nudge：multi-file / fail-then-fix / cross-module |
 | 2026-07-17 | **M5 vs Claude Code**：`claude -p` 同 fixture 并排；`COMPARE.json`；无 CLI/凭证则 skip |

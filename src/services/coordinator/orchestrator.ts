@@ -272,6 +272,90 @@ export async function coordinatorAssignAwait(
   return { ok: true, assignment, envelope };
 }
 
+
+export type AssignManyItem = {
+  to: string;
+  description: string;
+  prompt: string;
+};
+
+/**
+ * 并行扇出：lead → 多个 worker/explore。
+ * background=false 时 Promise.all 等待全部完成；true 时全部后台启动。
+ */
+export async function coordinatorAssignMany(
+  input: {
+    teamId: string;
+    from: string;
+    items: AssignManyItem[];
+    background?: boolean;
+    isolateWorktree?: boolean;
+  },
+  deps: CoordinatorRunDeps
+): Promise<
+  | {
+      ok: true;
+      assignments: CoordinatorAssignment[];
+      errors: Array<{ to: string; error: string }>;
+    }
+  | { ok: false; error: string }
+> {
+  if (!input.items.length) {
+    return { ok: false, error: 'assign_many requires non-empty items' };
+  }
+  const background = input.background !== false;
+  const assignments: CoordinatorAssignment[] = [];
+  const errors: Array<{ to: string; error: string }> = [];
+
+  if (background) {
+    for (const item of input.items) {
+      const r = coordinatorAssign(
+        {
+          teamId: input.teamId,
+          from: input.from,
+          to: item.to,
+          description: item.description,
+          prompt: item.prompt,
+          isolateWorktree: input.isolateWorktree,
+          background: true,
+        },
+        deps
+      );
+      if (r.ok) assignments.push(r.assignment);
+      else errors.push({ to: item.to, error: r.error });
+    }
+  } else {
+    const settled = await Promise.all(
+      input.items.map(async (item) => {
+        const r = await coordinatorAssignAwait(
+          {
+            teamId: input.teamId,
+            from: input.from,
+            to: item.to,
+            description: item.description,
+            prompt: item.prompt,
+            isolateWorktree: input.isolateWorktree,
+          },
+          deps
+        );
+        return { item, r };
+      })
+    );
+    for (const { item, r } of settled) {
+      if (r.ok) assignments.push(r.assignment);
+      else errors.push({ to: item.to, error: r.error });
+    }
+  }
+
+  if (assignments.length === 0) {
+    return {
+      ok: false,
+      error: errors.map((e) => `${e.to}: ${e.error}`).join('; ') || 'all assigns failed',
+    };
+  }
+  return { ok: true, assignments, errors };
+}
+
 export function coordinatorPoll(teamId: string):
   | { ok: true; contract: typeof COORDINATOR_CONTRACT; items: CoordinatorPollItem[] }
   | { ok: false; error: string } {

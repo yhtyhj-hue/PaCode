@@ -41,7 +41,11 @@ import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-s
 import { withRetry } from './retry.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
 import { getLatestUserText, requiresToolExecution, requiresCodeMutation } from './tool-intent.js';
-import { getPlanManager, formatPlanStepDriveMessage } from './plan-mode.js';
+import {
+  getPlanManager,
+  formatPlanStepDriveMessage,
+  MAX_PLAN_STEP_RETRIES,
+} from './plan-mode.js';
 import { compileMessagesForApi } from '../services/context-compiler/index.js';
 import { captureCheckpoint } from '../services/checkpoint.js';
 import {
@@ -153,6 +157,7 @@ export class QueryEngine {
     let mutatedSinceReflection = false;
     let planStepHadTools = false;
     let planStepNudgeAttempts = 0;
+    let planStepRetryCount = 0;
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
     const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
 
@@ -180,6 +185,7 @@ export class QueryEngine {
           }
           planStepHadTools = false;
           planStepNudgeAttempts = 0;
+          planStepRetryCount = 0;
           if (effectiveOptions.toolChoice !== 'any') {
             effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
           }
@@ -475,6 +481,62 @@ export class QueryEngine {
                 effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
                 continue;
               }
+              // 有界重试：仍无工具则重新注入本步；耗尽则 skip
+              if (needsTool && !planStepHadTools) {
+                if (planStepRetryCount < MAX_PLAN_STEP_RETRIES) {
+                  planStepRetryCount++;
+                  planStepNudgeAttempts = 0;
+                  deferredText = [];
+                  this.log.warn(
+                    `Plan step ${cur?.index ?? '?'} retry ${planStepRetryCount}/${MAX_PLAN_STEP_RETRIES}`
+                  );
+                  state.messages.push({
+                    role: 'user',
+                    content:
+                      formatPlanStepDriveMessage(active, cur!) +
+                      `\n[Retry ${planStepRetryCount}/${MAX_PLAN_STEP_RETRIES}: previous attempt used no tools.]`,
+                    timestamp: Date.now(),
+                  });
+                  effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+                  continue;
+                }
+                const skipped = getPlanManager().skipCurrentStep(
+                  active.id,
+                  'no tool use after retries'
+                );
+                deferredText = [];
+                state.messages.push({
+                  role: 'assistant',
+                  content: responseContentToBlocks(response.content),
+                  timestamp: Date.now(),
+                });
+                if (skipped.completed && skipped.plan) {
+                  yield* flushDeferredText();
+                  yield {
+                    type: 'content_block_delta',
+                    delta: {
+                      index: 0,
+                      text: `\n[Plan ${skipped.plan.id} completed with skipped steps: ${skipped.plan.title}]\n`,
+                    },
+                  };
+                  yield { type: 'message_stop', stopReason: response.stopReason };
+                  break;
+                }
+                if (skipped.next && skipped.plan) {
+                  planStepHadTools = false;
+                  planStepNudgeAttempts = 0;
+                  planStepRetryCount = 0;
+                  state.messages.push({
+                    role: 'user',
+                    content:
+                      `[Skipped prior step: ${skipped.reason}]\n` +
+                      formatPlanStepDriveMessage(skipped.plan, skipped.next),
+                    timestamp: Date.now(),
+                  });
+                  effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+                  continue;
+                }
+              }
               const adv = getPlanManager().advanceAfterTurn(active.id);
               if (adv.completed && adv.plan) {
                 deferredText = [];
@@ -515,6 +577,7 @@ export class QueryEngine {
                 });
                 planStepHadTools = false;
                 planStepNudgeAttempts = 0;
+                planStepRetryCount = 0;
                 effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
                 continue;
               }
@@ -725,6 +788,7 @@ export class QueryEngine {
                 });
                 planStepHadTools = false;
                 planStepNudgeAttempts = 0;
+                planStepRetryCount = 0;
                 effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
               }
             }

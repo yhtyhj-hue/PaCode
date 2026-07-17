@@ -4,7 +4,10 @@
 
 import { PermissionMode } from '../pkg/types.js';
 
-export type PlanStepStatus = 'pending' | 'running' | 'done';
+export type PlanStepStatus = 'pending' | 'running' | 'done' | 'failed';
+
+/** 单步工具失败 / 无工具后的有界重试 */
+export const MAX_PLAN_STEP_RETRIES = 2;
 
 export interface Plan {
   id: string;
@@ -118,6 +121,27 @@ export class PlanModeManager {
     const next = plan.steps[plan.currentStepIndex]!;
     next.status = 'running';
     return { completed: false, next, plan };
+  }
+
+  /** 当前步失败并跳过（计入 failed）；返回下一步或 completed */
+  skipCurrentStep(
+    planId: string | undefined,
+    reason: string
+  ): { completed: boolean; next: PlanStep | null; plan: Plan | null; reason: string } {
+    const plan = planId ? this.plans.get(planId) : this.getActive();
+    if (!plan || plan.status !== 'executing') {
+      return { completed: false, next: null, plan: plan ?? null, reason };
+    }
+    const cur = plan.steps[plan.currentStepIndex];
+    if (cur) cur.status = 'failed';
+    plan.currentStepIndex += 1;
+    if (plan.currentStepIndex >= plan.steps.length) {
+      plan.status = 'completed';
+      return { completed: true, next: null, plan, reason };
+    }
+    const next = plan.steps[plan.currentStepIndex]!;
+    next.status = 'running';
+    return { completed: false, next, plan, reason };
   }
 
   formatPlanMessage(plan: Plan): string {

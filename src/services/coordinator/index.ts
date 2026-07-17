@@ -14,8 +14,10 @@ export {
 export {
   coordinatorAssign,
   coordinatorAssignAwait,
+  coordinatorAssignMany,
   coordinatorPoll,
   coordinatorCollect,
   parseCoordinatorEnvelope,
   type CoordinatorRunDeps,
+  type AssignManyItem,
 } from './orchestrator.js';
