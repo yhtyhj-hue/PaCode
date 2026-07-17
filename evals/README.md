@@ -50,4 +50,5 @@ evals/fixtures/m5/{fix-bug,add-test,small-refactor}/
 
 - Gate：`evals/gate/m5-engineering-tasks.eval.ts` — broken 失败 / golden 通过
 - Periodic：`evals/periodic/m5-once-success.eval.ts` — live 写入 `BASELINE.json`；offline/sim 写 `BASELINE.offline.json` / `BASELINE.simulated.json`
+- Periodic：`evals/periodic/m5-cc-compare.eval.ts` — PaCode live vs `claude -p` 同 fixture，写入 `COMPARE.json`
 - 联合冒烟：`test/smoke-joint-paths.test.ts`

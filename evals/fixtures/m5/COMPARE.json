@@ -1,0 +1,37 @@
+{
+  "updatedAt": "2026-07-17T01:41:32.112Z",
+  "threshold": 0.5,
+  "pacodePassRate": 1,
+  "ccPassRate": 1,
+  "tasks": [
+    {
+      "id": "fix-bug",
+      "pacodePassed": true,
+      "ccPassed": true,
+      "pacodeDurationMs": 30906,
+      "ccDurationMs": 56542,
+      "pacodeMessage": "verify passed",
+      "ccMessage": "verify passed"
+    },
+    {
+      "id": "add-test",
+      "pacodePassed": true,
+      "ccPassed": true,
+      "pacodeDurationMs": 135940,
+      "ccDurationMs": 26599,
+      "pacodeMessage": "verify passed",
+      "ccMessage": "verify passed"
+    },
+    {
+      "id": "small-refactor",
+      "pacodePassed": true,
+      "ccPassed": true,
+      "pacodeDurationMs": 17941,
+      "ccDurationMs": 69933,
+      "pacodeMessage": "verify passed",
+      "ccMessage": "verify passed"
+    }
+  ],
+  "note": "head-to-head via cc-switch; pacode model=claude-sonnet-4-6",
+  "claudeVersion": "2.1.207 (Claude Code)"
+}
