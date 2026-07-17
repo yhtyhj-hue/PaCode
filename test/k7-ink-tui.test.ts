@@ -84,6 +84,8 @@ describe('K7 TUI slash', () => {
     expect(TUI_SLASH_HELP).toMatch(/agents/);
     expect(TUI_SLASH_HELP).toMatch(/plan/);
     expect(TUI_SLASH_HELP).toMatch(/resume/);
+    expect(TUI_SLASH_HELP).toMatch(/compact/);
+    expect(TUI_SLASH_HELP).toMatch(/mcp/);
   });
 
   it('handles /help /status /mode /style /agents /bridge /voice', async () => {

@@ -91,6 +91,8 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
         session,
         model: options.model,
         apiKeyPresent: Boolean(options.apiKey),
+        apiKey: options.apiKey,
+        baseUrl: options.baseUrl,
         tokenUsage,
         outputStyle,
         setOutputStyle: (s) => {
@@ -99,6 +101,9 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
         onSessionRestored: () => {
           // applySessionState 已写回 live session；SessionManager 必须指向同一引用
           sessionManager.restoreSession(session);
+        },
+        onSessionCompacted: () => {
+          sessionManager.saveSession(session);
         },
       });
       if (handled) return;

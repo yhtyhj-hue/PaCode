@@ -2,7 +2,7 @@
  * K7 TUI slash commands — 确定性命令，无 LLM
  */
 
-import { PermissionMode, type SessionState } from '../../pkg/types.js';
+import { PermissionMode, type MCPServerConnection, type SessionState } from '../../pkg/types.js';
 import { formatDoctorReport, runDoctorChecks } from '../doctor.js';
 import { formatGitDiffView } from '../git-diff-view.js';
 import { getBridgeStatus, formatBridgeStatus } from '../../services/bridge/index.js';
@@ -15,7 +15,9 @@ import {
   loadResumeSession,
 } from '../resume-display.js';
 import { getSessionResume, type SessionResume } from '../resume.js';
+import { formatMcpReportLines, listMcpConnections } from '../mcp-display.js';
 import { getMCPClient } from '../../mcp/client.js';
+import { runCompactForDisplay, type CompactDisplayOptions } from '../compact-display.js';
 import { formatVoiceStatus } from '../../services/voice/index.js';
 import { formatCostReport } from '../cost-estimate.js';
 import { listStyles, type OutputStyle } from '../output-styles.js';
@@ -26,7 +28,7 @@ import { resolveAppConfig } from '../../pkg/app-config.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
-  '/help /clear /status /mode /cost /style /doctor /diff /agents /plan /resume /bridge /voice /permissions /brief /rewind /exit';
+  '/help /clear /status /mode /cost /style /doctor /diff /agents /plan /resume /compact /mcp /bridge /voice /permissions /brief /rewind /exit';
 
 export interface TuiSlashContext {
   ctl: TuiController;
@@ -44,6 +46,13 @@ export interface TuiSlashContext {
   resume?: SessionResume;
   /** 恢复后可选回调（如 SessionManager.restoreSession） */
   onSessionRestored?: (state: SessionState) => void;
+  apiKey?: string;
+  baseUrl?: string;
+  /** 测试注入 compactSession */
+  compactFn?: CompactDisplayOptions['compactFn'];
+  onSessionCompacted?: (session: SessionState) => void;
+  /** 测试注入 MCP connections */
+  mcpConnections?: MCPServerConnection[];
 }
 
 /** 处理 TUI slash；返回 true 表示已处理 */
@@ -122,6 +131,29 @@ export async function handleTuiSlash(
       const view = formatGitDiffView(process.cwd());
       for (const line of view.split('\n').slice(0, 40)) {
         ctl.appendSystem(line || ' ');
+      }
+      return true;
+    }
+    case 'compact': {
+      const instructions = args.join(' ').trim();
+      const outcome = await runCompactForDisplay(session, {
+        apiKey: ctx.apiKey,
+        baseUrl: ctx.baseUrl,
+        model: ctx.model,
+        instructions,
+        compactFn: ctx.compactFn,
+      });
+      for (const line of outcome.lines) {
+        if (outcome.ok) ctl.appendSystem(line);
+        else ctl.appendError(line);
+      }
+      if (outcome.ok) ctx.onSessionCompacted?.(session);
+      return true;
+    }
+    case 'mcp': {
+      const connections = listMcpConnections(ctx.mcpConnections);
+      for (const line of formatMcpReportLines(connections)) {
+        ctl.appendSystem(line);
       }
       return true;
     }

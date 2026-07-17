@@ -14,10 +14,11 @@ import { getToolRegistry, ToolRegistry } from '../tools/registry.js';
 import { registerCoreTools } from '../tools/bootstrap.js';
 import { bootstrapMcpTools } from '../mcp/loader.js';
 import { getMCPClient } from '../mcp/client.js';
+import { formatMcpReportLines, listMcpConnections } from './mcp-display.js';
+import { runCompactForDisplay } from './compact-display.js';
 import { bootstrapHooks, runSessionHooks, runStopHooks } from '../hooks/loader.js';
 import { bootstrapPlugins, PluginCommand } from '../plugins/bootstrap.js';
 import { HookRegistry } from '../hooks/registry.js';
-import { compactSession } from '../context/session-compactor.js';
 import { getSessionResume } from './resume.js';
 import {
   formatResumeListLines,
@@ -605,38 +606,26 @@ export class REPL {
 
   private async compact(instructions: string): Promise<void> {
     const session = this.sessionManager.getCurrentSession();
-    if (!session) {
-      console.log(`${YELLOW}⚠${RESET}  No active session to compact`);
-      return;
-    }
-
-    if (session.messages.length <= 4) {
-      console.log(`${YELLOW}⚠${RESET}  Not enough messages to compact (${session.messages.length})`);
-      return;
-    }
-
     console.log(`${DIM}⏺ Compacting conversation...${RESET}`);
-
-    try {
-      const result = await compactSession(session, {
-        apiKey: this.apiKey,
-        baseUrl: this.baseUrl,
-        model: this.model,
-        instructions: instructions.trim() || undefined,
-      });
-
-      this.sessionManager.saveSession(result.session);
-      console.log(
-        `${GREEN}✓${RESET} Compacted ${result.beforeCount} → ${result.afterCount} messages`
-      );
-      if (result.summary) {
-        const preview = result.summary.split('\n')[0]?.slice(0, 80) ?? '';
-        console.log(`${DIM}  Summary: ${preview}${result.summary.length > 80 ? '...' : ''}${RESET}`);
+    const outcome = await runCompactForDisplay(session, {
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+      model: this.model,
+      instructions,
+    });
+    if (outcome.ok) {
+      this.sessionManager.saveSession(outcome.result.session);
+      console.log(`${GREEN}✓${RESET} ${outcome.lines[0]}`);
+      for (const line of outcome.lines.slice(1)) {
+        console.log(`${DIM}${line}${RESET}`);
       }
-    } catch (error) {
-      console.log(
-        `${RED}✗${RESET} Compaction failed: ${error instanceof Error ? error.message : String(error)}`
-      );
+    } else {
+      const msg = outcome.lines[0] ?? 'Compaction failed';
+      if (msg.startsWith('Compaction failed')) {
+        console.log(`${RED}✗${RESET} ${msg}`);
+      } else {
+        console.log(`${YELLOW}⚠${RESET}  ${msg}`);
+      }
     }
   }
 
@@ -718,25 +707,13 @@ Project-specific instructions for PaCode/Claude Code.
 
   private showMcp(): void {
     console.log('');
-    console.log(`${CYAN}${BOLD}MCP Servers${RESET}`);
     const connections = this.mcpConnections.length
       ? this.mcpConnections
-      : getMCPClient().listConnections();
-
-    if (connections.length === 0) {
-      console.log(`  ${DIM}No MCP servers connected${RESET}`);
-      console.log(`  ${DIM}Configure with: pacode mcp add <name> <command>${RESET}`);
-    } else {
-      for (const conn of connections) {
-        const status =
-          conn.status === 'connected' ? `${GREEN}connected${RESET}` : `${YELLOW}${conn.status}${RESET}`;
-        console.log(
-          `  ${CYAN}${conn.name}${RESET} · ${status} · ${conn.tools.length} tool(s)`
-        );
-        if (conn.lastError) {
-          console.log(`    ${DIM}Error: ${conn.lastError}${RESET}`);
-        }
-      }
+      : listMcpConnections();
+    const lines = formatMcpReportLines(connections);
+    console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
+    for (const line of lines.slice(1)) {
+      console.log(`${DIM}${line}${RESET}`);
     }
     console.log('');
   }
