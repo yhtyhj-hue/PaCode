@@ -9,7 +9,7 @@ import { formatBridgeStatus } from '../../services/bridge/index.js';
 import { formatVoiceStatus } from '../../services/voice/index.js';
 import { formatCostReport } from '../cost-estimate.js';
 import { listStyles, type OutputStyle } from '../output-styles.js';
-import { formatCheckpointList, listCheckpoints } from '../../services/checkpoint.js';
+import { formatCheckpointList, listCheckpoints, rewindToDetailed } from '../../services/checkpoint.js';
 import { formatPermissionsReport } from '../../permission/format-display.js';
 import { buildProjectBrief, formatProjectBrief } from '../../services/brief/index.js';
 import { resolveAppConfig } from '../../pkg/app-config.js';
@@ -26,6 +26,10 @@ export interface TuiSlashContext {
   tokenUsage: { input: number; output: number };
   outputStyle: OutputStyle;
   setOutputStyle: (s: OutputStyle) => void;
+  /** 测试可注入 cwd；默认 process.cwd() */
+  cwd?: string;
+  /** 测试可注入 rewind 实现 */
+  rewindFn?: typeof rewindToDetailed;
 }
 
 /** 处理 TUI slash；返回 true 表示已处理 */
@@ -132,12 +136,27 @@ export async function handleTuiSlash(
       return true;
     }
     case 'rewind': {
-      // 列表；强制 apply 在脏树风险高，TUI 仅展示 id 提示用 readline `/rewind`
-      ctl.appendSystem(formatCheckpointList(listCheckpoints()).replace(/\n/g, ' · '));
-      if (args[0]) {
-        ctl.appendSystem(
-          `To apply checkpoint ${args[0]}, use readline REPL: pacode (no --tui) then /rewind ${args[0]}`
-        );
+      const id = args[0];
+      const cwd = ctx.cwd ?? process.cwd();
+      if (!id) {
+        ctl.appendSystem(formatCheckpointList(listCheckpoints(cwd)));
+        ctl.appendSystem('Usage: /rewind <id>  (y/n confirm before apply)');
+        return true;
+      }
+      // 核心：破坏性恢复前必须 Ink 确认
+      const confirmed = await ctl.askConfirm(
+        `Rewind working tree to checkpoint ${id}? Uncommitted changes may be overwritten.`
+      );
+      if (!confirmed) {
+        ctl.appendSystem('Rewind cancelled');
+        return true;
+      }
+      const rewind = ctx.rewindFn ?? rewindToDetailed;
+      const result = rewind(id, cwd);
+      if (result.ok) {
+        ctl.appendSystem(`Rewound to ${id}`);
+      } else {
+        ctl.appendError(result.message);
       }
       return true;
     }

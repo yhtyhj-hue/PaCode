@@ -37,7 +37,7 @@
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
 | Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP alias) | ✅ |
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
-| Ink TUI | ✅ K7：`--tui`（AskUser Ink 输入 + 高频 slash：doctor/diff/cost/style/bridge/voice/…） |
+| Ink TUI | ✅ K7：`--tui`（AskUser + 高频 slash；`/rewind <id>` 经确认后真恢复） |
 | Voice / Buddy | ❌ deferred 状态面（`/voice`，J4） |
 | M5 工程评测 | ✅ golden + **simulated agent**；live 有 `ANTHROPIC_API_KEY` 时跑 |
 | G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
@@ -98,7 +98,7 @@
 | K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP 别名) | ✅（诊断非真 language server） |
 | K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；Bridge 仍 deferred（`/bridge`） |
 | K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice`） |
-| K7 | Ink TUI | ✅ `--tui`：AskUser 文本框 + 高频 slash（doctor/diff/cost/style/bridge/voice/permissions/brief/rewind 列表） |
+| K7 | Ink TUI | ✅ AskUser + 高频 slash；`/rewind <id>` askConfirm → rewindToDetailed |
 | J4 | Voice / Buddy | deferred 产品面（`/voice` 状态契约，非 STT） |
 
 Windows PowerShellTool：非 macOS 主线，defer。
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | K7 `/rewind`：TUI 确认后调用 rewindToDetailed（取消/脏树错误可测） |
 | 2026-07-17 | K7 加深：AskUser→Ink askText；TUI slash 对齐 doctor/diff/cost/style/bridge/voice/permissions/brief/rewind |
 | 2026-07-17 | **K7 Ink TUI**：`--tui` / `PACODE_TUI=1` 最小 Ink REPL（权限确认 + transcript + /help/clear/mode） |
 | 2026-07-17 | **对标 CC P0–P2**：M5 simulated+live wiring；retry 500/502/503；BashOutput；PermissionRequest；L4 结构化 compact；MCP websocket；Diagnostics 别名；`/voice`；工具时间线；rewind 结构化错误 |

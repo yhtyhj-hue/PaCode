@@ -125,4 +125,46 @@ describe('K7 TUI slash', () => {
     expect(await handleTuiSlash('/clear', makeCtx())).toBe(true);
     expect(session.messages).toEqual([]);
   });
+
+  it('applies /rewind after confirm; cancels when denied', async () => {
+    const ctl = mockCtl();
+    let confirm = true;
+    ctl.askConfirm = async () => confirm;
+
+    const session = {
+      sessionId: 't1',
+      messages: [],
+      mode: PermissionMode.DEFAULT,
+    } as unknown as SessionState;
+
+    const makeCtx = (rewindFn: typeof import('../src/services/checkpoint.js').rewindToDetailed) => ({
+      ctl,
+      session,
+      model: 'm',
+      apiKeyPresent: true,
+      tokenUsage: { input: 0, output: 0 },
+      outputStyle: 'default' as OutputStyle,
+      setOutputStyle: () => undefined,
+      rewindFn,
+    });
+
+    const okRewind = () => ({ ok: true as const });
+    expect(await handleTuiSlash('/rewind s1/0', makeCtx(okRewind))).toBe(true);
+    expect(ctl.lines.some((l) => l.includes('Rewound to s1/0'))).toBe(true);
+
+    confirm = false;
+    ctl.lines.length = 0;
+    expect(await handleTuiSlash('/rewind s1/0', makeCtx(okRewind))).toBe(true);
+    expect(ctl.lines.some((l) => l.includes('cancelled'))).toBe(true);
+
+    confirm = true;
+    ctl.lines.length = 0;
+    const failRewind = () => ({
+      ok: false as const,
+      reason: 'dirty_conflict' as const,
+      message: 'dirty tree — commit first',
+    });
+    expect(await handleTuiSlash('/rewind s1/0', makeCtx(failRewind))).toBe(true);
+    expect(ctl.lines.some((l) => l.startsWith('E:') && l.includes('dirty'))).toBe(true);
+  });
 });
