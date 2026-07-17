@@ -1251,8 +1251,8 @@ PaCode/
 | **权限** | 7 modes + ML | 7 modes + G6/v0 deterministic AUTO + tool-gate + 工作区路径边界 ✅ |
 | **压缩** | 5-layer | 5-layer L1–L5（L1 降低 API max_tokens） ✅ |
 | **扩展** | Hooks/Skills/Plugins/MCP | 同上 + Ink `--tui` |
-| **工具** | 43 内置 + MCP | 8 核心 + Plugin + MCP；Bash 静态分析（非容器沙箱） ✅ |
-| **测试** | — | 300 tests，80.3% 覆盖率 |
+| **工具** | ~43 内置 + MCP（二手引用） | **31 核心** + Plugin + MCP；Bash 静态分析（非容器沙箱） ✅ |
+| **测试** | — | `npm test`≈955（unit+gate；periodic 另跑）；覆盖率以 coverage job 为准 |
 | **实现** | TypeScript (Bun) | TypeScript（Go core defer） |
 
 ---

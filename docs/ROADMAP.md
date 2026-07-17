@@ -18,7 +18,7 @@
 |----|------|------|
 | M1 | 假完成率（声称检查/已测但无 tool 证据） | → 0（gate） |
 | M2 | DEFAULT 完成一次「项目质检」人工确认次数 | ≤ 1（Bash 批） |
-| M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | ≥ 90% 会话 |
+| M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | gate：意图正则→Read；**会话 ≥90% 尚未度量** |
 | M4 | 权限确认不卡死输入框 / Ctrl+C 可取消 | 100% |
 | M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5；easy live passRate=1；**m5-hard**（多文件/失败再修/跨模块）≥ 0.5；vs CC 见 COMPARE.json |
 
@@ -57,7 +57,7 @@
 | H4 | **工具保真**：Grep 常用旗标；Read 大文件/分页体验；Bash 超时与截断产品化文案 | 对应 unit + 至少 1 条集成 | ✅（Grep: -i/--glob/--exclude/-A/-B/-C/output_mode；Read: offset+limit, 大文件拒绝 + 提示；Bash: truncate 提示加 PaCode 操作建议） |
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | ✅（client.ts createTransport switch on type: stdio/sse/http 全部接线；MCPServerConfig 加 headers 字段；transport 字段类型 union AnyTransport） |
 | H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ✅（DEFAULT 权限；REPL pause 后注入 cooked `readLine`；工具优先 `ctx.readLine`） |
-| H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | ✅（evals/gate/m1-m4.eval.ts 4 个 gate eval 覆盖 M1 假完成率/M2 单次批 confirm/M3 深读触发/M4 Ctrl+C 取消；M3 同步加 完整读/逐行读/全读 正则；npm run test 跑 705 通过即可阻断） |
+| H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | ✅（gate 拆为 m1/m2/m3/m4 + widened；M3 为 policy/正则触发，**非会话 ≥90% 度量**；`npm test`≈955 阻断，不含 periodic live） |
 | H8 | **主循环失败可恢复**：中断、权限拒绝后可续跑同一任务 | 无卡死确认框；会话可 resume | ✅（engine 8 处 shouldAbort ABORTED 检查 + confirm-prompt Ctrl+C 取消 + `/resume` slash command 接入 SessionResume.list/load + SessionManager.restoreSession 替换当前会话） |
 
 **Phase H 明确不做：** LSP、Notebook、Cron、Voice、Buddy、Team、刷 slash 到 80+、Ink TUI。
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **对标 CC 深度质检**：M5 对齐；Voice/Bridge/LSP 落后；纠偏 M3/H7 文档过度声明 |
 | 2026-07-17 | **M5 vs CC 复验**：easy 双方 passRate=1（claude 2.1.207；pacode sonnet-4-6） |
 | 2026-07-17 | **质检核实**：31 工具；`npm test` 排除 periodic；gate 28 + unit 绿；live skipIf 认 cc-switch |
 | 2026-07-17 | **M5 live 诊断**：failure summary 断言；`PACODE_M5_TASKS` 过滤；过滤时写 BASELINE.partial |
