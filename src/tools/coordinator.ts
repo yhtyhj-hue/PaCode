@@ -76,7 +76,7 @@ export function registerCoordinatorTool(
         isolate_worktree: isolateWorktree,
         assignment_ids: assignmentIds,
       } = input as {
-        action: 'assign' | 'poll' | 'collect';
+        action: 'assign' | 'assign_many' | 'poll' | 'collect';
         team_id: string;
         from?: string;
         to?: string;
