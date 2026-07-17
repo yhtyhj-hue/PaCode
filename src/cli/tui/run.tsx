@@ -14,7 +14,10 @@ import { ContextAssembler } from '../../context/assembler.js';
 import { SkillsLoader } from '../../skills/loader.js';
 import { PermissionMode, type SessionState, type ToolCall } from '../../pkg/types.js';
 import type { Provider } from '../../pkg/ccswitch/index.js';
+import { AskUserAbortedError } from '../../services/ask-user/index.js';
+import type { OutputStyle } from '../output-styles.js';
 import { TuiApp, type TuiController } from './app.js';
+import { handleTuiSlash } from './slash.js';
 
 export interface InkReplOptions {
   apiKey: string;
@@ -54,6 +57,8 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
   let ctl: TuiController | null = null;
   let exitRequested = false;
   let interrupt = false;
+  const tokenUsage = { input: 0, output: 0 };
+  let outputStyle: OutputStyle = 'default';
 
   const engine = new QueryEngine({
     apiKey: options.apiKey,
@@ -71,13 +76,28 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
       if (!ctl) return false;
       return ctl.askConfirm(q);
     },
+    // AskUser：Ink askText，避免再开 readline 抢 stdin
+    readLine: async (prompt) => {
+      if (!ctl) throw new AskUserAbortedError();
+      return ctl.askText(prompt);
+    },
   });
 
   const onSubmit = async (text: string): Promise<void> => {
     if (!ctl) return;
     if (text.startsWith('/')) {
-      await handleSlash(text, ctl, session);
-      return;
+      const handled = await handleTuiSlash(text, {
+        ctl,
+        session,
+        model: options.model,
+        apiKeyPresent: Boolean(options.apiKey),
+        tokenUsage,
+        outputStyle,
+        setOutputStyle: (s) => {
+          outputStyle = s;
+        },
+      });
+      if (handled) return;
     }
     interrupt = false;
     ctl.appendUser(text);
@@ -100,6 +120,9 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
           ctl.appendAssistantDelta(event.delta.text);
         } else if (event.type === 'tool_use' && event.tool) {
           ctl.appendTool(event.tool.name, summarizeTool(event.tool));
+        } else if (event.type === 'message_stop' && event.usage) {
+          tokenUsage.input += event.usage.inputTokens ?? 0;
+          tokenUsage.output += event.usage.outputTokens ?? 0;
         } else if (event.type === 'error' && event.error) {
           ctl.appendError(event.error.message);
         }
@@ -135,42 +158,5 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
     />
   );
 
-  // 等待 Ink 退出（/exit 或 Ctrl+C）
   await instance.waitUntilExit();
-}
-
-async function handleSlash(
-  text: string,
-  ctl: TuiController,
-  session: SessionState
-): Promise<void> {
-  const [cmd, ...args] = text.slice(1).split(/\s+/);
-  if (cmd === 'help') {
-    ctl.appendSystem('/help /clear /mode <name> /status /exit');
-    return;
-  }
-  if (cmd === 'clear' || cmd === 'reset') {
-    session.messages = [];
-    ctl.appendSystem('Conversation cleared');
-    return;
-  }
-  if (cmd === 'status') {
-    ctl.appendSystem(
-      `session=${session.sessionId} messages=${session.messages.length} mode=${session.mode}`
-    );
-    return;
-  }
-  if (cmd === 'mode') {
-    const next = args[0];
-    const allowed = Object.values(PermissionMode) as string[];
-    if (!next || !allowed.includes(next)) {
-      ctl.appendSystem(`Usage: /mode ${allowed.join('|')}`);
-      return;
-    }
-    session.mode = next as PermissionMode;
-    ctl.setMode(next as PermissionMode);
-    ctl.appendSystem(`mode=${next}`);
-    return;
-  }
-  ctl.appendSystem(`Unknown slash: /${cmd}. Try /help`);
 }

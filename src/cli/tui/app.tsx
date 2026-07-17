@@ -1,5 +1,5 @@
 /**
- * K7 Ink REPL shell — status + transcript + input + confirm overlay
+ * K7 Ink REPL shell — status + transcript + input + confirm/AskUser overlays
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -12,6 +12,7 @@ import {
   type TuiLine,
 } from './frames.js';
 import { ConfirmInk } from './confirm.js';
+import { AskUserAbortedError } from '../../services/ask-user/index.js';
 
 export interface TuiAppProps {
   model: string;
@@ -32,6 +33,10 @@ export interface TuiController {
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
   askConfirm: (question: string) => Promise<boolean>;
+  /**
+   * AskUser 文本提问。Esc/Ctrl+C 时 reject AskUserAbortedError（由调用方处理）。
+   */
+  askText: (prompt: string) => Promise<string>;
   setMode: (mode: PermissionMode) => void;
   requestInterrupt: () => void;
 }
@@ -41,7 +46,7 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
   const [lines, setLines] = useState<TuiLine[]>([
     {
       kind: 'system',
-      text: `PaCode TUI · ${props.providerName} · ${props.model} · /exit to quit`,
+      text: `PaCode TUI · ${props.providerName} · ${props.model} · /help · /exit`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -49,14 +54,17 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
   const [status, setStatus] = useState('ready');
   const [mode, setMode] = useState(props.mode);
   const [confirmQ, setConfirmQ] = useState<string | null>(null);
+  const [textPrompt, setTextPrompt] = useState<string | null>(null);
   const confirmResolveRef = useRef<((v: boolean) => void) | null>(null);
-  const interruptRef = useRef(false);
+  const textResolveRef = useRef<{
+    resolve: (v: string) => void;
+    reject: (e: Error) => void;
+  } | null>(null);
 
   const push = useCallback((line: TuiLine) => {
     setLines((prev) => truncateLines([...prev, line]));
   }, []);
 
-  // 核心：把命令式控制器绑给 run.ts，避免 prop-drill query 循环
   useEffect(() => {
     const ctl: TuiController = {
       appendUser: (text) => push({ kind: 'user', text: `❯ ${text}` }),
@@ -68,7 +76,6 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
       setStatus,
       setMode,
       requestInterrupt: () => {
-        interruptRef.current = true;
         setStatus('interrupt requested');
       },
       askConfirm: (question) =>
@@ -76,19 +83,56 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
           confirmResolveRef.current = resolve;
           setConfirmQ(question);
         }),
+      askText: (prompt) =>
+        new Promise<string>((resolve, reject) => {
+          textResolveRef.current = { resolve, reject };
+          setTextPrompt(prompt);
+          setInput('');
+          setStatus('awaiting input');
+        }),
     };
     props.bindController(ctl);
   }, [props, push]);
 
   useInput((ch, key) => {
+    // AskUser 文本输入：即使 busy 也放行键入
+    if (textPrompt) {
+      if (key.escape || (key.ctrl && ch === 'c')) {
+        textResolveRef.current?.reject(new AskUserAbortedError());
+        textResolveRef.current = null;
+        setTextPrompt(null);
+        setInput('');
+        setStatus(busy ? 'querying' : 'ready');
+        return;
+      }
+      if (key.return) {
+        const value = input;
+        textResolveRef.current?.resolve(value);
+        textResolveRef.current = null;
+        setTextPrompt(null);
+        setInput('');
+        setStatus(busy ? 'querying' : 'ready');
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setInput((s) => s.slice(0, -1));
+        return;
+      }
+      if (ch && !key.ctrl && !key.meta) {
+        setInput((s) => s + ch);
+      }
+      return;
+    }
+
     if (confirmQ) return;
+
     if (busy) {
       if (key.escape || (key.ctrl && ch === 'c')) {
-        interruptRef.current = true;
         setStatus('interrupt requested');
       }
       return;
     }
+
     if (key.return) {
       const text = input.trim();
       setInput('');
@@ -98,7 +142,6 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
         exit();
         return;
       }
-      interruptRef.current = false;
       void props.onSubmit(text);
       return;
     }
@@ -148,6 +191,17 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
             setConfirmQ(null);
           }}
         />
+      ) : textPrompt ? (
+        <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+          <Text color="cyan">AskUser</Text>
+          <Text>{textPrompt.replace(/\n/g, ' ').slice(0, 200)}</Text>
+          <Box>
+            <Text color="green">{'? '}</Text>
+            <Text>{input}</Text>
+            <Text dimColor>█</Text>
+          </Box>
+          <Text dimColor>Enter = submit · Esc = abort</Text>
+        </Box>
       ) : (
         <Box>
           <Text color="green">{'> '}</Text>
