@@ -26,6 +26,27 @@ export interface PlanStep {
   description: string;
   estimatedRisk: 'low' | 'medium' | 'high';
   status?: PlanStepStatus;
+  /** skip/fail 原因（可审计） */
+  failReason?: string;
+}
+
+export interface PlanExecutionReport {
+  planId: string;
+  title: string;
+  status: Plan['status'];
+  total: number;
+  done: number;
+  failed: number;
+  pending: number;
+  running: number;
+  ok: boolean;
+  steps: Array<{
+    index: number;
+    action: string;
+    status: PlanStepStatus;
+    tool?: string;
+    failReason?: string;
+  }>;
 }
 
 export class PlanModeManager {
@@ -87,7 +108,10 @@ export class PlanModeManager {
     if (plan) {
       plan.status = 'completed';
       for (const step of plan.steps) {
-        if (step.status !== 'done') step.status = 'done';
+        // 保留 failed；仅收尾 pending/running
+        if (step.status === 'pending' || step.status === 'running' || !step.status) {
+          step.status = 'done';
+        }
       }
     }
   }
@@ -133,7 +157,10 @@ export class PlanModeManager {
       return { completed: false, next: null, plan: plan ?? null, reason };
     }
     const cur = plan.steps[plan.currentStepIndex];
-    if (cur) cur.status = 'failed';
+    if (cur) {
+      cur.status = 'failed';
+      cur.failReason = reason;
+    }
     plan.currentStepIndex += 1;
     if (plan.currentStepIndex >= plan.steps.length) {
       plan.status = 'completed';
@@ -188,6 +215,59 @@ export function formatPlanExecutionKickoff(plan: Plan): string {
     'The harness will inject each step; complete the current step then end_turn.',
     `Total steps: ${plan.steps.length}.`,
   ].join('\n');
+}
+
+/** 确定性执行报告：done/failed/pending 可审计 */
+export function buildPlanExecutionReport(plan: Plan): PlanExecutionReport {
+  let done = 0;
+  let failed = 0;
+  let pending = 0;
+  let running = 0;
+  const steps: PlanExecutionReport['steps'] = [];
+  for (const step of plan.steps) {
+    const status: PlanStepStatus = step.status ?? 'pending';
+    if (status === 'done') done += 1;
+    else if (status === 'failed') failed += 1;
+    else if (status === 'running') running += 1;
+    else pending += 1;
+    steps.push({
+      index: step.index,
+      action: step.action,
+      status,
+      tool: step.tool,
+      failReason: step.failReason,
+    });
+  }
+  return {
+    planId: plan.id,
+    title: plan.title,
+    status: plan.status,
+    total: plan.steps.length,
+    done,
+    failed,
+    pending,
+    running,
+    ok: failed === 0 && pending === 0 && running === 0,
+    steps,
+  };
+}
+
+export function formatPlanExecutionReport(plan: Plan): string {
+  const r = buildPlanExecutionReport(plan);
+  const lines: string[] = [
+    `[Plan report] ${r.planId} "${r.title}" (${r.status})`,
+    `summary: ${r.done} done / ${r.failed} failed / ${r.pending} pending / ${r.running} running (total ${r.total})`,
+    r.ok ? 'result: OK' : 'result: HAS_FAILURES',
+    'steps:',
+  ];
+  for (const step of r.steps) {
+    const mark =
+      step.status === 'done' ? '✓' : step.status === 'failed' ? '✗' : step.status === 'running' ? '…' : '·';
+    const tool = step.tool ? ` (${step.tool})` : '';
+    const why = step.failReason ? ` — ${step.failReason}` : '';
+    lines.push(`  ${mark} ${step.index + 1}. ${step.action}${tool} [${step.status}]${why}`);
+  }
+  return lines.join('\n');
 }
 
 let instance: PlanModeManager | null = null;

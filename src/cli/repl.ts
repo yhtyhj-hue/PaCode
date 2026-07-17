@@ -24,7 +24,11 @@ import { Provider } from '../pkg/ccswitch/index.js';
 import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
-import { getPlanManager, formatPlanExecutionKickoff } from '../agent/plan-mode.js';
+import {
+  getPlanManager,
+  formatPlanExecutionKickoff,
+  formatPlanExecutionReport,
+} from '../agent/plan-mode.js';
 import { parsePlanFromMarkdown, extractLastAssistantText } from '../agent/plan-parser.js';
 import { ContextAssembler } from '../context/assembler.js';
 import { renderer } from './enhanced-renderer.js';
@@ -884,8 +888,12 @@ Project-specific instructions for PaCode/Claude Code.
       if (plan) {
         console.log('');
         console.log(planManager.formatPlanMessage(plan));
+        if (plan.status === 'completed' || plan.steps.some((s) => s.status === 'failed')) {
+          console.log('');
+          console.log(formatPlanExecutionReport(plan));
+        }
         console.log('');
-        console.log(`${DIM}Status: ${plan.status} | /plan approve | /plan reject | /plan execute${RESET}`);
+        console.log(`${DIM}Status: ${plan.status} | /plan approve | /plan reject | /plan execute | /plan report${RESET}`);
       } else {
         console.log(`${DIM}Usage: /plan <task description>${RESET}`);
         console.log(`${DIM}       /plan approve | reject | execute | list${RESET}`);
@@ -905,6 +913,18 @@ Project-specific instructions for PaCode/Claude Code.
       for (const plan of plans) {
         console.log(`  ${CYAN}${plan.id}${RESET} [${plan.status}] ${plan.title} (${plan.steps.length} steps)`);
       }
+      return;
+    }
+
+    if (arg === 'report') {
+      const plan = planManager.getActive();
+      if (!plan) {
+        console.log(`${YELLOW}⚠${RESET}  No active plan.`);
+        return;
+      }
+      console.log('');
+      console.log(formatPlanExecutionReport(plan));
+      console.log('');
       return;
     }
 

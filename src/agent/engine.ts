@@ -44,6 +44,7 @@ import { getLatestUserText, requiresToolExecution, requiresCodeMutation } from '
 import {
   getPlanManager,
   formatPlanStepDriveMessage,
+  formatPlanExecutionReport,
   MAX_PLAN_STEP_RETRIES,
 } from './plan-mode.js';
 import { compileMessagesForApi } from '../services/context-compiler/index.js';
@@ -516,7 +517,7 @@ export class QueryEngine {
                     type: 'content_block_delta',
                     delta: {
                       index: 0,
-                      text: `\n[Plan ${skipped.plan.id} completed with skipped steps: ${skipped.plan.title}]\n`,
+                      text: `\n${formatPlanExecutionReport(skipped.plan)}\n`,
                     },
                   };
                   yield { type: 'message_stop', stopReason: response.stopReason };
@@ -548,7 +549,7 @@ export class QueryEngine {
                 yield* flushDeferredText();
                 yield {
                   type: 'content_block_delta',
-                  delta: { index: 0, text: `\n[Plan ${adv.plan.id} completed: ${adv.plan.title}]\n` },
+                  delta: { index: 0, text: `\n${formatPlanExecutionReport(adv.plan)}\n` },
                 };
                 yield {
                   type: 'message_stop',

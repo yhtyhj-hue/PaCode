@@ -37,7 +37,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/model', description: 'Show or change model' },
   { command: '/style', description: 'Switch output style (default/cost/full/minimal)' },
   { command: '/agents', description: 'List subagents, tasks, and teams' },
-  { command: '/plan', description: 'Create or manage implementation plans' },
+  { command: '/plan', description: 'Create or manage plans (/plan report for execution summary)' },
   { command: '/resume', description: 'Resume a saved session' },
   { command: '/rewind', description: 'Rewind workspace to a checkpoint' },
   { command: '/init', description: 'Initialize project with CLAUDE.md' },

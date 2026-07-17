@@ -73,7 +73,7 @@ describe('I4 plan step driver', () => {
     const events: string[] = [];
     for await (const e of engine.query({ message: 'plan the work', mode: PermissionMode.PLAN }, state)) {
       if (e.type === 'tool_use' && e.tool) events.push(`tool:${e.tool.name}`);
-      if (e.type === 'content_block_delta' && e.delta?.text?.includes('completed')) events.push('plan-completed');
+      if (e.type === 'content_block_delta' && e.delta?.text && (e.delta.text.includes('completed') || e.delta.text.includes('[Plan report]'))) events.push('plan-completed');
     }
     expect(events).toContain('tool:EnterPlanMode');
     expect(events).toContain('tool:ExitPlanMode');
@@ -81,5 +81,6 @@ describe('I4 plan step driver', () => {
     expect(getPlanManager().getActive()?.status).toBe('completed');
     expect(state.mode).toBe(PermissionMode.ACCEPT_EDITS);
     expect(events).toContain('plan-completed');
+    // report may say OK when all steps succeed
   });
 });
