@@ -8,6 +8,13 @@ import { formatGitDiffView } from '../git-diff-view.js';
 import { getBridgeStatus, formatBridgeStatus } from '../../services/bridge/index.js';
 import { formatAgentsReportLines } from '../agents-display.js';
 import { formatPlanReadOnlyLines } from '../plan-display.js';
+import {
+  applySessionState,
+  formatResumeListLines,
+  formatResumeSuccess,
+  loadResumeSession,
+} from '../resume-display.js';
+import { getSessionResume, type SessionResume } from '../resume.js';
 import { getMCPClient } from '../../mcp/client.js';
 import { formatVoiceStatus } from '../../services/voice/index.js';
 import { formatCostReport } from '../cost-estimate.js';
@@ -19,7 +26,7 @@ import { resolveAppConfig } from '../../pkg/app-config.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
-  '/help /clear /status /mode /cost /style /doctor /diff /agents /plan /bridge /voice /permissions /brief /rewind /exit';
+  '/help /clear /status /mode /cost /style /doctor /diff /agents /plan /resume /bridge /voice /permissions /brief /rewind /exit';
 
 export interface TuiSlashContext {
   ctl: TuiController;
@@ -33,6 +40,10 @@ export interface TuiSlashContext {
   cwd?: string;
   /** 测试可注入 rewind 实现 */
   rewindFn?: typeof rewindToDetailed;
+  /** 测试可注入 SessionResume */
+  resume?: SessionResume;
+  /** 恢复后可选回调（如 SessionManager.restoreSession） */
+  onSessionRestored?: (state: SessionState) => void;
 }
 
 /** 处理 TUI slash；返回 true 表示已处理 */
@@ -112,6 +123,34 @@ export async function handleTuiSlash(
       for (const line of view.split('\n').slice(0, 40)) {
         ctl.appendSystem(line || ' ');
       }
+      return true;
+    }
+    case 'resume': {
+      const resume = ctx.resume ?? getSessionResume();
+      const id = args[0];
+      if (!id) {
+        for (const line of formatResumeListLines(resume)) {
+          ctl.appendSystem(line);
+        }
+        return true;
+      }
+      const loaded = loadResumeSession(id, resume);
+      if (!loaded.ok) {
+        for (const line of loaded.lines) ctl.appendError(line);
+        return true;
+      }
+      // 确认后再覆盖当前会话（与 /rewind 同级谨慎）
+      const confirmed = await ctl.askConfirm(
+        `Resume session ${id}? Current conversation will be replaced.`
+      );
+      if (!confirmed) {
+        ctl.appendSystem('Resume cancelled');
+        return true;
+      }
+      applySessionState(session, loaded.state);
+      ctl.setMode(loaded.state.mode);
+      ctx.onSessionRestored?.(loaded.state);
+      ctl.appendSystem(formatResumeSuccess(loaded.state));
       return true;
     }
     case 'plan': {

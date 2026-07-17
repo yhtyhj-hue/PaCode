@@ -19,6 +19,11 @@ import { bootstrapPlugins, PluginCommand } from '../plugins/bootstrap.js';
 import { HookRegistry } from '../hooks/registry.js';
 import { compactSession } from '../context/session-compactor.js';
 import { getSessionResume } from './resume.js';
+import {
+  formatResumeListLines,
+  formatResumeSuccess,
+  loadResumeSession,
+} from './resume-display.js';
 import { PermissionMode, MCPServerConnection, SessionState, HookType } from '../pkg/types.js';
 import { Provider } from '../pkg/ccswitch/index.js';
 import { CCSwitchClient } from '../pkg/ccswitch/index.js';
@@ -1475,37 +1480,23 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
   private async handleResume(args: string[]): Promise<void> {
     const resume = getSessionResume();
     if (args.length === 0) {
-      const sessions = resume.list();
-      if (sessions.length === 0) {
-        console.log(`${DIM}No saved sessions found.${RESET}`);
-        return;
-      }
-      console.log(`${CYAN}${BOLD}Saved sessions:${RESET}`);
-      for (const s of sessions.slice(0, 10)) {
-        const mtime = s.modified.toISOString().slice(0, 19).replace('T', ' ');
-        console.log(
-          `  ${DIM}${mtime}${RESET}  ${BOLD}${s.id}${RESET}  ${DIM}(${s.messageCount} msgs, ${s.mode})${RESET}`
-        );
-      }
-      if (sessions.length > 10) {
-        console.log(`${DIM}  ... and ${sessions.length - 10} more${RESET}`);
+      for (const line of formatResumeListLines(resume)) {
+        console.log(line);
       }
       return;
     }
 
-    const id = args[0]!;
-    const state = resume.load(id);
-    if (!state) {
-      console.log(`${YELLOW}?${RESET} Session not found: ${id}`);
+    const loaded = loadResumeSession(args[0]!, resume);
+    if (!loaded.ok) {
+      for (const line of loaded.lines) {
+        console.log(`${YELLOW}?${RESET} ${line}`);
+      }
       return;
     }
 
-    // Replace current session via the SessionManager API.
-    this.sessionManager.restoreSession(state);
-    this.mode = state.mode;
-    console.log(
-      `${GREEN}✓${RESET} Resumed session ${DIM}${id}${RESET} (${state.messages.length} messages, mode=${state.mode})`
-    );
+    this.sessionManager.restoreSession(loaded.state);
+    this.mode = loaded.state.mode;
+    console.log(`${GREEN}✓${RESET} ${formatResumeSuccess(loaded.state)}`);
   }
 }
 

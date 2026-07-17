@@ -96,6 +96,10 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
         setOutputStyle: (s) => {
           outputStyle = s;
         },
+        onSessionRestored: () => {
+          // applySessionState 已写回 live session；SessionManager 必须指向同一引用
+          sessionManager.restoreSession(session);
+        },
       });
       if (handled) return;
     }

@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **TUI /resume**：list + confirm 后恢复会话（与 REPL 共用 resume-display） |
 | 2026-07-17 | **G6/v1 pluggable + TUI /plan 只读**：ClassifierBackend 可注入；TUI list/report |
 | 2026-07-17 | **G6/v0 + Bridge v1-partial + TUI /agents**：确定性分类器契约；远程 MCP 清单；TUI 对齐 |
 | 2026-07-17 | **J3 /agents assign_many 可见性**：per-assignment status 行（poll 同源） |
