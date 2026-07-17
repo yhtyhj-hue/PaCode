@@ -8,7 +8,17 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'dist/', '**/*.test.ts', '**/*.d.ts', 'vitest.config.ts'],
+      // 只计量主源码；排除 worktree / coverage 产物污染全局阈值
+      include: ['src/**/*.ts'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        'coverage/',
+        '.claude/**',
+        '**/*.test.ts',
+        '**/*.d.ts',
+        'vitest.config.ts',
+      ],
       thresholds: {
         lines: 80,
         statements: 80,

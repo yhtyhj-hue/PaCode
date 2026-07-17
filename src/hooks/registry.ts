@@ -1,13 +1,43 @@
 /**
- * Hook Registry
+ * Hook Registry — execFile argv 执行，禁止 shell 元字符拼接
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Hook, HookType, ToolContext, HookResult } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/** 将 hook.command 解析为 execFile(file, args)；拒绝 shell 元字符 */
+export function parseHookArgv(
+  command: string | string[]
+): { file: string; args: string[] } | { error: string } {
+  const hasMeta = (s: string): boolean => /[;&|`$<>]/.test(s);
+
+  if (Array.isArray(command)) {
+    if (command.length === 0 || !command[0]?.trim()) {
+      return { error: 'empty hook command' };
+    }
+    for (const part of command) {
+      if (hasMeta(part)) {
+        return { error: 'Hook command args must not contain shell metacharacters' };
+      }
+    }
+    return { file: command[0]!, args: command.slice(1) };
+  }
+
+  const trimmed = command.trim();
+  if (!trimmed) return { error: 'empty hook command' };
+  if (hasMeta(trimmed)) {
+    return {
+      error:
+        'Hook string command must not contain shell metacharacters; use command: string[]',
+    };
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return { file: parts[0]!, args: parts.slice(1) };
+}
 
 export class HookRegistry {
   private hooks = new Map<string, Hook>();
@@ -39,19 +69,30 @@ export class HookRegistry {
   }
 
   async execute(hook: Hook): Promise<HookResult> {
+    const parsed = parseHookArgv(hook.command);
+    if ('error' in parsed) {
+      return {
+        exitCode: 1,
+        stdout: '',
+        stderr: parsed.error,
+        blocked: false,
+      };
+    }
+
     try {
-      const cmd = Array.isArray(hook.command) ? hook.command.join(' ') : hook.command;
-      const { stdout, stderr } = await execAsync(cmd, {
+      const { stdout, stderr } = await execFileAsync(parsed.file, parsed.args, {
         cwd: hook.cwd ?? process.cwd(),
         timeout: 30000,
+        env: hook.env ? { ...process.env, ...hook.env } : process.env,
+        maxBuffer: 2 * 1024 * 1024,
       });
       return { exitCode: 0, stdout, stderr };
     } catch (e) {
-      const err = e as { code?: number; message?: string };
+      const err = e as { code?: number; message?: string; stdout?: string; stderr?: string };
       return {
-        exitCode: err.code ?? 1,
-        stdout: '',
-        stderr: err.message ?? String(e),
+        exitCode: typeof err.code === 'number' ? err.code : 1,
+        stdout: err.stdout ?? '',
+        stderr: err.stderr ?? err.message ?? String(e),
         blocked: err.code === 2,
       };
     }

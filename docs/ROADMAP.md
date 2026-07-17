@@ -24,18 +24,19 @@
 
 ---
 
-## 当前基线（截至 2026-07-16）
+## 当前基线（截至 2026-07-17）
 
 | 能力 | 状态 |
 |------|------|
 | Query while-loop + 流式 + 并行 concurrencySafe | ✅ |
 | 7 权限模式 + deny-first + DEFAULT 只读免确认 + 单键确认 | ✅ |
 | L1 预取（prefetch workers，非假 Subagent）+ 预取后仍可 tool | ✅ |
-| Edit 唯一匹配 / replaceAll | ✅ |
+| Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
 | 5 层 compact 管道形态 | ✅ 仍可加深 |
-| MCP stdio | ✅；HTTP/SSE 🔜 |
+| MCP stdio + SSE + HTTP | ✅；WebSocket / Bridge deferred |
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
-| Ink TUI / Voice / Team / LSP | ❌ defer 或靠后 |
+| Team / Coordinator / NotebookEdit / ScheduleCron / LSP(diagnostics) | ✅（K4/J2/J3） |
+| Ink TUI / Voice / Buddy | ❌ defer（K7 / J4） |
 
 ---
 
@@ -50,7 +51,7 @@
 | H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PostToolUseFailure + Stop；PermissionRequest deferred — REPL 走 confirm-prompt 而非 hook 触发） |
 | H4 | **工具保真**：Grep 常用旗标；Read 大文件/分页体验；Bash 超时与截断产品化文案 | 对应 unit + 至少 1 条集成 | ✅（Grep: -i/--glob/--exclude/-A/-B/-C/output_mode；Read: offset+limit, 大文件拒绝 + 提示；Bash: truncate 提示加 PaCode 操作建议） |
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | ✅（client.ts createTransport switch on type: stdio/sse/http 全部接线；MCPServerConfig 加 headers 字段；transport 字段类型 union AnyTransport） |
-| H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ⚠️ 部分（tool 已注册 + 30 测试；REPL 未在 tool dispatch 处拦截/转发 stdin — 模型调 AskUser 会与 ReplLineEditor 抢 raw mode。短期方案：工具标注 ACCEPT_EDITS 但 REPL 不 pause line editor；长期：REPL 在 tool dispatch 时显式 pause+delegate stdin） |
+| H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ✅（DEFAULT 权限；REPL pause 后注入 cooked `readLine`；工具优先 `ctx.readLine`） |
 | H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | ✅（evals/gate/m1-m4.eval.ts 4 个 gate eval 覆盖 M1 假完成率/M2 单次批 confirm/M3 深读触发/M4 Ctrl+C 取消；M3 同步加 完整读/逐行读/全读 正则；npm run test 跑 705 通过即可阻断） |
 | H8 | **主循环失败可恢复**：中断、权限拒绝后可续跑同一任务 | 无卡死确认框；会话可 resume | ✅（engine 8 处 shouldAbort ABORTED 检查 + confirm-prompt Ctrl+C 取消 + `/resume` slash command 接入 SessionResume.list/load + SessionManager.restoreSession 替换当前会话） |
 
@@ -65,7 +66,7 @@
 | I1 | **可审计 auto-memory**：对话事实写入 `.paude/memory/`，可 diff / 回滚 | 比黑盒记忆更可检查 | ✅（heuristic 提取 is-def-zh/project-uses/set-config/decision 4 类；写入 ~/.paude/memory/auto/<date>.jsonl；Stop hook 自动触发；14 测试覆盖） |
 | I2 | **/rewind + 工作区 checkpoint**（按 tool 批次，慎重） | 强恢复；需快照权限与测试 | ✅（git-stash-backed checkpoint + /rewind slash：capture/list/rewindTo；read-tree -m -u --reset 强恢复；12 测试覆盖。已知限制：uncommitted 冲突时 rewind 返回 false 让用户手动 commit/stash） |
 | I3 | **Reflection 绑证据**：改码后强制/可选跑测或 lint，失败则继续 loop | 有信号的反思，不是空复读 | ✅（end_turn 时若 toolCallHistory 含 Edit/Write/NotebookEdit 且 reflectionCount < 2 触发；npm/cargo/go/pytest 项目自动检测；失败输出注入 user message 强制下一轮；12 测试覆盖） |
-| I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | ✅（EnterPlanMode/ExitPlanMode 两个新工具注册到 bootstrap；PlanManager.createPlan/approve/startExecution 复用；5 测试 + p0 工具数 14→16） |
+| I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | ✅（PLAN 白名单工具暴露给 API；ExitPlanMode permissionMode=PLAN；PermissionSystem 放行 Exit/Read） |
 | I5 | **Output styles + Compact 策略**（auto / forced / manual + 焦点） | 体感与可控性 | ✅（output-styles.ts：4 风格预设 default/cost/full/minimal；/style slash 切换 + 列表；7 测试覆盖。Compact 策略：auto/forced/manual 三模式 policy 锁定） |
 | I6 | **真 Subagent + worktree 隔离**（替换「prefetch = agents」认知） | 多代理有边界，无戏服 | ✅（QueryEngine.workingDirectory；Task 默认 ephemeral worktree + 固定 SubagentReport JSON；禁嵌套 Task；Bash/Glob/Grep 尊重 cwd；不 chdir） |
 
@@ -151,6 +152,8 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | 二次质检：approvedKeys；apiKey 禁 project；ExitPlanMode/PLAN 白名单；DONT_ASK←bash-secure；cron 下限；hooks execFile；AskUser interrupt |
+| 2026-07-17 | 质检 P0/P1：Bash 确认可执行 + 2>&1；symlink 嵌套写逃逸；DEFAULT Edit/Write；预取证据门闩；AskUser readLine；LSP 工作区；coverage/docs |
 | 2026-07-17 | K4 P2：NotebookEdit + ScheduleCron + LSP(diagnostics) |
 | 2026-07-17 | K5：MCP sse/http bootstrap 放行 + auth headers；Bridge deferred `/bridge` |
 | 2026-07-17 | K6：高频 slash（doctor/diff + 菜单对齐 resume/rewind/style） |

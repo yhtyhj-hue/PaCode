@@ -310,8 +310,13 @@ describe('QueryEngine.query()', () => {
     }
 
     expect(permissionPrompt).toHaveBeenCalled();
+    // 全拒绝时 header 为「预取未成功」，正文仍含 User denied / Permission denied
     const audit = state.messages.find(
-      (m) => typeof m.content === 'string' && m.content.includes('项目检查已完成')
+      (m) =>
+        typeof m.content === 'string' &&
+        (m.content.includes('预取未成功') ||
+          m.content.includes('项目检查已完成') ||
+          m.content.includes('User denied'))
     );
     expect(String(audit?.content ?? '')).toMatch(/Permission denied|User denied permission/);
   });
@@ -465,8 +470,18 @@ describe('QueryEngine.query()', () => {
     expect(events.some((e) => e.type === 'message_stop')).toBe(true);
   });
 
-  it('omits tools from API request in PLAN mode', async () => {
+  it('exposes only PLAN whitelist tools (not Echo) in PLAN mode', async () => {
     registry.register(createEchoTool());
+    registry.register({
+      name: 'ExitPlanMode',
+      description: 'exit',
+      inputSchema: {},
+      concurrencySafe: true,
+      permissionMode: PermissionMode.PLAN,
+      async execute() {
+        return { content: [{ type: 'text', text: 'ok' }] };
+      },
+    });
 
     const streamParams: Record<string, unknown>[] = [];
     const client = createMockAnthropicClient(
@@ -486,8 +501,9 @@ describe('QueryEngine.query()', () => {
       /* drain */
     }
 
-    expect(streamParams[0]?.tools).toBeUndefined();
-    expect(streamParams[0]?.tool_choice).toBeUndefined();
+    const tools = streamParams[0]?.tools as Array<{ name: string }> | undefined;
+    expect(tools?.some((t) => t.name === 'ExitPlanMode')).toBe(true);
+    expect(tools?.some((t) => t.name === 'Echo')).toBe(false);
   });
 
   it('aborts query when shouldAbort returns true', async () => {

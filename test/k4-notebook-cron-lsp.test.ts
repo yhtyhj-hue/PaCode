@@ -232,7 +232,7 @@ describe('K4 bootstrap', () => {
     expect(reg.has('NotebookEdit')).toBe(true);
     expect(reg.has('ScheduleCron')).toBe(true);
     expect(reg.has('LSP')).toBe(true);
-    expect(reg.get('NotebookEdit')?.permissionMode).toBe(PermissionMode.ACCEPT_EDITS);
+    expect(reg.get('NotebookEdit')?.permissionMode).toBe(PermissionMode.DEFAULT);
     expect(reg.list()).toHaveLength(28);
   });
 });

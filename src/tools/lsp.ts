@@ -4,6 +4,7 @@
 
 import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
 import { collectDiagnostics } from '../services/diagnostics/index.js';
+import { resolvePathInWorkspace } from './path-utils.js';
 
 export function registerLspTool(registry: { register: (t: ToolDefinition) => void }): void {
   registry.register({
@@ -49,7 +50,18 @@ export function registerLspTool(registry: { register: (t: ToolDefinition) => voi
         };
       }
 
-      const cwd = path ?? ctx?.workingDirectory ?? process.cwd();
+      const root = ctx?.workingDirectory ?? process.cwd();
+      let cwd = root;
+      if (path) {
+        const resolved = resolvePathInWorkspace(path, root);
+        if (!resolved.ok) {
+          return {
+            content: [{ type: 'text', text: resolved.reason }],
+            isError: true,
+          };
+        }
+        cwd = resolved.resolved;
+      }
       const result = await collectDiagnostics(cwd, { prefer });
       return {
         content: [

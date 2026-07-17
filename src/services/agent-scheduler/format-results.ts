@@ -90,8 +90,16 @@ export function formatDagResults(
   const errorCount = runs.filter((r) => r.result.isError).length;
   const errorNote =
     errorCount > 0
-      ? `\n[Note: ${errorCount}/${runs.length} prefetch tool(s) returned errors — treat those sections as failed, not as successful audit evidence.]`
+      ? `\n[Note: ${errorCount}/${runs.length} prefetch tool(s) returned errors — treat those sections as failed, not as successful audit evidence. Do not claim the audit is complete.]`
       : '';
+  let header = INTENT_HEADERS[intent];
+  if (errorCount > 0 && errorCount === runs.length) {
+    header =
+      '[预取未成功（全部失败）。禁止声称检查/审计已完成；请继续调用 Read/Grep/Bash 收集证据。输出 ● 列表，禁止表格。]';
+  } else if (errorCount > 0) {
+    header =
+      `[预取部分失败（${errorCount}/${runs.length}）。仅未标 [error] 的段落可参考；禁止把整次检查标为已完成。输出 ● 列表，禁止表格。]`;
+  }
 
-  return `${INTENT_HEADERS[intent]}${errorNote}\n\n${skillBlock}${sections.join('\n\n')}`;
+  return `${header}${errorNote}\n\n${skillBlock}${sections.join('\n\n')}`;
 }

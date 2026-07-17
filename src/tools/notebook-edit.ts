@@ -71,7 +71,8 @@ export function registerNotebookEditTool(registry: {
       required: ['path', 'action'],
     },
     concurrencySafe: false,
-    permissionMode: PermissionMode.ACCEPT_EDITS,
+    // DEFAULT：会话可确认后改 notebook；ACCEPT_EDITS 模式免确认
+    permissionMode: PermissionMode.DEFAULT,
     async execute(input, ctx?: ToolContext) {
       const {
         path,

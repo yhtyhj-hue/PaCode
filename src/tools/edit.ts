@@ -39,7 +39,8 @@ export function registerEditTool(registry: { register: (t: ToolDefinition) => vo
       required: ['path', 'oldText', 'newText'],
     },
     concurrencySafe: false,
-    permissionMode: PermissionMode.ACCEPT_EDITS,
+    // DEFAULT：会话可确认后编辑；ACCEPT_EDITS 模式由 PermissionSystem 免确认
+    permissionMode: PermissionMode.DEFAULT,
     async execute(input, ctx?: ToolContext) {
       const { path, oldText, newText, replaceAll } = input as {
         path: string;

@@ -40,7 +40,7 @@ const BASE64_RE = /\b(?:[A-Za-z0-9+/]{120,}={0,2})\b/g;
 const IGNORE_PATTERNS: RegExp[] = [
   /ignore\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions|prompts?|directives?)/i,
   /disregard\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions|prompts?)/i,
-  /you\s+are\s+now\s+(?:a|an)\s+[a-z0-9 ,.\-]{2,80}/i,
+  /you\s+are\s+now\s+(?:a|an)\s+[a-z0-9 ,.-]{2,80}/i,
   /system\s*:\s*you\s+are/i,
   /new\s+instructions?\s*:/i,
   /forget\s+(?:everything|all)\s+(?:above|before)/i,

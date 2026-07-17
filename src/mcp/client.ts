@@ -191,17 +191,15 @@ export class MCPClient {
     description: string | undefined,
     inputSchema: unknown
   ): ToolDefinition {
-    // 闭包绑定 MCPClient 实例；禁止 MCPClient.prototype.callTool.call(this) —
-    // tool.execute 的 this 是工具对象，不是 client，会导致 servers Map 丢失。
-    const client = this;
+    // 箭头函数捕获外层 this（MCPClient）；禁止把 tool.execute 的 this 当 client
     return {
       name: `mcp__${serverName}__${name}`,
       description: description ?? `MCP tool ${name} from ${serverName}`,
       inputSchema: inputSchema ?? { type: 'object', properties: {} },
       concurrencySafe: false,
       permissionMode: PermissionMode.DEFAULT,
-      async execute(input) {
-        return client.callTool(serverName, name, input as Record<string, unknown>);
+      execute: async (input) => {
+        return this.callTool(serverName, name, input as Record<string, unknown>);
       },
     };
   }

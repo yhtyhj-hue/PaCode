@@ -196,6 +196,21 @@ export function registerConfigTool(
         };
       }
 
+      // apiKey 禁止写入可提交的 project 层（.claude/settings.json 默认进 git）
+      if (key === 'apiKey' && target === 'project') {
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                'apiKey cannot be written to project settings (commit/leak risk). ' +
+                'Use target=user or target=local (.claude/settings.local.json is gitignored).',
+            },
+          ],
+          isError: true,
+        };
+      }
+
       try {
         const coerced = coerceValue(key, value);
         const layer = mgr.mergeSet(key, coerced, target);

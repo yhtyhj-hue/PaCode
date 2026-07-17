@@ -51,7 +51,7 @@ export function detectVerifiers(cwd: string = process.cwd()): ProjectVerifier[] 
         scripts?: Record<string, string>;
       };
       const testScript = pkg.scripts?.['test'];
-      if (testScript && testScript !== 'echo \"Error: no test specified\" && exit 1') {
+      if (testScript && testScript !== 'echo "Error: no test specified" && exit 1') {
         out.push({
           kind: 'test',
           command: 'npm',

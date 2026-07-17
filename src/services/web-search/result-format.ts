@@ -21,6 +21,7 @@ const INSTRUCTION_PATTERNS: readonly RegExp[] = [
   /disregard\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above)\s+instructions?/gi,
 ];
 const BASE64_TOKEN_PATTERN = /(^|\s)(?=[A-Za-z0-9+/]{24,}={0,2}(?=\s|$))(?=[A-Za-z0-9+/]*[A-Z])(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]*[0-9+/=])([A-Za-z0-9+/]{24,}={0,2})(?=\s|$)/g;
+// eslint-disable-next-line no-control-regex -- 刻意匹配含 NUL 的非 ASCII 长串
 const LONG_UNICODE_PATTERN = /[^\x00-\x7F]{16,}/gu;
 
 function isUnicodeControlCodePoint(codePoint: number): boolean {

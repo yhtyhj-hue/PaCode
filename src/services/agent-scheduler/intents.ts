@@ -26,7 +26,7 @@ const CODE_AUDIT_PATTERN =
   /(?:读|看|审查).{0,10}(?:代码|源文件|源码)|(?:检查|读).{0,6}代码实现|完整代码|源文件|source\s+code|read\s+(?:the\s+)?(?:code|source|implementation)/i;
 
 const CONTINUE_PATTERN =
-  /^(?:继续|接着|往下|go\s+on|continue)(?:读|看|查|做|来)?(?:啊|呀|吧)?[\.!]?$/i;
+  /^(?:继续|接着|往下|go\s+on|continue)(?:读|看|查|做|来)?(?:啊|呀|吧)?[.!]?$/i;
 
 /** 要求逐行/全文深读 — 跳过浅层 prefetch DAG，交给模型真调 Read */
 const DEEP_FULL_READ_PATTERN =

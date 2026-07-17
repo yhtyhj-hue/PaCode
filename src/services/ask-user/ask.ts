@@ -122,11 +122,10 @@ export async function askUser(
 
   const multi = Boolean(input.multiSelect);
 
-  let attempt = 0;
   let lastHint: string | undefined;
 
   // Outer loop: retry only on parse failure (not on abort/timeout).
-  while (true) {
+  for (let attempt = 0; attempt <= maxParseRetries; attempt++) {
     renderPrompt(input.question, input.header, input.options, multi, input.default_id, write);
     if (lastHint) renderHint(lastHint, write);
 
@@ -158,9 +157,8 @@ export async function askUser(
       return { selection: result.selection, rawInput: raw, aborted: false };
     }
 
-    attempt += 1;
     lastHint = result.hint;
-    if (attempt > maxParseRetries) {
+    if (attempt >= maxParseRetries) {
       return {
         selection: multi ? [] : '',
         rawInput: raw,
@@ -169,4 +167,6 @@ export async function askUser(
       };
     }
   }
+
+  return { selection: multi ? [] : '', rawInput: '', aborted: true };
 }

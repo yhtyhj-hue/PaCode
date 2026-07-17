@@ -12,6 +12,18 @@ import {
 import { matchDenyRules, matchAllowAskRules, PermissionRules } from './rules.js';
 import { classifyToolCall } from './classifier.js';
 import { checkToolPermissionGate } from './tool-gate.js';
+import { checkBashSecurity, shouldHardBlockBashExecution } from '../tools/bash-secure.js';
+
+/** PLAN 模式仅允许只读调研 + 进出 plan 的工具（engine 暴露同一白名单） */
+export const PLAN_ALLOWED_TOOLS = new Set([
+  'ExitPlanMode',
+  'EnterPlanMode',
+  'AskUser',
+  'Read',
+  'Glob',
+  'Grep',
+  'TodoWrite',
+]);
 
 export interface PermissionSystemOptions {
   rules?: PermissionRules;
@@ -38,8 +50,8 @@ export class PermissionSystem {
     const denyResult = matchDenyRules(tool, this.rules);
     if (denyResult) return denyResult;
 
-    // Layer 2: PLAN 模式 — 在 allow/ask 规则之前拦截，防止规则绕过
-    if (mode === PermissionMode.PLAN) {
+    // Layer 2: PLAN — 默认禁执行；白名单工具可继续（ExitPlanMode 等）
+    if (mode === PermissionMode.PLAN && !PLAN_ALLOWED_TOOLS.has(tool.name)) {
       return { allowed: false, reason: 'Plan mode: no execution' };
     }
 
@@ -48,15 +60,24 @@ export class PermissionSystem {
 
     const definition = this.getToolDefinition?.(tool.name);
 
-    // Layer 4: tool.permissionMode 门禁
-    const toolGate = checkToolPermissionGate(mode, definition?.permissionMode);
+    // Layer 4: tool.permissionMode 门禁（PLAN 白名单工具跳过，否则 Read@DEFAULT 会被 PLAN 会话挡住）
+    const skipGate =
+      mode === PermissionMode.PLAN && PLAN_ALLOWED_TOOLS.has(tool.name);
+    const toolGate = skipGate
+      ? null
+      : checkToolPermissionGate(mode, definition?.permissionMode);
     if (toolGate) return toolGate;
 
     switch (mode) {
       case PermissionMode.BYPASS:
         return { allowed: true };
+      case PermissionMode.PLAN:
+        // 只读免确认；ExitPlanMode / AskUser 需确认
+        if (['Read', 'Glob', 'Grep', 'TodoWrite'].includes(tool.name)) {
+          return { allowed: true };
+        }
+        return { allowed: true, requiresInteraction: true, interactionType: 'confirm' };
       case PermissionMode.DEFAULT: {
-        // Claude Code 对齐：只读工具免确认；Bash/Edit 等需确认
         const classification = classifyToolCall(tool, definition);
         if (classification.risk === 'safe') {
           return { allowed: true };
@@ -69,10 +90,21 @@ export class PermissionSystem {
       case PermissionMode.AUTO:
         return this.checkAutoMode(tool, definition);
       case PermissionMode.ACCEPT_EDITS:
-        if (['Edit', 'Write', 'Read', 'Glob', 'Grep'].includes(tool.name)) return { allowed: true };
+        if (
+          ['Edit', 'Write', 'NotebookEdit', 'Read', 'Glob', 'Grep', 'AskUser'].includes(
+            tool.name
+          )
+        ) {
+          return { allowed: true };
+        }
         return { allowed: true, requiresInteraction: true, interactionType: 'confirm' };
       case PermissionMode.DONT_ASK:
-        if (this.isDestructive(tool)) return { allowed: false, reason: 'Destructive operation' };
+        if (this.isDestructive(tool, definition)) {
+          return {
+            allowed: false,
+            reason: 'Destructive operation',
+          };
+        }
         return { allowed: true };
       case PermissionMode.BUBBLE:
         return { allowed: true };
@@ -96,11 +128,16 @@ export class PermissionSystem {
     return { allowed: true, requiresInteraction: true, interactionType: 'confirm' };
   }
 
-  private isDestructive(tool: ToolCall): boolean {
+  /** DONT_ASK：走 bash-secure / classifier，不靠简陋正则 */
+  private isDestructive(tool: ToolCall, definition?: ToolDefinition): boolean {
     if (tool.name === 'Bash') {
       const cmd = String(tool.input['command'] ?? '');
-      return /\b(rm\s+-rf|DROP\s+TABLE|git\s+push\s+--force)\b/i.test(cmd);
+      const check = checkBashSecurity(cmd);
+      if (check.safe) return false;
+      if (check.category === 'destructive') return true;
+      if (shouldHardBlockBashExecution(check)) return true;
+      return false;
     }
-    return false;
+    return classifyToolCall(tool, definition).risk === 'destructive';
   }
 }

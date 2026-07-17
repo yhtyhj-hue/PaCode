@@ -95,7 +95,8 @@ export function registerPlanModeTools(registry: ToolRegistry): void {
       },
     },
     concurrencySafe: true,
-    permissionMode: PermissionMode.ACCEPT_EDITS,
+    // PLAN：会话在 plan 时 tool-gate 可通过；PermissionSystem 白名单放行 ExitPlanMode
+    permissionMode: PermissionMode.PLAN,
     async execute(input, _ctx?: ToolContext) {
       const args = input as { plan_id?: string };
       const pm = getPlanManager();

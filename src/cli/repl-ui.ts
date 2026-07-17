@@ -135,7 +135,7 @@ export function formatStatusBarLeft(mode: PermissionMode): string {
   const label = formatModeStatusLabel(mode);
   return (
     `${MAGENTA}>>${RESET} ${MAGENTA}${label}${RESET}` +
-    `${DIM} (shift+tab to cycle) · esc to interrupt · ctrl+o to expand${RESET}`
+    `${DIM} (shift+tab to cycle) · ctrl+c to interrupt · ctrl+o to expand${RESET}`
   );
 }
 

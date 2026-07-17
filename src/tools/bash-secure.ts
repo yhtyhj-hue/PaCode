@@ -125,7 +125,14 @@ export function parseShellSegments(command: string): string[] {
         push();
         continue;
       }
+      // 裸 & 才分段；2>&1 / >&file / &>file 属于重定向，不得切开
       if (ch === '&') {
+        const prev = i > 0 ? command[i - 1]! : '';
+        const next = i + 1 < command.length ? command[i + 1]! : '';
+        if (prev === '>' || next === '>') {
+          current += ch;
+          continue;
+        }
         push();
         continue;
       }
@@ -217,6 +224,14 @@ function checkSegment(segment: string): SecurityCheck | null {
       if (/^git\s+(status|diff|log|show|branch|remote|tag)\b/i.test(normalized)) {
         return { safe: true, category: 'readonly' };
       }
+      // 必须在 return null 前判定 push，否则会落到 unknown 被 DONT_ASK 放行
+      if (/^git\s+push\b/i.test(normalized)) {
+        return {
+          safe: false,
+          reason: 'Git push requires confirmation',
+          category: 'destructive',
+        };
+      }
       return null;
     }
     return { safe: true, category: 'readonly' };
@@ -224,10 +239,6 @@ function checkSegment(segment: string): SecurityCheck | null {
 
   if (NETWORK_BASES.has(base)) {
     return { safe: true, category: 'network' };
-  }
-
-  if (/^git\s+push\b/i.test(normalized)) {
-    return { safe: false, reason: 'Git push requires confirmation', category: 'destructive' };
   }
 
   return null;
@@ -250,16 +261,57 @@ function checkPipelineSinks(segments: string[]): SecurityCheck | null {
   return null;
 }
 
+/** 检测裸后台 `&`（排除 2>&1 / >& / &> 重定向） */
+export function hasBareBackgroundAmpersand(command: string): boolean {
+  let inSingle = false;
+  let inDouble = false;
+  let escaped = false;
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && !inSingle) {
+      escaped = true;
+      continue;
+    }
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (inSingle || inDouble) continue;
+    if (ch !== '&') continue;
+    const prev = i > 0 ? command[i - 1]! : '';
+    const next = i + 1 < command.length ? command[i + 1]! : '';
+    if (prev === '>' || next === '>') continue;
+    return true;
+  }
+  return false;
+}
+
 export function checkBashSecurity(command: string): SecurityCheck {
   const trimmed = command.trim();
   if (!trimmed) {
-    return { safe: false, reason: 'Empty command', category: 'unknown' };
+    return { safe: false, reason: 'Empty command', category: 'destructive' };
   }
 
   if (hasForbiddenControlChars(trimmed)) {
     return {
       safe: false,
       reason: 'Control characters or newlines not allowed',
+      category: 'destructive',
+    };
+  }
+
+  if (hasBareBackgroundAmpersand(trimmed)) {
+    return {
+      safe: false,
+      reason: 'Background execution (&) not allowed',
       category: 'destructive',
     };
   }
@@ -313,6 +365,18 @@ export interface SecureBashExecOptions {
   cwd?: string;
 }
 
+/**
+ * 执行层硬拒：仅 destructive / 控制字符等。
+ * unknown 与 “requires confirmation” 由权限层弹窗；批准后必须能真正 exec。
+ */
+export function shouldHardBlockBashExecution(check: SecurityCheck): boolean {
+  if (check.safe) return false;
+  // Empty / 后台 & / 真 destructive：执行层硬拒；unknown 与「需确认」交给权限层
+  if (check.category === 'unknown') return false;
+  if (/requires confirmation/i.test(check.reason ?? '')) return false;
+  return true;
+}
+
 export function createSecureBashExecutor(config: BashSecurityConfig = {}) {
   const timeoutMs = config.timeoutMs ?? 60000;
   const maxOutputLines = config.maxOutputLines ?? DEFAULT_BASH_MAX_OUTPUT_LINES;
@@ -323,7 +387,7 @@ export function createSecureBashExecutor(config: BashSecurityConfig = {}) {
   ): Promise<BashExecutionResult> {
     return new Promise((resolve) => {
       const security = checkBashSecurity(command);
-      if (!security.safe) {
+      if (shouldHardBlockBashExecution(security)) {
         resolve({ stdout: '', stderr: security.reason ?? 'Blocked', exitCode: 1 });
         return;
       }

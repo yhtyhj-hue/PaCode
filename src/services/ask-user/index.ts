@@ -114,32 +114,32 @@ export function registerAskUserTool(registry: ToolRegistry): void {
       required: ['question', 'options'],
     },
     concurrencySafe: false,
-    permissionMode: PermissionMode.ACCEPT_EDITS,
-    async execute(input: unknown, _ctx: ToolContext) {
+    // DEFAULT：可确认后提问；REPL 须 pause editor 并注入 ctx.readLine
+    permissionMode: PermissionMode.DEFAULT,
+    async execute(input: unknown, ctx: ToolContext) {
       const parsed = coerceInput((input ?? {}) as Record<string, unknown>);
 
-      // Default reader wraps Node's readline against stderr so the prompt does
-      // not interfere with stdout (which the REPL line editor uses).
-      const readLine = (prompt: string): Promise<string> =>
-        new Promise<string>((resolve, reject) => {
-          // Lazy import keeps this file free of node:readline at module-load
-          // time so it remains usable in non-Node test shims.
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { createInterface } = require('node:readline') as typeof import('node:readline');
-          const rl = createInterface({ input: process.stdin, output: process.stderr });
-          let settled = false;
-          const finish = (value: string): void => {
-            if (settled) return;
-            settled = true;
-            rl.close();
-            resolve(value);
-          };
-          rl.on('SIGINT', () => {
-            finish('');
-            reject(new AskUserAbortedError());
-          });
-          rl.question(prompt, (answer) => finish(answer));
-        });
+      // 优先用 REPL 注入的 reader（cooked stdin）；否则自建 readline（测试/非 REPL）
+      const readLine =
+        ctx?.readLine ??
+        ((prompt: string): Promise<string> =>
+          new Promise<string>((resolve, reject) => {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { createInterface } = require('node:readline') as typeof import('node:readline');
+            const rl = createInterface({ input: process.stdin, output: process.stderr });
+            let settled = false;
+            const finish = (value: string): void => {
+              if (settled) return;
+              settled = true;
+              rl.close();
+              resolve(value);
+            };
+            rl.on('SIGINT', () => {
+              finish('');
+              reject(new AskUserAbortedError());
+            });
+            rl.question(prompt, (answer) => finish(answer));
+          }));
 
       try {
         const answer = await askUser(parsed, { readLine });

@@ -54,14 +54,20 @@ describe('prefetch-config (H1)', () => {
 });
 
 describe('session-memory (H2)', () => {
-  it('approvalKey fingerprints Bash first token', () => {
+  it('approvalKey fingerprints package-manager subcommands', () => {
     expect(approvalKey({ id: '1', name: 'Read', input: { path: 'a' } })).toBe('Read');
     expect(
       approvalKey({ id: '1', name: 'Bash', input: { command: 'npm test -- --run' } })
-    ).toBe('Bash:npm');
+    ).toBe('Bash:npm:test');
+    expect(
+      approvalKey({ id: '1', name: 'Bash', input: { command: 'npm run build' } })
+    ).toBe('Bash:npm:run:build');
+    expect(
+      approvalKey({ id: '1', name: 'Bash', input: { command: 'git push origin main' } })
+    ).toBe('Bash:git:push');
   });
 
-  it('remembers and matches session approvals', () => {
+  it('remembers and matches session approvals narrowly', () => {
     const state = {
       sessionId: 's',
       messages: [],
@@ -76,9 +82,13 @@ describe('session-memory (H2)', () => {
     expect(hasSessionApproval(state, bash)).toBe(false);
     rememberSessionApproval(state, bash);
     expect(hasSessionApproval(state, bash)).toBe(true);
+    // npm test 不得批准 npm run build / npm publish
     expect(
       hasSessionApproval(state, { id: '2', name: 'Bash', input: { command: 'npm run build' } })
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      hasSessionApproval(state, { id: '2b', name: 'Bash', input: { command: 'npm publish' } })
+    ).toBe(false);
     expect(
       hasSessionApproval(state, { id: '3', name: 'Bash', input: { command: 'git status' } })
     ).toBe(false);
@@ -88,7 +98,7 @@ describe('session-memory (H2)', () => {
 });
 
 describe('prefetch gate + session memory', () => {
-  it('skips prompt when session already approved Bash:npm', async () => {
+  it('skips prompt when session already approved Bash:npm:test', async () => {
     const prompt = vi.fn().mockResolvedValue(true);
     const tool = { id: '1', name: 'Bash', input: { command: 'npm test' } };
     const state = {
@@ -99,7 +109,7 @@ describe('prefetch gate + session memory', () => {
       mode: PermissionMode.DEFAULT,
       hooks: { hooks: {} },
       compactionHistory: [],
-      sessionApprovals: ['Bash:npm'],
+      sessionApprovals: ['Bash:npm:test'],
     };
     const blocked = await authorizePrefetchTool(tool, {
       permissionSystem: new PermissionSystem(),

@@ -9,7 +9,7 @@ import { SHIFT_TAB_MODES } from './cycle-mode.js';
 export function describePermissionMode(mode: PermissionMode): string {
   switch (mode) {
     case PermissionMode.PLAN:
-      return 'no tool execution';
+      return 'read-only + ExitPlanMode/AskUser (no mutations)';
     case PermissionMode.DEFAULT:
       return 'auto-allow Read/Glob/Grep; confirm Bash/Edit/Write (CC-like)';
     case PermissionMode.ACCEPT_EDITS:
@@ -17,7 +17,7 @@ export function describePermissionMode(mode: PermissionMode): string {
     case PermissionMode.AUTO:
       return 'deterministic classifier (not ML)';
     case PermissionMode.DONT_ASK:
-      return 'auto-approve except crude destructive regex';
+      return 'auto-approve except bash-secure destructive / hard-blocked';
     case PermissionMode.BYPASS:
       return 'skip interaction (deny rules still apply)';
     case PermissionMode.BUBBLE:

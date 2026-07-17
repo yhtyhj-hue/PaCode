@@ -23,9 +23,10 @@ import {
   MAX_REFLECTIONS_PER_QUERY,
 } from './reflection.js';
 import { ToolRegistry } from '../tools/registry.js';
-import { PermissionSystem } from '../permission/system.js';
+import { PermissionSystem, PLAN_ALLOWED_TOOLS } from '../permission/system.js';
 import { shouldRunPrefetch } from './prefetch-config.js';
 import {
+  approvalKey,
   hasSessionApproval,
   rememberSessionApproval,
 } from '../permission/session-memory.js';
@@ -81,6 +82,7 @@ export class QueryEngine {
   private prefetchConfig: import('../pkg/app-config.js').ResolvedAppConfig['prefetch'];
   /** 工具执行根目录（Subagent worktree 隔离时覆盖 process.cwd） */
   private workingDirectory: string;
+  private readLine?: (prompt: string) => Promise<string>;
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
@@ -91,6 +93,7 @@ export class QueryEngine {
     this.contextMaxTokens = appConfig.contextMaxTokens;
     this.prefetchConfig = options.prefetch ?? appConfig.prefetch;
     this.workingDirectory = options.workingDirectory ?? process.cwd();
+    this.readLine = options.readLine;
     this.contextAssembler = options.contextAssembler ?? new ContextAssembler();
     this.compactionPipeline =
       options.compactionPipeline ??
@@ -133,8 +136,8 @@ export class QueryEngine {
     let toolsUsedInQuery = false;
     let dagPrefetched = false;
     let deferredText: string[] = [];
-    /** 本 query 已确认过的工具名（预取批通过后复用，避免反复弹窗） */
-    const approvedToolNames = new Set<string>();
+    /** 本 query 已确认过的批准键（approvalKey，非裸工具名） */
+    const approvedKeys = new Set<string>();
     /** I3 reflection count within this query (capped at MAX_REFLECTIONS_PER_QUERY). */
     let reflectionCount = 0;
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
@@ -190,7 +193,7 @@ export class QueryEngine {
         ) {
           dagPrefetched = true;
           deferredText = [];
-          toolsUsedInQuery = true;
+          // 预取不是模型 tool 证据：失败/空预取不得关掉 M1 nudge（toolsUsedInQuery）
           this.log.debug(DAG_PREFETCH_NOTE);
 
           const skillCtx = await loadSkillContextForIntent(dagPlan.intent);
@@ -229,7 +232,7 @@ export class QueryEngine {
             if (blocked) return blocked;
             const need = this.permissionSystem.check({ tool: call, mode, context: state });
             if (need.requiresInteraction) {
-              approvedToolNames.add(call.name);
+              approvedKeys.add(approvalKey(call));
               rememberSessionApproval(state, call);
             }
             return this.executeTool(call, state);
@@ -267,6 +270,10 @@ export class QueryEngine {
               content: formatDagResults(dagPlan.intent, runs, skillCtx.markdown),
               timestamp: Date.now(),
             });
+            // 仅当至少一条预取成功时计为证据；全失败则保留 M1 nudge
+            if (runs.some((r) => !r.result.isError)) {
+              toolsUsedInQuery = true;
+            }
             effectiveOptions = {
               ...effectiveOptions,
               toolChoice: 'auto',
@@ -436,10 +443,8 @@ export class QueryEngine {
             }
 
             if (allowed.requiresInteraction) {
-              if (
-                approvedToolNames.has(toolCall.name) ||
-                hasSessionApproval(state, toolCall)
-              ) {
+              const key = approvalKey(toolCall);
+              if (approvedKeys.has(key) || hasSessionApproval(state, toolCall)) {
                 approvedCalls.push(toolCall);
                 continue;
               }
@@ -465,7 +470,7 @@ export class QueryEngine {
                 });
                 continue;
               }
-              approvedToolNames.add(toolCall.name);
+              approvedKeys.add(key);
               rememberSessionApproval(state, toolCall);
             }
 
@@ -559,13 +564,22 @@ export class QueryEngine {
     this.log.debug('Query completed');
   }
 
+  /** PLAN：只暴露白名单工具，否则模型无法调用 ExitPlanMode */
+  private toolsForMode(mode: PermissionMode, suppressTools?: boolean) {
+    if (suppressTools) return [];
+    const all = this.toolRegistry.list();
+    if (mode === PermissionMode.PLAN) {
+      return all.filter((t) => PLAN_ALLOWED_TOOLS.has(t.name));
+    }
+    return all;
+  }
+
   private async assembleContext(
     state: SessionState,
     options: QueryOptions,
     mode: PermissionMode
   ) {
-    const tools =
-      mode === PermissionMode.PLAN ? [] : this.toolRegistry.list();
+    const tools = this.toolsForMode(mode);
     const context = await this.contextAssembler.assemble(state, {
       systemPrompt: options.systemPrompt,
       tools,
@@ -579,8 +593,7 @@ export class QueryEngine {
     options: QueryOptions,
     mode: PermissionMode
   ) {
-    const tools =
-      mode === PermissionMode.PLAN || options.suppressTools ? [] : this.toolRegistry.list();
+    const tools = this.toolsForMode(mode, options.suppressTools);
     const system = context.systemPrompt;
     const { messages } = compileMessagesForApi(context.messages);
 
@@ -638,6 +651,7 @@ const stream = await withRetry(
       sessionState: state,
       hooks: this.hookRegistry,
       currentTool: toolCall,
+      readLine: this.readLine,
     };
   }
 
@@ -779,4 +793,6 @@ export interface QueryEngineOptions {
   prefetch?: import('../pkg/app-config.js').ResolvedAppConfig['prefetch'];
   /** 工具 cwd；Subagent 隔离 worktree 时注入，默认 process.cwd() */
   workingDirectory?: string;
+  /** AskUser 等交互工具用的读行（REPL 在 pause editor 后注入） */
+  readLine?: (prompt: string) => Promise<string>;
 }

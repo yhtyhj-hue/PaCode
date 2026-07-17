@@ -47,4 +47,15 @@ describe('resolvePathInWorkspace', () => {
     const r = resolvePathInWorkspace('escape', root);
     expect(r.ok).toBe(false);
   });
+
+  // P0: symlink 目录 + 尚未创建的子文件不得 fail-open 写出工作区
+  it('rejects nested path under symlink directory that points outside', () => {
+    try {
+      symlinkSync(outside, join(root, 'link'));
+    } catch {
+      return;
+    }
+    const r = resolvePathInWorkspace('link/newfile.txt', root);
+    expect(r.ok).toBe(false);
+  });
 });

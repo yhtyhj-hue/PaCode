@@ -47,6 +47,8 @@ export interface ToolContext {
   sessionState: SessionState;
   hooks: HookRegistry;
   currentTool?: ToolCall;
+  /** REPL 注入的 cooked stdin 读行（AskUser）；调用前须 pause line editor */
+  readLine?: (prompt: string) => Promise<string>;
 }
 
 export interface ToolResult {

@@ -69,7 +69,7 @@ describe('eval:gate:m2-confirm-once', () => {
   it('session approval short-circuits the prompt entirely', async () => {
     const ctx = makeCtx();
     const tool: ToolCall = { id: 'b1', name: 'Bash', input: { command: 'npm test' } };
-    ctx.state.sessionApprovals = ['Bash:npm'];
+    ctx.state.sessionApprovals = ['Bash:npm:test'];
     ctx.batchConfirm.tools = [tool];
 
     const prompt = vi.fn();

@@ -69,7 +69,7 @@ export async function webFetch(
     let currentUrl = validatedUrl;
     let redirects = 0;
 
-    while (true) {
+    for (;;) {
       let response: Response;
       try {
         response = await fetch(currentUrl, {
@@ -227,7 +227,7 @@ async function readBoundedText(
   const chunks: Uint8Array[] = [];
   let total = 0;
 
-  while (true) {
+  for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
     if (!value) continue;

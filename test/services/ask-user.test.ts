@@ -286,7 +286,7 @@ describe('registerAskUserTool', () => {
     expect(tool).toBeTruthy();
     expect(tool?.name).toBe('AskUser');
     expect(tool?.concurrencySafe).toBe(false);
-    expect(tool?.permissionMode).toBe(PermissionMode.ACCEPT_EDITS);
+    expect(tool?.permissionMode).toBe(PermissionMode.DEFAULT);
     expect(registry.has('AskUser')).toBe(true);
   });
 

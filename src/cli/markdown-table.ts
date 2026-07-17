@@ -26,7 +26,7 @@ export function isTableRow(line: string): boolean {
 /** 是否为 Unicode 框线表的边框/分隔行（无单元格文本） */
 export function isBoxBorderRow(line: string): boolean {
   const t = line.trim();
-  return /^[┌┬┐├┼┤└┴┘─═\s\-]+$/.test(t);
+  return /^[┌┬┐├┼┤└┴┘─═\s-]+$/.test(t);
 }
 
 /** 是否为 |---|---| 或 ├──┼──┤ 分隔行（无数据，应丢弃） */
@@ -34,7 +34,7 @@ export function isTableSeparator(line: string): boolean {
   const t = line.trim();
   if (isBoxBorderRow(t)) return true;
   if (!t.startsWith('|')) return false;
-  return /^\|[\s|:\-]+\|$/.test(t) || /^[\s|:\-]+$/.test(t.slice(1, -1) || t);
+  return /^\|[\s|:-]+\|$/.test(t) || /^[\s|:-]+$/.test(t.slice(1, -1) || t);
 }
 
 /** 拆分单元格：兼容 markdown | 与 Unicode │ */

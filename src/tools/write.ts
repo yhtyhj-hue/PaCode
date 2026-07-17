@@ -16,7 +16,8 @@ export function registerWriteTool(registry: { register: (t: ToolDefinition) => v
       required: ['path', 'content'],
     },
     concurrencySafe: false,
-    permissionMode: PermissionMode.ACCEPT_EDITS,
+    // DEFAULT：会话可确认后写入；ACCEPT_EDITS 模式由 PermissionSystem 免确认
+    permissionMode: PermissionMode.DEFAULT,
     async execute(input, ctx?: ToolContext) {
       const { path, content } = input as { path: string; content: string };
       const root = ctx?.workingDirectory ?? process.cwd();

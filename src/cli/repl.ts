@@ -34,6 +34,7 @@ import { ReplLineEditor } from './repl-line-editor.js';
 import { formatUserMessage } from './repl-ui.js';
 import { formatCostReport } from './cost-estimate.js';
 import { confirmYesNo } from './confirm-prompt.js';
+import { AskUserAbortedError } from '../services/ask-user/index.js';
 import { formatPermissionsReport } from '../permission/format-display.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
 import type { SlashMenuEntry } from './slash-menu.js';
@@ -49,7 +50,11 @@ import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.j
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
 import { formatBridgeStatus } from '../services/bridge/index.js';
-import { getCronStore } from '../services/cron/index.js';
+import {
+  getCronStore,
+  MAX_CRON_DUE_PER_TURN,
+  sanitizeCronPrompt,
+} from '../services/cron/index.js';
 import { cyclePermissionMode } from '../permission/cycle-mode.js';
 
 const RESET = '\x1b[0m';
@@ -122,6 +127,8 @@ export class REPL {
       hookRegistry: this.hookRegistry,
       contextAssembler: new ContextAssembler({ skillsLoader: this.skillsLoader }),
       permissionPrompt: async (tool, batchTools) => this.promptForPermission(tool, batchTools),
+      // AskUser：processMessage 已 pause editor（cooked stdin），禁止再开抢 raw mode 的 reader
+      readLine: (prompt) => this.readAskUserLine(prompt),
     });
 
     if (options.initialSession) {
@@ -1203,8 +1210,10 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       const tokenMeta =
-        turnOutputTokens > 0
-          ? `${DIM}(${elapsed}s · ↓ ${turnOutputTokens} tokens)${RESET}`
+        turnOutputTokens > 0 || modelToolCount > 0
+          ? `${DIM}(${elapsed}s${modelToolCount > 0 ? ` · ${modelToolCount} tools` : ''}${
+              turnOutputTokens > 0 ? ` · ↓ ${turnOutputTokens} tokens` : ''
+            })${RESET}`
           : `${DIM}(${elapsed}s)${RESET}`;
       console.log(`${tokenMeta}\n`);
 
@@ -1231,6 +1240,35 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
         this.inputEditor?.resume();
       }
     }
+  }
+
+  /** AskUser 读行：editor 已 pause，stdin 为 cooked；轮询 interruptRequested */
+  private readAskUserLine(prompt: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+      let settled = false;
+      const cleanup = (): void => {
+        clearInterval(poll);
+        rl.close();
+      };
+      const finish = (value: string): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const abort = (): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new AskUserAbortedError());
+      };
+      rl.on('SIGINT', abort);
+      const poll = setInterval(() => {
+        if (this.interruptRequested || this.exitRequested) abort();
+      }, 100);
+      rl.question(prompt, (answer) => finish(answer));
+    });
   }
 
   private async promptForPermission(
@@ -1357,11 +1395,15 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
   private drainCronDue(session: SessionState): void {
     try {
-      const due = getCronStore().due();
+      const due = getCronStore().due().slice(0, MAX_CRON_DUE_PER_TURN);
       for (const job of due) {
+        const body = sanitizeCronPrompt(job.prompt);
         session.messages.push({
           role: 'user',
-          content: `[ScheduledCron ${job.id}]\n${job.prompt}`,
+          content:
+            `[ScheduledCron ${job.id}]\n` +
+            `--- cron prompt (untrusted scheduled text) ---\n${body}\n` +
+            `--- end cron ---`,
           timestamp: Date.now(),
         });
       }
