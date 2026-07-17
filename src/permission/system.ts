@@ -10,7 +10,7 @@ import {
   ToolDefinition,
 } from '../pkg/types.js';
 import { matchDenyRules, matchAllowAskRules, PermissionRules } from './rules.js';
-import { classifyToolCall } from './classifier.js';
+import { classifyToolCall, type ClassificationResult } from './classifier.js';
 import { checkToolPermissionGate } from './tool-gate.js';
 import { checkBashSecurity, shouldHardBlockBashExecution } from '../tools/bash-secure.js';
 
@@ -31,15 +31,19 @@ export const PLAN_ALLOWED_TOOLS = new Set([
 export interface PermissionSystemOptions {
   rules?: PermissionRules;
   getToolDefinition?: (name: string) => ToolDefinition | undefined;
+  /** 测试注入；默认走 G6/v1 pluggable registry */
+  classify?: (tool: ToolCall, definition?: ToolDefinition) => ClassificationResult;
 }
 
 export class PermissionSystem {
   private rules?: PermissionRules;
   private getToolDefinition?: (name: string) => ToolDefinition | undefined;
+  private classify: (tool: ToolCall, definition?: ToolDefinition) => ClassificationResult;
 
   constructor(options: PermissionSystemOptions = {}) {
     this.rules = options.rules;
     this.getToolDefinition = options.getToolDefinition;
+    this.classify = options.classify ?? classifyToolCall;
   }
 
   getRules(): PermissionRules | undefined {
@@ -81,7 +85,7 @@ export class PermissionSystem {
         }
         return { allowed: true, requiresInteraction: true, interactionType: 'confirm' };
       case PermissionMode.DEFAULT: {
-        const classification = classifyToolCall(tool, definition);
+        const classification = this.classify(tool, definition);
         if (classification.risk === 'safe') {
           return { allowed: true };
         }
@@ -118,7 +122,7 @@ export class PermissionSystem {
 
   /** AUTO：确定性分类器决定是否需要确认 */
   private checkAutoMode(tool: ToolCall, definition?: ToolDefinition): PermissionCheckResult {
-    const classification = classifyToolCall(tool, definition);
+    const classification = this.classify(tool, definition);
 
     if (classification.risk === 'destructive') {
       return { allowed: false, reason: classification.reason ?? 'Destructive operation blocked' };
@@ -141,6 +145,6 @@ export class PermissionSystem {
       if (shouldHardBlockBashExecution(check)) return true;
       return false;
     }
-    return classifyToolCall(tool, definition).risk === 'destructive';
+    return this.classify(tool, definition).risk === 'destructive';
   }
 }

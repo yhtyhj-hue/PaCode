@@ -7,6 +7,7 @@ import { formatDoctorReport, runDoctorChecks } from '../doctor.js';
 import { formatGitDiffView } from '../git-diff-view.js';
 import { getBridgeStatus, formatBridgeStatus } from '../../services/bridge/index.js';
 import { formatAgentsReportLines } from '../agents-display.js';
+import { formatPlanReadOnlyLines } from '../plan-display.js';
 import { getMCPClient } from '../../mcp/client.js';
 import { formatVoiceStatus } from '../../services/voice/index.js';
 import { formatCostReport } from '../cost-estimate.js';
@@ -18,7 +19,7 @@ import { resolveAppConfig } from '../../pkg/app-config.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
-  '/help /clear /status /mode /cost /style /doctor /diff /agents /bridge /voice /permissions /brief /rewind /exit';
+  '/help /clear /status /mode /cost /style /doctor /diff /agents /plan /bridge /voice /permissions /brief /rewind /exit';
 
 export interface TuiSlashContext {
   ctl: TuiController;
@@ -110,6 +111,15 @@ export async function handleTuiSlash(
       const view = formatGitDiffView(process.cwd());
       for (const line of view.split('\n').slice(0, 40)) {
         ctl.appendSystem(line || ' ');
+      }
+      return true;
+    }
+    case 'plan': {
+      const planArg = args.join(' ').trim();
+      for (const line of formatPlanReadOnlyLines(planArg)) {
+        for (const part of line.split('\n')) {
+          ctl.appendSystem(part || ' ');
+        }
       }
       return true;
     }

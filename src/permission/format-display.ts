@@ -15,7 +15,7 @@ export function describePermissionMode(mode: PermissionMode): string {
     case PermissionMode.ACCEPT_EDITS:
       return 'auto-approve Read/Edit/Write/Glob/Grep; confirm others';
     case PermissionMode.AUTO:
-      return 'G6/v0 deterministic classifier (ML deferred; PACODE_CLASSIFIER_AUDIT=1)';
+      return 'G6/v1 pluggable (default v0 deterministic; PACODE_CLASSIFIER / AUDIT)';
     case PermissionMode.DONT_ASK:
       return 'auto-approve except bash-secure destructive / hard-blocked';
     case PermissionMode.BYPASS:

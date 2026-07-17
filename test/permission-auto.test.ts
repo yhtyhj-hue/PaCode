@@ -2,11 +2,19 @@
  * Permission AUTO mode + rule engine tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { PermissionSystem } from '../src/permission/system.js';
 import { PermissionMode } from '../src/pkg/types.js';
 import { matchPermissionRules } from '../src/permission/rules.js';
-import { classifyToolCall, CLASSIFIER_CONTRACT } from '../src/permission/classifier.js';
+import {
+  classifyToolCall,
+  CLASSIFIER_CONTRACT,
+  CLASSIFIER_REGISTRY_CONTRACT,
+  getClassifierBackend,
+  getClassifierRegistryContract,
+  setClassifierBackend,
+  resetClassifierBackend,
+} from '../src/permission/classifier.js';
 
 describe('PermissionRules', () => {
   it('deny rule blocks before allow', () => {
@@ -147,5 +155,51 @@ describe('G6/v0 classifier contract', () => {
     });
     expect(c.risk).toBe('moderate');
     expect(c.category).toBe('orchestration');
+  });
+});
+
+describe('G6/v1 pluggable classifier', () => {
+  afterEach(() => {
+    resetClassifierBackend();
+    delete process.env['PACODE_CLASSIFIER'];
+  });
+
+  it('exposes registry contract and default backend id', () => {
+    expect(getClassifierRegistryContract()).toBe(CLASSIFIER_REGISTRY_CONTRACT);
+    expect(getClassifierBackend().id).toBe('deterministic');
+  });
+
+  it('injected backend is used by classifyToolCall and PermissionSystem', () => {
+    setClassifierBackend({
+      id: 'test-mock',
+      contract: 'g6/test',
+      classify: () => ({
+        risk: 'destructive',
+        reason: 'mock deny',
+        contract: 'g6/test',
+        backend: 'test-mock',
+        category: 'unknown',
+        confidence: 'high',
+      }),
+    });
+    const r = classifyToolCall({ id: '1', name: 'Read', input: { path: 'x' } });
+    expect(r.risk).toBe('destructive');
+    expect(r.backend).toBe('test-mock');
+
+    const ps = new PermissionSystem();
+    const result = ps.check({
+      tool: { id: '1', name: 'Read', input: { path: 'x' } },
+      mode: PermissionMode.AUTO,
+      context: {} as any,
+    });
+    expect(result.allowed).toBe(false);
+  });
+
+  it('unknown PACODE_CLASSIFIER falls back to deterministic', () => {
+    process.env['PACODE_CLASSIFIER'] = 'ml';
+    const r = classifyToolCall({ id: '1', name: 'Read', input: { path: 'x' } });
+    expect(r.contract).toBe(CLASSIFIER_CONTRACT);
+    expect(r.backend).toBe('deterministic');
+    expect(r.risk).toBe('safe');
   });
 });

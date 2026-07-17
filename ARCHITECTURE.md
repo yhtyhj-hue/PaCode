@@ -14,9 +14,9 @@
 | Context Assembly | ~85% | 9 源组装；Skills lazy index 默认 |
 | Compaction | ~92% | L1–L5；L4 路径/工具/错误信号；L5 withRetry |
 | Tool Registry | ~96% | **31 核心工具**（+BashOutput/BashStop/Diagnostics；LSP 别名）+ Plugin |
-| Permission System | ~92% | 7 modes + PermissionRequest hook + session memory |
+| Permission System | ~94% | 7 modes + G6/v1 pluggable classifier + session memory |
 | Memory | ~85% | 用户 `.paude/memory/` + 项目 hash + auto-memory |
-| Hooks / Skills / Plugins / MCP | ~90% | MCP stdio/sse/http/**websocket**；Bridge deferred |
+| Hooks / Skills / Plugins / MCP | ~90% | MCP stdio/sse/http/**websocket**；Bridge v1-partial 远程清单 |
 | CLI / REPL | ~94% | readline 默认 + Ink `--tui`；工具时间线；`/rewind`；`/voice` deferred |
 | 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
 | 测试 | ≥80% | `npm test` + `eval:gate`（M1–M5 + widened）；coverage 仅 `src/**` |
@@ -38,6 +38,7 @@
 - `src/services/agent-scheduler/` — DAG 预取 + 并行 agent
 - `src/services/context-compiler/` — 消息编译 + pairing
 - `src/services/web-fetch/` — HTML→text + prompt injection sanitization
+- `src/services/bridge/` — Bridge status + remote MCP inventory (sessions deferred)
 - `src/services/web-search/` — Brave API + mock fallback
 - `src/services/mcp-sse-http/` — SSE + StreamableHTTP transport
 - `src/services/mcp-auth/` — OAuth PKCE + AES-256-GCM token store
@@ -256,7 +257,7 @@ User Input
 | **Memory/Compaction** | 5-layer pipeline | 上下文压缩 + 文件记忆 | ✅ L1–L5 + project memory |
 | **Session Store** | Append-oriented | 会话持久化 | ✅ `src/session/manager.ts` |
 | **Hooks/Skills/Plugins/MCP** | 4 extensibility | 扩展机制 | ✅ 大部分完成 |
-| **CLI/TUI** | Ink/React | 用户界面 | 🔨 REPL + ANSI（TUI defer） |
+| **CLI/TUI** | Ink/React | 用户界面 | ✅ REPL + Ink `--tui` |
 
 ### 4.2 核心接口定义
 
@@ -1249,7 +1250,7 @@ PaCode/
 | **记忆** | 文件-based | 文件-based + 项目 hash 分区 ✅ |
 | **权限** | 7 modes + ML | 7 modes + G6/v0 deterministic AUTO + tool-gate + 工作区路径边界 ✅ |
 | **压缩** | 5-layer | 5-layer L1–L5（L1 降低 API max_tokens） ✅ |
-| **扩展** | Hooks/Skills/Plugins/MCP | 同上（Ink TUI defer） |
+| **扩展** | Hooks/Skills/Plugins/MCP | 同上 + Ink `--tui` |
 | **工具** | 43 内置 + MCP | 8 核心 + Plugin + MCP；Bash 静态分析（非容器沙箱） ✅ |
 | **测试** | — | 300 tests，80.3% 覆盖率 |
 | **实现** | TypeScript (Bun) | TypeScript（Go core defer） |

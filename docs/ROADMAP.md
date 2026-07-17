@@ -132,7 +132,7 @@ J1 → J2 → J3
 K* 按需插入（永不阻塞 H）
 ```
 
-遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → **G6/v0-deterministic 已落地**（真 ML 延后 g6/v1-ml）。
+遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → **G6/v1-pluggable 已落地**（默认 v0 deterministic；真 ML 延后）。
 
 ---
 
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **G6/v1 pluggable + TUI /plan 只读**：ClassifierBackend 可注入；TUI list/report |
 | 2026-07-17 | **G6/v0 + Bridge v1-partial + TUI /agents**：确定性分类器契约；远程 MCP 清单；TUI 对齐 |
 | 2026-07-17 | **J3 /agents assign_many 可见性**：per-assignment status 行（poll 同源） |
 | 2026-07-17 | **I4 plan execution report**：done/failed 可审计摘要；`/plan report`；complete 保留 failed |
