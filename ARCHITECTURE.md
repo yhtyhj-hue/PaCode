@@ -17,7 +17,7 @@
 | Permission System | ~92% | 7 modes + PermissionRequest hook + session memory |
 | Memory | ~85% | 用户 `.paude/memory/` + 项目 hash + auto-memory |
 | Hooks / Skills / Plugins / MCP | ~90% | MCP stdio/sse/http/**websocket**；Bridge deferred |
-| CLI / REPL | ~92% | 工具时间线；`/rewind` 结构化错误；`/voice` deferred |
+| CLI / REPL | ~94% | readline 默认 + Ink `--tui`；工具时间线；`/rewind`；`/voice` deferred |
 | 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
 | 测试 | ≥80% | `npm test` + `eval:gate`（M1–M5 + widened）；coverage 仅 `src/**` |
 | Eval harness | ✅ | M5 simulated agent CI；live 有 key 时跑 |
@@ -46,7 +46,7 @@
 - `src/services/bash-jobs/` — 后台 Bash + BashOutput 环形缓冲
 - `src/services/voice/` — Voice/Buddy deferred 状态契约
 
-**Defer:** Ink/React TUI（K7）、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、真 language server、Bridge 远程会话、完整 Voice STT（J4 仅 `/voice` 状态面）
+**Defer:** Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、真 language server、Bridge 远程会话、完整 Voice STT（J4 仅 `/voice` 状态面）
 
 **G4 图片：** `ContentBlock.image` + `message-serializer` → Anthropic `media_type`；CLI `--image`；`src/services/image-attach/`
 

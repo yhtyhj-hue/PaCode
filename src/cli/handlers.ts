@@ -39,6 +39,8 @@ Options:
   --api-key <key>         Anthropic API key
   --base-url <url>        Custom API base URL (for proxy)
   --model <model>         Model name (default: claude-sonnet-4-5)
+  --tui                   Launch Ink TUI REPL (also PACODE_TUI=1)
+  --image <path>          Attach image for vision (repeatable; png/jpeg/gif/webp)
 
 CC-Switch Commands:
   pacode cc-switch list              List all configured providers
@@ -66,12 +68,14 @@ Environment:
   CLAUDE_MODEL            Default model
   PACODE_AUTO_APPROVE     Set to 1 to allow tool prompts in non-TTY environments
   PACODE_HOOK_FAIL_OPEN   Set to 1 to continue when PreToolUse hooks throw (default: deny)
+  PACODE_TUI              Set to 1 to launch Ink TUI instead of readline REPL
 
 Options:
   --image <path>          Attach image for vision (repeatable; png/jpeg/gif/webp)
 
 Examples:
   pacode "Read package.json and explain the project"
+  pacode --tui
   pacode -m acceptEdits "Add error handling to index.ts"
   pacode --image shot.png "Describe this screenshot"
   pacode cc-switch add anthropic --api-key sk-xxx

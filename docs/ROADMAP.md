@@ -37,7 +37,7 @@
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
 | Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP alias) | ✅ |
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
-| Ink TUI | ❌ defer（K7）；进度行工具时间线已增强 |
+| Ink TUI | ✅ K7 最小可用：`--tui` / `PACODE_TUI=1`（Ink REPL + 权限确认）；readline 仍为默认 |
 | Voice / Buddy | ❌ deferred 状态面（`/voice`，J4） |
 | M5 工程评测 | ✅ golden + **simulated agent**；live 有 `ANTHROPIC_API_KEY` 时跑 |
 | G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
@@ -53,7 +53,7 @@
 |---|------|----------|------|
 | H1 | **预取可选加速**：配置 `prefetch.enabled` / intent 白名单 / `PACODE_PREFETCH=0` | 关预取时：质检纯 tool loop；开预取时：只加速且可继续 Read | ✅ |
 | H2 | **权限会话记忆**：批准写入 `sessionApprovals`（`Bash:npm` 指纹）；`/clear` 重置 | 同 session 不再对同类 Bash 连环确认；deny 仍最终 | ✅ |
-| H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PostToolUseFailure + Stop；PermissionRequest deferred — REPL 走 confirm-prompt 而非 hook 触发） |
+| H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PostToolUseFailure + Stop + PermissionRequest：stdout approve / exit 2 deny；REPL confirm 仍为默认 UI） |
 | H4 | **工具保真**：Grep 常用旗标；Read 大文件/分页体验；Bash 超时与截断产品化文案 | 对应 unit + 至少 1 条集成 | ✅（Grep: -i/--glob/--exclude/-A/-B/-C/output_mode；Read: offset+limit, 大文件拒绝 + 提示；Bash: truncate 提示加 PaCode 操作建议） |
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | ✅（client.ts createTransport switch on type: stdio/sse/http 全部接线；MCPServerConfig 加 headers 字段；transport 字段类型 union AnyTransport） |
 | H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ✅（DEFAULT 权限；REPL pause 后注入 cooked `readLine`；工具优先 `ctx.readLine`） |
@@ -98,7 +98,7 @@
 | K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP 别名) | ✅（诊断非真 language server） |
 | K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；Bridge 仍 deferred（`/bridge`） |
 | K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice`） |
-| K7 | Ink TUI | defer（进度行工具时间线已增强） |
+| K7 | Ink TUI | ✅ 最小可用（`--tui` / `PACODE_TUI=1`；确认 + transcript + 基础 slash） |
 | J4 | Voice / Buddy | deferred 产品面（`/voice` 状态契约，非 STT） |
 
 Windows PowerShellTool：非 macOS 主线，defer。
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **K7 Ink TUI**：`--tui` / `PACODE_TUI=1` 最小 Ink REPL（权限确认 + transcript + /help/clear/mode） |
 | 2026-07-17 | **对标 CC P0–P2**：M5 simulated+live wiring；retry 500/502/503；BashOutput；PermissionRequest；L4 结构化 compact；MCP websocket；Diagnostics 别名；`/voice`；工具时间线；rewind 结构化错误 |
 | 2026-07-17 | 联合冒烟 + M5 工程评测基线 + G4 图片（--image / ContentBlock）+ Edit 后自动 checkpoint |
 | 2026-07-17 | 二次质检：approvedKeys；apiKey 禁 project；ExitPlanMode/PLAN 白名单；DONT_ASK←bash-secure；cron 下限；hooks execFile；AskUser interrupt |

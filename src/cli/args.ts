@@ -14,6 +14,7 @@ export const CLI_OPTIONS = {
   name: { type: 'string' },
   resume: { type: 'boolean', default: false },
   'session-id': { type: 'string' },
+  tui: { type: 'boolean', default: false },
   /** G4：附加图片路径（可重复），如 --image shot.png */
   image: { type: 'string', multiple: true },
 } as const;

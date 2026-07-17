@@ -23,6 +23,7 @@ import {
 import { parseCliArgs } from './args.js';
 import { loadImageFromFile } from '../services/image-attach/index.js';
 import type { ImageSource } from '../pkg/types.js';
+import { shouldEnableTui, startInkRepl } from './tui/index.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -129,6 +130,20 @@ Get a key at: https://console.anthropic.com/
   }
 
   if (!message) {
+    const useTui = shouldEnableTui({
+      tuiFlag: Boolean(values.tui),
+      env: process.env,
+    });
+    if (useTui) {
+      await startInkRepl({
+        apiKey,
+        baseUrl,
+        model,
+        mode,
+        provider: activeProvider ?? { name: 'default', apiKey },
+      });
+      return;
+    }
     const repl = new REPL({
       apiKey,
       baseUrl,
