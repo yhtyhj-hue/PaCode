@@ -14,6 +14,12 @@ export {
   isParallelAgentsEnabled,
   runParallelAgentPrefetch,
 } from './parallel-orchestrator.js';
+export {
+  preferScriptedPrefetchDag,
+  buildLlmExploreSpecs,
+  runLlmExploreAgents,
+  formatLlmExploreResults,
+} from './llm-explore-orchestrator.js';
 export { getAgentPool, resetAgentPool, type AgentRunSnapshot } from './agent-pool.js';
 export { executeDagPlan, resetDagSequence, type DagExecuteFn } from './executor.js';
 export type { DagPlan, DagNodeSpec, ToolIntent } from './types.js';

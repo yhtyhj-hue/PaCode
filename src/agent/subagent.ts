@@ -235,6 +235,9 @@ export class SubagentManager {
         toolRegistry: registry,
         hookRegistry: options.hookRegistry,
         workingDirectory,
+        // 禁止子引擎再跑 L1/并行 explore，避免递归扇出
+        prefetch: { enabled: false },
+        disableReflection: true,
       };
 
       const engine =

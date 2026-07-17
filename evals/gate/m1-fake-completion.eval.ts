@@ -42,16 +42,19 @@ describe('eval:gate:m1-fake-completion', () => {
     expect(MAX_TOOL_NUDGE_RETRIES).toBeLessThanOrEqual(3);
   });
 
-  it('engine source does not mark toolsUsedInQuery at prefetch start', async () => {
-    // 失败预取不得关掉 M1：toolsUsedInQuery 只在有成功预取或模型 tool_use 后置位
+  it('engine source gates toolsUsedInQuery on successful explore/DAG', async () => {
+    // 失败预取不得关掉 M1：仅成功 explore（有 toolCalls）或非错误 DAG 结果后置位
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const src = readFileSync(join(process.cwd(), 'src/agent/engine.ts'), 'utf-8');
-    const prefetchBlock = src.slice(
-      src.indexOf('dagPrefetched = true'),
-      src.indexOf('// 仅当至少一条预取成功时计为证据')
+    const blockStart = src.indexOf('dagPrefetched = true');
+    expect(blockStart).toBeGreaterThan(-1);
+    // 预取入口附近不得无条件置位
+    const head = src.slice(blockStart, blockStart + 400);
+    expect(head).not.toMatch(/toolsUsedInQuery\s*=\s*true/);
+    expect(src).toMatch(
+      /exploreList\.some\(\(r\) => r\.result\.success && r\.result\.toolCalls > 0\)/
     );
-    expect(prefetchBlock).not.toMatch(/toolsUsedInQuery\s*=\s*true/);
     expect(src).toMatch(/runs\.some\(\(r\) => !r\.result\.isError\)/);
   });
 });

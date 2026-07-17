@@ -1,5 +1,8 @@
 /**
- * 并行 Agent 编排 — 将 inspect/review 拆成 4 路并行 DAG worker（对齐 CC 多 agent UI）
+ * 并行脚本 DAG — 遗留路径；默认不再用于质检
+ *
+ * 仅当 PACODE_PREFETCH_DAG=1 时由 engine 调用。
+ * 真多 agent 见 llm-explore-orchestrator.ts（SubagentManager + LLM）。
  */
 
 import { QueryEvent, ToolCall, ToolResult } from '../../pkg/types.js';

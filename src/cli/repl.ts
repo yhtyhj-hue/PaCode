@@ -1072,7 +1072,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
               });
               transcript.add({
                 kind: 'prefetch',
-                label: `Running ${event.parallelAgents.length} prefetch workers`,
+                label: `Running ${event.parallelAgents.length} explore subagents (LLM)`,
               });
             }
             break;

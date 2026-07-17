@@ -2,7 +2,7 @@
  * 多轮对话执行逻辑 — QueryEngine + 消息序列
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { QueryEngine } from '../src/agent/engine.js';
 import { compileMessagesForApi } from '../src/services/context-compiler/index.js';
 import { ToolRegistry } from '../src/tools/registry.js';
@@ -65,6 +65,11 @@ describe('multi-turn query execution', () => {
   beforeEach(() => {
     registry = new ToolRegistry();
     registerStubs(registry);
+    process.env['PACODE_PREFETCH_DAG'] = '1';
+  });
+
+  afterEach(() => {
+    delete process.env['PACODE_PREFETCH_DAG'];
   });
 
   it('turn 1 prefetch + turn 2 continue produce valid API message chain', async () => {

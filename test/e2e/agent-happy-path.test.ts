@@ -4,7 +4,7 @@
  * 无真实 LLM；验证完整 QueryEngine 回路与会话注入。
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { QueryEngine } from '../../src/agent/engine.js';
 import { serializeMessagesForApi } from '../../src/agent/message-serializer.js';
 import { ToolRegistry } from '../../src/tools/registry.js';
@@ -38,6 +38,11 @@ describe('e2e agent happy path', () => {
   beforeEach(() => {
     registry = new ToolRegistry();
     registerPrefetchStubs(registry);
+    process.env['PACODE_PREFETCH_DAG'] = '1';
+  });
+
+  afterEach(() => {
+    delete process.env['PACODE_PREFETCH_DAG'];
   });
 
   it('qualification review runs parallel agents then streams summary', async () => {

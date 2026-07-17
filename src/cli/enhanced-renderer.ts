@@ -70,7 +70,7 @@ export class EnhancedRenderer {
     const elapsed = Math.max(1, options.elapsedSec ?? 1);
     const labels = agents.map((a) => a.label).join(' · ');
     process.stdout.write(
-      `\n${ORANGE}*${RESET} ${ORANGE}Running ${agents.length} prefetch workers…${RESET}${DIM} (${elapsed}s)${RESET}\n`
+      `\n${ORANGE}*${RESET} ${ORANGE}Running ${agents.length} explore subagents…${RESET}${DIM} (${elapsed}s)${RESET}\n`
     );
     process.stdout.write(`${DIM}  ${labels}${RESET}\n`);
   }
@@ -88,7 +88,7 @@ export class EnhancedRenderer {
     const tokens = options.outputTokens ?? 0;
     const tokenPart = tokens > 0 ? ` · ↓ ${tokens} tokens` : '';
     const header = options.doneHeader
-      ? `${GREEN}*${RESET} ${GREEN}Prefetch complete${RESET}${DIM} (${elapsed}s${tokenPart})${RESET}`
+      ? `${GREEN}*${RESET} ${GREEN}Explore complete${RESET}${DIM} (${elapsed}s${tokenPart})${RESET}`
       : `${ORANGE}*${RESET} ${ORANGE}Accomplishing…${RESET}${DIM} (${elapsed}s${tokenPart})${RESET}`;
 
     process.stdout.write(`\n${header}\n`);

@@ -57,9 +57,13 @@ import {
   isParallelAgentsEnabled,
   runParallelAgentPrefetch,
   buildParallelAgentTasks,
+  preferScriptedPrefetchDag,
+  runLlmExploreAgents,
+  formatLlmExploreResults,
 } from '../services/agent-scheduler/index.js';
+import type { SubagentResult } from './subagent.js';
 
-const DAG_PREFETCH_NOTE = 'Running intent DAG prefetch before model summary.';
+const DAG_PREFETCH_NOTE = 'Running intent prefetch / LLM explore before model summary.';
 
 /** 模型未调工具时的重试上限 */
 export const MAX_TOOL_NUDGE_RETRIES = 1;
@@ -98,14 +102,20 @@ export class QueryEngine {
   private workingDirectory: string;
   private readLine?: (prompt: string) => Promise<string>;
   private disableReflection: boolean;
+  private apiKey?: string;
+  private baseUrl?: string;
+  private defaultModel?: string;
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
     const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
     const baseURL = options.baseUrl ?? process.env['ANTHROPIC_BASE_URL'];
+    this.apiKey = apiKey;
+    this.baseUrl = baseURL;
     this.client = options.anthropicClient ?? new Anthropic({ apiKey, baseURL });
     const appConfig = resolveAppConfig();
     this.contextMaxTokens = appConfig.contextMaxTokens;
+    this.defaultModel = appConfig.model;
     this.prefetchConfig = options.prefetch ?? appConfig.prefetch;
     this.workingDirectory = options.workingDirectory ?? process.cwd();
     this.readLine = options.readLine;
@@ -236,7 +246,8 @@ export class QueryEngine {
           effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
         }
 
-        // L1 调度：intent DAG 预取（可关：prefetch.enabled / PACODE_PREFETCH=0）
+        // L1：inspect/review/audit → 真 LLM explore Subagent；其它 intent → 脚本 DAG
+        // 逃逸：PACODE_PREFETCH_DAG=1 强制脚本；PACODE_PARALLEL_AGENTS=0 关并行
         const dagPlan = !dagPrefetched
           ? resolveDagPlanWithHistory(pinnedIntent, state.messages)
           : null;
@@ -247,7 +258,6 @@ export class QueryEngine {
         ) {
           dagPrefetched = true;
           deferredText = [];
-          // 预取不是模型 tool 证据：失败/空预取不得关掉 M1 nudge（toolsUsedInQuery）
           this.log.debug(DAG_PREFETCH_NOTE);
 
           const skillCtx = await loadSkillContextForIntent(dagPlan.intent);
@@ -255,84 +265,161 @@ export class QueryEngine {
             yield { type: 'skill_loaded', skills: skillCtx.loadedNames };
           }
 
-          const useParallelPrefetch =
+          const wantParallelExplore =
             isParallelAgentsEnabled() &&
+            !preferScriptedPrefetchDag() &&
             (dagPlan.intent === 'inspect_project' ||
               dagPlan.intent === 'review_implementation' ||
               dagPlan.intent === 'code_audit');
 
           const queryId = `q_${state.sessionId}_${Date.now()}`;
-          const batchNodeSpecs = useParallelPrefetch
-            ? buildParallelAgentTasks(dagPlan.intent).flatMap((t) => t.nodes)
-            : dagPlan.nodes;
-          const prefetchBatchTools: ToolCall[] = batchNodeSpecs.map((node, i) => ({
-            id: `dag_${node.id}_${i + 1}`,
-            name: node.name,
-            input: node.input,
-          }));
-          const prefetchBatchConfirm = {
-            promise: null as Promise<boolean> | null,
-            tools: prefetchBatchTools,
-          };
-          const prefetchExecute = async (call: ToolCall) => {
-            const blocked = await authorizePrefetchTool(call, {
-              permissionSystem: this.permissionSystem,
-              mode,
-              state,
-              prompt: this.permissionPrompt,
+
+          if (wantParallelExplore) {
+            // 真 Subagent：各自独立 QueryEngine + 工具循环
+            const exploreGen = runLlmExploreAgents(dagPlan.intent, {
+              apiKey: this.apiKey,
+              baseUrl: this.baseUrl,
+              model: effectiveOptions.model ?? this.defaultModel,
+              toolRegistry: this.toolRegistry,
+              hookRegistry: this.hookRegistry,
+              workingDirectory: this.workingDirectory,
               shouldAbort,
-              batchConfirm: prefetchBatchConfirm,
+              queryId,
+              userIntent: pinnedIntent,
             });
-            if (blocked) return blocked;
-            const need = this.permissionSystem.check({ tool: call, mode, context: state });
-            if (need.requiresInteraction) {
-              approvedKeys.add(approvalKey(call));
-              rememberSessionApproval(state, call);
-            }
-            return this.executeTool(call, state);
-          };
-          const prefetchGen = useParallelPrefetch
-            ? runParallelAgentPrefetch(dagPlan.intent, prefetchExecute, queryId)
-            : runIntentPrefetch(dagPlan, prefetchExecute);
-          let runs: Array<{ tool: ToolCall; result: ToolResult }> = [];
+            let exploreList: Array<{ label: string; result: SubagentResult }> = [];
 
-          while (true) {
-            const step = await prefetchGen.next();
-            if (step.done) {
-              runs = step.value ?? [];
-              break;
+            while (true) {
+              const step = await exploreGen.next();
+              if (step.done) {
+                exploreList = step.value ?? [];
+                break;
+              }
+              if (shouldAbort()) {
+                yield {
+                  type: 'error',
+                  error: { code: 'ABORTED', message: 'Query interrupted' },
+                };
+                break;
+              }
+              yield step.value;
             }
-            if (shouldAbort()) {
+
+            if (shouldAbort()) break;
+
+            if (exploreList.length > 0) {
               yield {
-                type: 'error',
-                error: { code: 'ABORTED', message: 'Query interrupted' },
+                type: 'prefetch_complete',
+                prefetchTools: exploreList.map((r, i) => ({
+                  id: `explore_${i}`,
+                  name: 'Explore',
+                  input: { agent: r.label, tools: r.result.toolCalls },
+                })),
               };
-              break;
+              const body = [
+                formatLlmExploreResults(dagPlan.intent, exploreList),
+                skillCtx.markdown ? `\n## Skills\n${skillCtx.markdown}` : '',
+              ]
+                .filter(Boolean)
+                .join('\n');
+              state.messages.push({
+                role: 'user',
+                content: body,
+                timestamp: Date.now(),
+              });
+              if (exploreList.some((r) => r.result.success && r.result.toolCalls > 0)) {
+                toolsUsedInQuery = true;
+              }
+              effectiveOptions = {
+                ...effectiveOptions,
+                toolChoice: 'auto',
+                suppressTools: false,
+              };
             }
-            yield step.value;
-          }
+          } else {
+            // 脚本 DAG（显式 PACODE_PREFETCH_DAG=1，或非并行意图）
+            const useScriptedParallel =
+              isParallelAgentsEnabled() &&
+              preferScriptedPrefetchDag() &&
+              (dagPlan.intent === 'inspect_project' ||
+                dagPlan.intent === 'review_implementation' ||
+                dagPlan.intent === 'code_audit');
 
-          if (shouldAbort()) break;
-
-          if (runs.length > 0) {
-            yield {
-              type: 'prefetch_complete',
-              prefetchTools: runs.map((r) => r.tool),
+            const batchNodeSpecs = useScriptedParallel
+              ? buildParallelAgentTasks(dagPlan.intent).flatMap((t) => t.nodes)
+              : dagPlan.nodes;
+            const prefetchBatchTools: ToolCall[] = batchNodeSpecs.map((node, i) => ({
+              id: `dag_${node.id}_${i + 1}`,
+              name: node.name,
+              input: node.input,
+            }));
+            const prefetchBatchConfirm = {
+              promise: null as Promise<boolean> | null,
+              tools: prefetchBatchTools,
             };
-            state.messages.push({
-              role: 'user',
-              content: formatDagResults(dagPlan.intent, runs, skillCtx.markdown),
-              timestamp: Date.now(),
-            });
-            // 仅当至少一条预取成功时计为证据；全失败则保留 M1 nudge
-            if (runs.some((r) => !r.result.isError)) {
-              toolsUsedInQuery = true;
+            const prefetchExecute = async (call: ToolCall) => {
+              const blocked = await authorizePrefetchTool(call, {
+                permissionSystem: this.permissionSystem,
+                mode,
+                state,
+                prompt: this.permissionPrompt,
+                shouldAbort,
+                batchConfirm: prefetchBatchConfirm,
+              });
+              if (blocked) return blocked;
+              const need = this.permissionSystem.check({
+                tool: call,
+                mode,
+                context: state,
+              });
+              if (need.requiresInteraction) {
+                approvedKeys.add(approvalKey(call));
+                rememberSessionApproval(state, call);
+              }
+              return this.executeTool(call, state);
+            };
+            const prefetchGen = useScriptedParallel
+              ? runParallelAgentPrefetch(dagPlan.intent, prefetchExecute, queryId)
+              : runIntentPrefetch(dagPlan, prefetchExecute);
+            let runs: Array<{ tool: ToolCall; result: ToolResult }> = [];
+
+            while (true) {
+              const step = await prefetchGen.next();
+              if (step.done) {
+                runs = step.value ?? [];
+                break;
+              }
+              if (shouldAbort()) {
+                yield {
+                  type: 'error',
+                  error: { code: 'ABORTED', message: 'Query interrupted' },
+                };
+                break;
+              }
+              yield step.value;
             }
-            effectiveOptions = {
-              ...effectiveOptions,
-              toolChoice: 'auto',
-              suppressTools: false,
-            };
+
+            if (shouldAbort()) break;
+
+            if (runs.length > 0) {
+              yield {
+                type: 'prefetch_complete',
+                prefetchTools: runs.map((r) => r.tool),
+              };
+              state.messages.push({
+                role: 'user',
+                content: formatDagResults(dagPlan.intent, runs, skillCtx.markdown),
+                timestamp: Date.now(),
+              });
+              if (runs.some((r) => !r.result.isError)) {
+                toolsUsedInQuery = true;
+              }
+              effectiveOptions = {
+                ...effectiveOptions,
+                toolChoice: 'auto',
+                suppressTools: false,
+              };
+            }
           }
 
           if (shouldAbort()) {

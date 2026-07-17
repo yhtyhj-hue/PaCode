@@ -2,7 +2,7 @@
  * QueryEngine.query() integration tests — mocked Anthropic stream
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { QueryEngine } from '../src/agent/engine.js';
 import { serializeMessagesForApi } from '../src/agent/message-serializer.js';
 import { ToolRegistry } from '../src/tools/registry.js';
@@ -52,6 +52,12 @@ describe('QueryEngine.query()', () => {
 
   beforeEach(() => {
     registry = new ToolRegistry();
+    // 引擎测试覆盖脚本 DAG；真 LLM explore 见 llm-explore-orchestrator.test.ts
+    process.env['PACODE_PREFETCH_DAG'] = '1';
+  });
+
+  afterEach(() => {
+    delete process.env['PACODE_PREFETCH_DAG'];
   });
 
   it('streams text deltas and persists assistant message on end_turn', async () => {

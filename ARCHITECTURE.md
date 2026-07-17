@@ -35,7 +35,7 @@
 
 ### 8 个 service 目录
 
-- `src/services/agent-scheduler/` — DAG 预取 + 并行 agent
+- `src/services/agent-scheduler/` — DAG 预取 + **默认真 LLM explore Subagent**（`PACODE_PREFETCH_DAG=1` 回退脚本）
 - `src/services/context-compiler/` — 消息编译 + pairing
 - `src/services/web-fetch/` — HTML→text + prompt injection sanitization
 - `src/services/bridge/` — Bridge v1-partial MCP 清单 + **v1-local** session relay

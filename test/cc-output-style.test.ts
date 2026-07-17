@@ -76,7 +76,7 @@ describe('EnhancedRenderer CC style', () => {
       { elapsedSec: 1 }
     );
     let out = writeSpy.mock.calls.map((c) => String(c[0])).join('');
-    expect(out).toContain('Running 2 prefetch workers');
+    expect(out).toContain('Running 2 explore subagents');
     expect(out).not.toContain('Accomplishing');
 
     writeSpy.mockClear();
@@ -88,7 +88,7 @@ describe('EnhancedRenderer CC style', () => {
       { elapsedSec: 4 }
     );
     out = writeSpy.mock.calls.map((c) => String(c[0])).join('');
-    expect(out).toContain('Prefetch complete');
+    expect(out).toContain('Explore complete');
     expect(out).toContain('Agent 核心回路');
   });
 });

@@ -30,7 +30,7 @@
 |------|------|
 | Query while-loop + 流式 + 并行 concurrencySafe | ✅ |
 | 7 权限模式 + deny-first + DEFAULT 只读免确认 + 单键确认 | ✅ |
-| L1 预取（prefetch workers，非假 Subagent）+ 预取后仍可 tool | ✅ |
+| L1 预取 | ✅ **默认真 LLM explore Subagent**（inspect/review/audit）；`PACODE_PREFETCH_DAG=1` 才用脚本 DAG |
 | Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
 | 5 层 compact 管道形态 | ✅ L4 结构化折叠 + L5 5xx 重试 |
 | MCP stdio + SSE + HTTP + WebSocket | ✅；`/bridge`=v1-partial 远程清单 + **bridge/v1-local** 本机会话中继（`pacode bridge serve`） |
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **真 LLM explore**：inspect/review/audit 默认 SubagentManager 并行；脚本 DAG 需 PACODE_PREFETCH_DAG=1 |
 | 2026-07-17 | **超越 CC 六项**：M5 并行+速度断言；`/effort`/`/vim`/`/new`；bridge/v1-local；LSP client；Voice STT pipe；G6 ml backend |
 | 2026-07-17 | **对标 CC 深度质检**：M5 对齐；Voice/Bridge/LSP 落后；纠偏 M3/H7 文档过度声明 |
 | 2026-07-17 | **M5 vs CC 复验**：easy 双方 passRate=1（claude 2.1.207；pacode sonnet-4-6） |
