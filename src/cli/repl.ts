@@ -72,7 +72,20 @@ import {
   formatBridgeSessionOp,
   parseBridgeSessionArgs,
 } from '../services/bridge/index.js';
-import { formatVoiceStatus } from '../services/voice/index.js';
+import {
+  formatVoiceStatus,
+  getVoiceStatus,
+  startVoiceListening,
+  stopVoiceListening,
+  setBuddyNarration,
+  setVoiceTranscriptHandler,
+  buddySystemHint,
+} from '../services/voice/index.js';
+import {
+  effortMaxTokens,
+  formatEffortStatus,
+  parseEffortLevel,
+} from './effort.js';
 import {
   getCronStore,
   MAX_CRON_DUE_PER_TURN,
@@ -193,6 +206,9 @@ export class REPL {
     this.printWelcome();
 
     this.inputEditor = new ReplLineEditor();
+    setVoiceTranscriptHandler((text) => {
+      this.inputEditor?.injectText(text);
+    });
     this.beginInterruptListener();
     try {
       await this.runInputLoop(true);
@@ -497,17 +513,37 @@ export class REPL {
         this.handleBridge(args);
         break;
       case '/voice':
-        this.handleVoice();
+        this.handleVoice(args);
         break;
       case '/cron':
         this.handleCron(args);
         break;
-      case '/effort':
-        console.log(`${DIM}Effort levels are not implemented yet. Use /model to pick a model.${RESET}`);
+      case '/effort': {
+        const level = parseEffortLevel(args[0]);
+        const session = this.getOrCreateSession();
+        if (!level) {
+          console.log(`${DIM}${formatEffortStatus(session.effort)}${RESET}`);
+          break;
+        }
+        session.effort = level;
+        console.log(`${GREEN}✓${RESET} ${formatEffortStatus(level)}`);
         break;
-      case '/vim':
-        console.log(`${DIM}Vim mode is not implemented. Use the line editor as-is.${RESET}`);
+      }
+      case '/vim': {
+        const on = args[0]?.toLowerCase();
+        if (on === 'off' || on === '0' || on === 'false') {
+          this.inputEditor?.setVimEnabled(false);
+          console.log(`${GREEN}✓${RESET} Vim mode off`);
+        } else if (on === 'on' || on === '1' || on === 'true' || !on) {
+          this.inputEditor?.setVimEnabled(true);
+          console.log(
+            `${GREEN}✓${RESET} Vim mode on (Esc=normal, i/a=insert, hjkl move, x delete, d clear)`
+          );
+        } else {
+          console.log(`${DIM}Usage: /vim [on|off]${RESET}`);
+        }
         break;
+      }
       case '/exit':
       case '/quit':
         this.exitRequested = true;
@@ -524,7 +560,8 @@ export class REPL {
     const groups: Record<string, [string, string][]> = {
       'Session Management': [
         ['/help', 'Show this help'],
-        ['/clear', 'Clear conversation history (/reset)'],
+        ['/clear', 'Clear conversation history (/reset /new)'],
+        ['/new', 'Alias for /clear — start a fresh conversation'],
         ['/compact', 'Compress conversation to reduce tokens'],
         ['/context', 'Show context usage'],
         ['/resume', 'Resume a saved session'],
@@ -536,7 +573,7 @@ export class REPL {
         ['/doctor', 'Run local health checks'],
         ['/diff', 'git status + diff --stat (read-only)'],
         ['/bridge', 'Bridge status + remote MCP; /bridge session list|attach'],
-        ['/voice', 'Voice / Buddy status (deferred)'],
+        ['/voice', 'Voice STT pipe status (/voice start|stop|status)'],
         ['/cron', 'List/create/delete in-process scheduled prompts'],
         ['/cost', 'Show token usage and cost'],
         ['/memory', 'Show memory file locations'],
@@ -550,6 +587,8 @@ export class REPL {
       Configuration: [
         ['/mode [name]', 'Change permission mode (or Shift+Tab)'],
         ['/model [name]', 'Show or change model'],
+        ['/effort [low|medium|high]', 'Set maxTokens budget for replies'],
+        ['/vim [on|off]', 'Toggle vi keybindings in the line editor'],
         ['/style [name]', 'Output style: default/cost/full/minimal'],
         ['/init', 'Initialize project with CLAUDE.md'],
       ],
@@ -1004,6 +1043,8 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
           message,
           options: {
             model: this.model,
+            maxTokens: effortMaxTokens(session.effort ?? 'medium'),
+            systemPrompt: buddySystemHint() ?? undefined,
             shouldAbort: () => this.interruptRequested || this.exitRequested,
           },
         },
@@ -1293,10 +1334,21 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     console.log('');
   }
 
-  /** J4: Voice / Buddy 状态（明确 deferred） */
-  private handleVoice(): void {
+  /** Voice STT: start|stop|status|buddy */
+  private handleVoice(args: string[] = []): void {
+    const sub = (args[0] ?? 'status').toLowerCase();
     console.log('');
-    console.log(formatVoiceStatus());
+    if (sub === 'start') {
+      console.log(formatVoiceStatus(startVoiceListening()));
+    } else if (sub === 'stop') {
+      console.log(formatVoiceStatus(stopVoiceListening()));
+    } else if (sub === 'buddy') {
+      const on = (args[1] ?? 'on').toLowerCase();
+      setBuddyNarration(on !== 'off' && on !== '0' && on !== 'false');
+      console.log(formatVoiceStatus(getVoiceStatus()));
+    } else {
+      console.log(formatVoiceStatus(getVoiceStatus()));
+    }
     console.log('');
   }
 

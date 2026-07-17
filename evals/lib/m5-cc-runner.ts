@@ -14,6 +14,15 @@ import {
   readTaskPrompt,
 } from './m5-grader.js';
 import { resolveM5LiveCredentials } from './m5-live-runner.js';
+import {
+  formatSpeedAssert,
+  mapPool,
+  meetsSpeedRatio,
+  resolveM5Concurrency,
+  resolveSpeedMetric,
+  resolveSpeedRatio,
+  sumDurationMs,
+} from './m5-speed.js';
 
 export interface M5CcRunResult {
   taskId: string;
@@ -40,6 +49,15 @@ export interface M5CompareReport {
   threshold: number;
   pacodePassRate: number;
   ccPassRate: number;
+  /** 任务 duration 之和（诊断） */
+  pacodeTotalMs: number;
+  ccTotalMs: number;
+  /** 套件墙钟（并行后经历时间；速度断言优先用此） */
+  pacodeWallMs?: number;
+  ccWallMs?: number;
+  speedMetric: 'wall' | 'sum';
+  speedRatio: number;
+  speedOk: boolean;
   tasks: M5CompareTaskRow[];
   note: string;
   claudeVersion?: string;
@@ -142,6 +160,7 @@ export async function runM5ClaudeCodeAgent(
     timeoutMs?: number;
     env?: NodeJS.ProcessEnv;
     tasks?: string[];
+    concurrency?: number;
   } = {}
 ): Promise<M5CcRunResult[]> {
   const cli = options.cli ?? resolveClaudeCli();
@@ -151,9 +170,9 @@ export async function runM5ClaudeCodeAgent(
   const timeoutMs = options.timeoutMs ?? 180_000;
   const env = options.env ?? buildClaudeEnv();
   const tasks = options.tasks ?? [...M5_TASKS];
-  const results: M5CcRunResult[] = [];
+  const concurrency = options.concurrency ?? resolveM5Concurrency();
 
-  for (const taskId of tasks) {
+  return mapPool(tasks, concurrency, async (taskId) => {
     const started = Date.now();
     const fixtureRoot = join(fixturesRoot, taskId);
     const workDir = join(workRoot, taskId);
@@ -163,9 +182,7 @@ export async function runM5ClaudeCodeAgent(
     const prompt = [
       readTaskPrompt(fixtureRoot),
       '',
-      'Working directory is already the project root.',
-      'Use tools to change files — do not only describe a plan.',
-      'When finished, `node verify.mjs` must pass.',
+      'Use Edit/Write in this cwd; harness runs `node verify.mjs`.',
     ].join('\n');
 
     const run = await runClaudePrint({
@@ -176,7 +193,7 @@ export async function runM5ClaudeCodeAgent(
       env,
     });
     const grade = gradeM5Task(taskId, workDir);
-    results.push({
+    return {
       taskId,
       passed: grade.passed,
       message: grade.passed
@@ -193,9 +210,8 @@ export async function runM5ClaudeCodeAgent(
       exitCode: run.exitCode,
       stdoutPreview: preview(run.stdout),
       stderrPreview: preview(run.stderr),
-    });
-  }
-  return results;
+    };
+  });
 }
 
 /** 并排汇总（无密钥） */
@@ -216,6 +232,8 @@ export function buildM5CompareReport(options: {
   note: string;
   claudeVersion?: string;
   taskIds?: string[];
+  pacodeWallMs?: number;
+  ccWallMs?: number;
 }): M5CompareReport {
   const threshold = options.threshold ?? 0.5;
   const ids = options.taskIds ?? [...M5_TASKS];
@@ -236,11 +254,28 @@ export function buildM5CompareReport(options: {
     tasks.length === 0 ? 1 : tasks.filter((t) => t.pacodePassed).length / tasks.length;
   const ccPassRate =
     tasks.length === 0 ? 1 : tasks.filter((t) => t.ccPassed).length / tasks.length;
+  const pacodeTotalMs = sumDurationMs(tasks.map((t) => ({ durationMs: t.pacodeDurationMs })));
+  const ccTotalMs = sumDurationMs(tasks.map((t) => ({ durationMs: t.ccDurationMs })));
+  const speedRatio = resolveSpeedRatio();
+  const metric = resolveSpeedMetric({
+    pacodeWallMs: options.pacodeWallMs,
+    ccWallMs: options.ccWallMs,
+    pacodeSumMs: pacodeTotalMs,
+    ccSumMs: ccTotalMs,
+  });
+  const speedOk = meetsSpeedRatio(metric.pacodeMs, metric.ccMs, speedRatio);
   return {
     updatedAt: new Date().toISOString(),
     threshold,
     pacodePassRate,
     ccPassRate,
+    pacodeTotalMs,
+    ccTotalMs,
+    pacodeWallMs: options.pacodeWallMs,
+    ccWallMs: options.ccWallMs,
+    speedMetric: metric.metric,
+    speedRatio,
+    speedOk,
     tasks,
     note: options.note,
     claudeVersion: options.claudeVersion,
@@ -251,3 +286,11 @@ export function writeM5CompareReport(outPath: string, report: M5CompareReport): 
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, JSON.stringify(report, null, 2));
 }
+
+export {
+  formatSpeedAssert,
+  meetsSpeedRatio,
+  sumDurationMs,
+  resolveSpeedRatio,
+  resolveSpeedMetric,
+};

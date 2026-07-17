@@ -12,7 +12,14 @@ import {
   runM5LiveAgent,
   formatM5FailureSummary,
 } from '../lib/m5-live-runner.js';
-import { buildM5CompareReport, readClaudeVersion, resolveClaudeCli, runM5ClaudeCodeAgent, writeM5CompareReport } from '../lib/m5-cc-runner.js';
+import {
+  buildM5CompareReport,
+  formatSpeedAssert,
+  readClaudeVersion,
+  resolveClaudeCli,
+  runM5ClaudeCodeAgent,
+  writeM5CompareReport,
+} from '../lib/m5-cc-runner.js';
 
 const FIXTURES = join(process.cwd(), 'evals/fixtures/m5-hard');
 const THRESHOLD = 0.5;
@@ -22,17 +29,55 @@ const canCompare = Boolean(liveCreds.apiKey && claudeCli);
 
 describe.skipIf(!canCompare)('eval:periodic:m5-hard-cc-compare', () => {
   let workDir: string;
-  beforeEach(() => { workDir = mkdtempSync(join(tmpdir(), 'm5h-cmp-')); });
-  afterEach(() => { rmSync(workDir, { recursive: true, force: true }); });
-  it('PaCode and Claude Code hard suite both meet threshold', async () => {
+  beforeEach(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'm5h-cmp-'));
+  });
+  afterEach(() => {
+    rmSync(workDir, { recursive: true, force: true });
+  });
+  it('PaCode and Claude Code hard suite meet threshold and speed', async () => {
     const tasks = [...M5_HARD_TASKS];
-    const pacodeRuns = await runM5LiveAgent(FIXTURES, join(workDir, 'pacode'), { timeoutMs: 180_000, apiKey: liveCreds.apiKey, baseUrl: liveCreds.baseUrl, model: liveCreds.model, tasks });
-    const ccRuns = await runM5ClaudeCodeAgent(FIXTURES, join(workDir, 'cc'), { cli: claudeCli!, timeoutMs: 180_000, tasks });
+    const timed = async <T>(fn: () => Promise<T>): Promise<{ value: T; wallMs: number }> => {
+      const t0 = Date.now();
+      const value = await fn();
+      return { value, wallMs: Date.now() - t0 };
+    };
+    // PaCode 可并行；CC 串行（贴近 CLI）
+    const pacodePack = await timed(() =>
+      runM5LiveAgent(FIXTURES, join(workDir, 'pacode'), {
+        timeoutMs: 180_000,
+        apiKey: liveCreds.apiKey,
+        baseUrl: liveCreds.baseUrl,
+        model: liveCreds.model,
+        tasks,
+      })
+    );
+    const ccPack = await timed(() =>
+      runM5ClaudeCodeAgent(FIXTURES, join(workDir, 'cc'), {
+        cli: claudeCli!,
+        timeoutMs: 180_000,
+        tasks,
+        concurrency: 1,
+      })
+    );
     const report = buildM5CompareReport({
-      pacode: pacodeRuns.map((r) => ({ taskId: r.taskId, passed: r.passed, durationMs: r.durationMs, message: r.message })),
-      cc: ccRuns.map((r) => ({ taskId: r.taskId, passed: r.passed, durationMs: r.durationMs, message: r.message })),
-      threshold: THRESHOLD, taskIds: tasks,
-      note: `m5-hard head-to-head via ${liveCreds.source}; model=${liveCreds.model ?? 'default'}`,
+      pacode: pacodePack.value.map((r) => ({
+        taskId: r.taskId,
+        passed: r.passed,
+        durationMs: r.durationMs,
+        message: r.message,
+      })),
+      cc: ccPack.value.map((r) => ({
+        taskId: r.taskId,
+        passed: r.passed,
+        durationMs: r.durationMs,
+        message: r.message,
+      })),
+      pacodeWallMs: pacodePack.wallMs,
+      ccWallMs: ccPack.wallMs,
+      threshold: THRESHOLD,
+      taskIds: tasks,
+      note: `m5-hard head-to-head via ${liveCreds.source}; model=${liveCreds.model ?? 'default'}; speed=wall`,
       claudeVersion: claudeCli ? readClaudeVersion(claudeCli) : undefined,
     });
     writeM5CompareReport(join(FIXTURES, 'COMPARE.json'), report);
@@ -63,6 +108,15 @@ describe.skipIf(!canCompare)('eval:periodic:m5-hard-cc-compare', () => {
             durationMs: x.ccDurationMs,
           }))
         )
+    ).toBe(true);
+    expect(
+      report.speedOk,
+      formatSpeedAssert(
+        report.pacodeWallMs ?? report.pacodeTotalMs,
+        report.ccWallMs ?? report.ccTotalMs,
+        report.speedRatio,
+        report.speedMetric
+      )
     ).toBe(true);
   }, 900_000);
 });

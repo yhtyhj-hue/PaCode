@@ -25,6 +25,8 @@ export interface ReplLineOptions {
   onModeCycle?: () => PermissionMode;
 }
 
+export type VimEditorMode = 'insert' | 'normal';
+
 /** 输入块行数：上横线 / 输入 / 下横线 / 状态栏 */
 const INPUT_BLOCK_LINES = 4;
 
@@ -41,6 +43,7 @@ export function zoneClearCursorUp(totalClear: number): number {
 
 export class ReplLineEditor {
   private buffer = '';
+  private cursor = 0;
   private resolve: ((value: string | null) => void) | null = null;
   private keyHandler: ((str: string, key: readline.Key) => void) | null = null;
   private active = false;
@@ -49,11 +52,27 @@ export class ReplLineEditor {
   private menuVisibleLines = 0;
   /** 输入区已绘制时才向上清除，避免首次绘制误删上方内容 */
   private zoneDrawn = false;
+  /** /vim 启用后：Esc → normal；i/a → insert */
+  private vimEnabled = false;
+  private vimMode: VimEditorMode = 'insert';
 
   constructor() {
     if (process.stdin.isTTY) {
       readline.emitKeypressEvents(process.stdin);
     }
+  }
+
+  setVimEnabled(enabled: boolean): void {
+    this.vimEnabled = enabled;
+    this.vimMode = 'insert';
+  }
+
+  isVimEnabled(): boolean {
+    return this.vimEnabled;
+  }
+
+  getVimMode(): VimEditorMode {
+    return this.vimMode;
   }
 
   pause(): void {
@@ -86,6 +105,8 @@ export class ReplLineEditor {
     }
 
     this.buffer = '';
+    this.cursor = 0;
+    this.vimMode = 'insert';
     this.menuVisibleLines = 0;
     this.zoneDrawn = false;
     this.active = true;
@@ -140,8 +161,12 @@ export class ReplLineEditor {
   }
 
   private positionOnInputLine(input: string): void {
+    const cursor = Math.max(0, Math.min(this.cursor, input.length));
     readline.moveCursor(process.stdout, 0, -INPUT_LINE_TO_BLOCK_END);
-    readline.cursorTo(process.stdout, visibleWidth(formatInputPrompt()) + visibleWidth(input));
+    readline.cursorTo(
+      process.stdout,
+      visibleWidth(formatInputPrompt()) + visibleWidth(input.slice(0, cursor))
+    );
   }
 
   /**
@@ -218,7 +243,22 @@ export class ReplLineEditor {
 
   clearBuffer(): void {
     this.buffer = '';
+    this.cursor = 0;
     if (this.active) this.fullRedraw();
+  }
+
+  /** 注入文本到当前输入（Voice STT）；返回是否写入成功 */
+  injectText(text: string): boolean {
+    if (!this.active || this.paused) return false;
+    const t = text.trim();
+    if (!t) return false;
+    const before = this.buffer.slice(0, this.cursor);
+    const after = this.buffer.slice(this.cursor);
+    const sep = before.length > 0 && !before.endsWith(' ') ? ' ' : '';
+    this.buffer = before + sep + t + after;
+    this.cursor = (before + sep + t).length;
+    this.fullRedraw();
+    return true;
   }
 
   /** Ctrl+C 输出 ^C 提示后重绘底部输入区 */
@@ -263,7 +303,74 @@ export class ReplLineEditor {
         );
         if (completed) {
           this.buffer = completed;
+          this.cursor = this.buffer.length;
           this.fullRedraw();
+        }
+        return;
+      }
+
+      // Vim：Esc 进 normal；normal 下 i/a/A/hjkl/x/dd
+      if (this.vimEnabled && key.name === 'escape') {
+        this.vimMode = 'normal';
+        this.fullRedraw();
+        return;
+      }
+
+      if (this.vimEnabled && this.vimMode === 'normal') {
+        if (str === 'i') {
+          this.vimMode = 'insert';
+          this.fullRedraw();
+          return;
+        }
+        if (str === 'a') {
+          this.cursor = Math.min(this.buffer.length, this.cursor + 1);
+          this.vimMode = 'insert';
+          this.fullRedraw();
+          return;
+        }
+        if (str === 'A') {
+          this.cursor = this.buffer.length;
+          this.vimMode = 'insert';
+          this.fullRedraw();
+          return;
+        }
+        if (str === 'h' || key.name === 'left') {
+          this.cursor = Math.max(0, this.cursor - 1);
+          this.fullRedraw();
+          return;
+        }
+        if (str === 'l' || key.name === 'right') {
+          this.cursor = Math.min(this.buffer.length, this.cursor + 1);
+          this.fullRedraw();
+          return;
+        }
+        if (str === '0') {
+          this.cursor = 0;
+          this.fullRedraw();
+          return;
+        }
+        if (str === '$') {
+          this.cursor = this.buffer.length;
+          this.fullRedraw();
+          return;
+        }
+        if (str === 'x') {
+          if (this.cursor < this.buffer.length) {
+            this.buffer = this.buffer.slice(0, this.cursor) + this.buffer.slice(this.cursor + 1);
+            this.fullRedraw();
+          }
+          return;
+        }
+        if (str === 'd') {
+          // 简化：dd 清行（连按 d 不追踪；单 d 也清行以满足最小可用）
+          this.buffer = '';
+          this.cursor = 0;
+          this.fullRedraw();
+          return;
+        }
+        if (key.name === 'return') {
+          if (this.buffer.trim().length === 0) return;
+          this.finishSubmit(this.buffer);
         }
         return;
       }
@@ -275,15 +382,28 @@ export class ReplLineEditor {
       }
 
       if (key.name === 'backspace') {
-        if (this.buffer.length > 0) {
-          this.buffer = this.buffer.slice(0, -1);
+        if (this.cursor > 0) {
+          this.buffer = this.buffer.slice(0, this.cursor - 1) + this.buffer.slice(this.cursor);
+          this.cursor -= 1;
           this.fullRedraw();
         }
         return;
       }
 
+      if (key.name === 'left') {
+        this.cursor = Math.max(0, this.cursor - 1);
+        this.fullRedraw();
+        return;
+      }
+      if (key.name === 'right') {
+        this.cursor = Math.min(this.buffer.length, this.cursor + 1);
+        this.fullRedraw();
+        return;
+      }
+
       if (str && !key.ctrl && !key.meta) {
-        this.buffer += str;
+        this.buffer = this.buffer.slice(0, this.cursor) + str + this.buffer.slice(this.cursor);
+        this.cursor += str.length;
         this.fullRedraw();
       }
     };

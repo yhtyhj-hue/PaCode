@@ -195,8 +195,15 @@ describe('G6/v1 pluggable classifier', () => {
     expect(result.allowed).toBe(false);
   });
 
-  it('unknown PACODE_CLASSIFIER falls back to deterministic', () => {
+  it('PACODE_CLASSIFIER=ml uses ml backend', () => {
     process.env['PACODE_CLASSIFIER'] = 'ml';
+    const r = classifyToolCall({ id: '1', name: 'Read', input: { path: 'x' } });
+    expect(r.backend).toBe('ml');
+    expect(r.risk).toBe('safe');
+  });
+
+  it('unknown PACODE_CLASSIFIER falls back to deterministic', () => {
+    process.env['PACODE_CLASSIFIER'] = 'not-a-real-backend';
     const r = classifyToolCall({ id: '1', name: 'Read', input: { path: 'x' } });
     expect(r.contract).toBe(CLASSIFIER_CONTRACT);
     expect(r.backend).toBe('deterministic');

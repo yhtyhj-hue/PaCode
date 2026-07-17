@@ -2,9 +2,9 @@
 
 > 基于 Claude Code v2.1.88 源码分析验证的 AI 编程助手框架
 
-**版本:** 1.3.0
+**版本:** 1.4.0
 **日期:** 2026-07-17
-**状态:** Phase H–K 主线完成（K7 Ink / J4 Voice defer）；31 核心工具；`npm test`=unit+gate（periodic 另跑）
+**状态:** Phase H–K 主线完成；超越 CC：Bridge local / LSP / Voice STT / ML AUTO；31 核心工具；`npm test`=unit+gate
 
 ### 实施状态快照
 
@@ -13,14 +13,14 @@
 | Query Engine | ~94% | 全循环；PermissionRequest；5xx 重试；Subagent + 预取证据门闩 |
 | Context Assembly | ~85% | 9 源组装；Skills lazy index 默认 |
 | Compaction | ~92% | L1–L5；L4 路径/工具/错误信号；L5 withRetry |
-| Tool Registry | ~96% | **31 核心工具**（+BashOutput/BashStop/Diagnostics；LSP 别名）+ Plugin |
-| Permission System | ~94% | 7 modes + G6/v1 pluggable classifier + session memory |
+| Tool Registry | ~96% | **31 核心工具**（Diagnostics/LSP=真 client + tsc 回退）+ Plugin |
+| Permission System | ~95% | 7 modes + G6 ml/deterministic classifier + session memory |
 | Memory | ~85% | 用户 `.paude/memory/` + 项目 hash + auto-memory |
-| Hooks / Skills / Plugins / MCP | ~90% | MCP stdio/sse/http/**websocket**；Bridge v1-partial 远程清单 |
-| CLI / REPL | ~94% | readline 默认 + Ink `--tui`；工具时间线；`/rewind`；`/voice` deferred |
+| Hooks / Skills / Plugins / MCP | ~92% | MCP stdio/sse/http/**websocket**；Bridge **v1-local** 中继 |
+| CLI / REPL | ~96% | readline + Ink；`/effort` `/vim` `/voice` STT；`pacode bridge serve` |
 | 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
 | 测试 | ≥80% | `npm test` + `eval:gate`（M1–M5 + widened）；coverage 仅 `src/**` |
-| Eval harness | ✅ | M5 simulated agent CI；live 有 key 时跑 |
+| Eval harness | ✅ | M5 simulated；live+vs CC COMPARE + speed assert |
 
 ### 8 项安全修复（commit bdd7555）
 
@@ -38,16 +38,17 @@
 - `src/services/agent-scheduler/` — DAG 预取 + 并行 agent
 - `src/services/context-compiler/` — 消息编译 + pairing
 - `src/services/web-fetch/` — HTML→text + prompt injection sanitization
-- `src/services/bridge/` — Bridge status + remote MCP inventory (sessions deferred)
+- `src/services/bridge/` — Bridge v1-partial MCP 清单 + **v1-local** session relay
+- `src/services/lsp-client/` — JSON-RPC stdio LSP（typescript-language-server）
 - `src/services/web-search/` — Brave API + mock fallback
 - `src/services/mcp-sse-http/` — SSE + StreamableHTTP transport
 - `src/services/mcp-auth/` — OAuth PKCE + AES-256-GCM token store
 - `src/services/skill-mount/` — everything-claude-code skill 挂载
 - `src/services/ask-user/` — REPL 交互式问题（对标 CC AskUserQuestionTool）
 - `src/services/bash-jobs/` — 后台 Bash + BashOutput 环形缓冲
-- `src/services/voice/` — Voice/Buddy deferred 状态契约
+- `src/services/voice/` — Voice STT pipe（`PACODE_STT_CMD`）+ Buddy 旁白
 
-**Defer:** Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、真 language server、Bridge 远程会话、完整 Voice STT（J4 仅 `/voice` 状态面）
+**Defer:** Go agent core、SQLite、容器级 Bash 沙箱、公网 Bridge SaaS、内置 Whisper 权重
 
 **G4 图片：** `ContentBlock.image` + `message-serializer` → Anthropic `media_type`；CLI `--image`；`src/services/image-attach/`
 

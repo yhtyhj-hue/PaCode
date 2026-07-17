@@ -1,15 +1,22 @@
 {
-  "updatedAt": "2026-07-17T08:22:59.384Z",
+  "updatedAt": "2026-07-17T12:15:30.052Z",
   "threshold": 0.5,
   "pacodePassRate": 1,
   "ccPassRate": 1,
+  "pacodeTotalMs": 30710,
+  "ccTotalMs": 155572,
+  "pacodeWallMs": 14524,
+  "ccWallMs": 155572,
+  "speedMetric": "wall",
+  "speedRatio": 1,
+  "speedOk": true,
   "tasks": [
     {
       "id": "fix-bug",
       "pacodePassed": true,
       "ccPassed": true,
-      "pacodeDurationMs": 55752,
-      "ccDurationMs": 37103,
+      "pacodeDurationMs": 6191,
+      "ccDurationMs": 34754,
       "pacodeMessage": "verify passed",
       "ccMessage": "verify passed"
     },
@@ -17,8 +24,8 @@
       "id": "add-test",
       "pacodePassed": true,
       "ccPassed": true,
-      "pacodeDurationMs": 155654,
-      "ccDurationMs": 60672,
+      "pacodeDurationMs": 14519,
+      "ccDurationMs": 73595,
       "pacodeMessage": "verify passed",
       "ccMessage": "verify passed"
     },
@@ -26,12 +33,12 @@
       "id": "small-refactor",
       "pacodePassed": true,
       "ccPassed": true,
-      "pacodeDurationMs": 15178,
-      "ccDurationMs": 19528,
+      "pacodeDurationMs": 10000,
+      "ccDurationMs": 47223,
       "pacodeMessage": "verify passed",
       "ccMessage": "verify passed"
     }
   ],
-  "note": "head-to-head via cc-switch; pacode model=claude-sonnet-4-6",
+  "note": "head-to-head via cc-switch; pacode model=claude-sonnet-4-6; speed=wall",
   "claudeVersion": "2.1.207 (Claude Code)"
 }

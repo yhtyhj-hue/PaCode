@@ -24,6 +24,25 @@ import {
   materializeBroken,
   readTaskPrompt,
 } from './m5-grader.js';
+import { passthroughCompaction } from '../../test/helpers/engine-stubs.js';
+import { mapPool, resolveM5Concurrency } from './m5-speed.js';
+import type { ContextAssembler } from '../../src/context/assembler.js';
+
+/** M5 最小 system：少 token、催工具改文件 */
+function m5Assembler(): ContextAssembler {
+  return {
+    async assemble(state: { messages: unknown[] }) {
+      return {
+        systemPrompt:
+          'You are a coding agent. Prefer Edit/Write over long explanations. Finish quickly once verify would pass.',
+        messages: state.messages,
+        tools: [],
+        maxTokens: 8192,
+        tokenCount: 80,
+      };
+    },
+  } as unknown as ContextAssembler;
+}
 
 export interface M5RunResult {
   taskId: string;
@@ -173,6 +192,8 @@ export async function runM5LiveAgent(
     model?: string;
     timeoutMs?: number;
     tasks?: string[];
+    /** 并行任务数；默认 PACODE_M5_CONCURRENCY 或 3 */
+    concurrency?: number;
   } = {}
 ): Promise<M5RunResult[]> {
   const resolved = resolveM5LiveCredentials();
@@ -183,8 +204,11 @@ export async function runM5LiveAgent(
     throw new Error('API key required for live M5 (ANTHROPIC_API_KEY or cc-switch active provider)');
   }
   const tasks = resolveM5TaskFilter(options.tasks ?? M5_TASKS);
-  const results: M5RunResult[] = [];
-  for (const taskId of tasks) {
+  const concurrency = options.concurrency ?? resolveM5Concurrency();
+  const timeoutMs = options.timeoutMs ?? 180_000;
+
+  // 并行跑 fixture（限流），墙钟下降；单任务逻辑不变
+  return mapPool(tasks, concurrency, async (taskId) => {
     const started = Date.now();
     const fixtureRoot = join(fixturesRoot, taskId);
     const workDir = join(workRoot, taskId);
@@ -192,7 +216,6 @@ export async function runM5LiveAgent(
     materializeBroken(fixtureRoot, workDir);
 
     const registry = new ToolRegistry();
-    // M5：精简工具，避免本地代理因 tools schema 过大而静默丢掉 tool_choice
     registerCoreTools(registry, {
       task: { toolRegistry: registry, apiKey, baseUrl, model },
     });
@@ -209,8 +232,11 @@ export async function runM5LiveAgent(
       toolRegistry: filtered,
       workingDirectory: workDir,
       permissionPrompt: async () => true,
-      // M5：关预取，逼模型真改 fixture
       prefetch: { enabled: false },
+      // M5：轻上下文 + 关 reflection，压墙钟
+      contextAssembler: m5Assembler(),
+      compactionPipeline: passthroughCompaction(),
+      disableReflection: true,
     });
 
     const state = {
@@ -223,26 +249,27 @@ export async function runM5LiveAgent(
       compactionHistory: [],
     };
 
+    // 短 prompt：保留「必须 Edit/Write + verify」一句
     const prompt = [
       readTaskPrompt(fixtureRoot),
       '',
-      `Working directory is already set to the project root (tools run there).`,
-      `You MUST use Read/Edit/Write/Bash tools to change files — never only describe a plan.`,
-      `Before finishing you MUST have used Edit or Write at least once.`,
-      `When finished, the harness runs: node verify.mjs`,
+      'Use Edit/Write (and Read/Bash as needed) in this cwd; harness runs `node verify.mjs`.',
     ].join('\n');
 
     const toolsUsed: string[] = [];
     const errors: string[] = [];
     let assistantPreview = '';
-    const timeoutMs = options.timeoutMs ?? 180_000;
     const deadline = Date.now() + timeoutMs;
+    const maxTokens = Number.parseInt(process.env['PACODE_M5_MAX_TOKENS'] ?? '2048', 10) || 2048;
+    let usedToolsThisQuery = false;
     try {
+      // 首轮 any：M5 必须改文件，避免 auto 空转一整轮；无 tool 时再强制一轮
       for await (const event of engine.query(
         {
           message: prompt,
           options: {
             model,
+            maxTokens,
             toolChoice: 'any',
             shouldAbort: () => Date.now() > deadline,
           },
@@ -251,24 +278,51 @@ export async function runM5LiveAgent(
       )) {
         if (event.type === 'tool_use' && event.tool) {
           toolsUsed.push(event.tool.name);
+          usedToolsThisQuery = true;
         } else if (event.type === 'content_block_delta' && event.delta?.text) {
           assistantPreview = (assistantPreview + event.delta.text).slice(0, 400);
         } else if (event.type === 'error' && event.error) {
           errors.push(`${event.error.code ?? 'ERR'}: ${event.error.message}`);
         }
       }
+
+      if (!usedToolsThisQuery && Date.now() < deadline) {
+        state.messages.push({
+          role: 'user',
+          content: 'You must call Edit or Write now to fix the project.',
+          timestamp: Date.now(),
+        });
+        for await (const event of engine.query(
+          {
+            options: {
+              model,
+              maxTokens,
+              toolChoice: 'any',
+              shouldAbort: () => Date.now() > deadline,
+            },
+          },
+          state
+        )) {
+          if (event.type === 'tool_use' && event.tool) {
+            toolsUsed.push(event.tool.name);
+          } else if (event.type === 'content_block_delta' && event.delta?.text) {
+            assistantPreview = (assistantPreview + event.delta.text).slice(0, 400);
+          } else if (event.type === 'error' && event.error) {
+            errors.push(`${event.error.code ?? 'ERR'}: ${event.error.message}`);
+          }
+        }
+      }
     } catch (e) {
-      results.push({
+      return {
         taskId,
         passed: false,
         message: e instanceof Error ? e.message : String(e),
         durationMs: Date.now() - started,
-        mode: 'live',
+        mode: 'live' as const,
         toolsUsed,
         errors,
         assistantPreview,
-      });
-      continue;
+      };
     }
 
     const grade = gradeM5Task(taskId, workDir);
@@ -283,18 +337,17 @@ export async function runM5LiveAgent(
           ]
             .filter(Boolean)
             .join(' · ');
-    results.push({
+    return {
       taskId,
       passed: grade.passed,
       message: diag,
       durationMs: Date.now() - started,
-      mode: 'live',
+      mode: 'live' as const,
       toolsUsed,
       errors,
       assistantPreview,
-    });
-  }
-  return results;
+    };
+  });
 }
 
 /** 写 BASELINE.json（非密钥） */

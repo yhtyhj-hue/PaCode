@@ -107,9 +107,10 @@ describe('P2 Diagnostics / Voice / Compact / MCP ws / rewind detail', () => {
     expect(s).toMatch(/has_error/);
   });
 
-  it('voice status is deferred', () => {
-    expect(getVoiceStatus().status).toBe('deferred');
-    expect(formatVoiceStatus()).toMatch(/Voice status: deferred/);
+  it('voice status is available when STT unset (not deferred)', () => {
+    expect(getVoiceStatus().status).toBe('available');
+    expect(formatVoiceStatus()).toMatch(/Voice status: available/);
+    expect(formatVoiceStatus()).toMatch(/voice\/v1-stt-pipe/);
   });
 
   it('accepts websocket MCP urls', () => {

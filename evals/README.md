@@ -53,6 +53,10 @@ evals/fixtures/m5/{fix-bug,add-test,small-refactor}/
 - Gate：`evals/gate/m5-hard-engineering-tasks.eval.ts` — 多文件 / 失败再修 / 跨模块
 - Periodic：`evals/periodic/m5-hard-once-success.eval.ts` + `m5-hard-cc-compare.eval.ts`
 - Periodic：`evals/periodic/m5-cc-compare.eval.ts` — PaCode live vs `claude -p` 同 fixture，写入 `COMPARE.json`
+- **速度断言**：`pacodeWallMs <= ccWallMs * PACODE_M5_SPEED_RATIO`（默认 1.0；并行任务后用套件墙钟，非任务 sum）
+- Env：`PACODE_M5_CONCURRENCY`（默认 **3**；遇 429 设 1）、`PACODE_M5_MAX_TOKENS`（默认 2048）、`PACODE_M5_TASKS`、`PACODE_M5_SPEED_RATIO`
+- Compare：PaCode 任务可并行；**CC 固定 concurrency=1**（贴近真实 CLI）
+- M5 live：stub assembler + `disableReflection` 压墙钟
 - 联合冒烟：`test/smoke-joint-paths.test.ts`
 
 ## CI lanes

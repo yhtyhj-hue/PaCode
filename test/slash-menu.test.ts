@@ -39,9 +39,10 @@ describe('slash-menu', () => {
     expect(filterSlashCommands('/', custom).some((e) => e.command === '/review')).toBe(true);
   });
 
-  it('does not advertise unimplemented /effort or /vim', () => {
+  it('advertises /effort /vim /new', () => {
     const names = BUILTIN_SLASH_COMMANDS.map((e) => e.command);
-    expect(names).not.toContain('/effort');
-    expect(names).not.toContain('/vim');
+    expect(names).toContain('/effort');
+    expect(names).toContain('/vim');
+    expect(names).toContain('/new');
   });
 });

@@ -1,6 +1,5 @@
 /**
- * K5 Bridge 远程会话 — 会话中继仍 deferred；
- * v1-partial：展示远程 MCP 清单，避免空壳状态面
+ * K5 Bridge — v1-partial 远程 MCP 清单 + bridge/v1-local 本机会话中继
  */
 
 import { loadMcpConfig, type McpConfigFile } from '../../mcp/config.js';
@@ -8,7 +7,7 @@ import type { MCPServerConnection } from '../../pkg/types.js';
 
 export const BRIDGE_CONTRACT = 'bridge/v1-partial' as const;
 
-export type BridgeStatus = 'unavailable' | 'deferred' | 'partial';
+export type BridgeStatus = 'unavailable' | 'deferred' | 'partial' | 'local';
 
 export interface BridgeRemoteServer {
   name: string;
@@ -30,13 +29,11 @@ export interface BridgeStatusReport {
 const REMOTE_TYPES = new Set(['sse', 'http', 'websocket']);
 
 export interface BridgeStatusInput {
-  /** 已连接的 MCP（可选；缺省不查 live） */
   connections?: MCPServerConnection[];
-  /** 测试注入配置；缺省读 ~/.paude/mcp.json */
   config?: McpConfigFile;
 }
 
-/** Bridge 会话未实现；有远程 MCP 配置/连接时 status=partial */
+/** Bridge：本机会话可用；有远程 MCP 时 status=partial */
 export function getBridgeStatus(input: BridgeStatusInput = {}): BridgeStatusReport {
   const config = input.config ?? loadMcpConfig();
   const connections = input.connections ?? [];
@@ -56,7 +53,6 @@ export function getBridgeStatus(input: BridgeStatusInput = {}): BridgeStatusRepo
     });
   }
 
-  // 配置未列名但已连接的远程（罕见）也计入 connected
   const remoteConnected = connections.filter((c) => {
     const entry = config.servers[c.name];
     const type = entry?.type ?? 'stdio';
@@ -66,14 +62,17 @@ export function getBridgeStatus(input: BridgeStatusInput = {}): BridgeStatusRepo
   const hasRemote = remoteConfigured.length > 0 || remoteConnected > 0;
   return {
     contract: BRIDGE_CONTRACT,
-    status: hasRemote ? 'partial' : 'deferred',
+    status: hasRemote ? 'partial' : 'local',
     message:
-      'Bridge remote sessions are not implemented (no cross-machine session attach). ' +
-      'Remote MCP transports below are the supported alternative.',
+      'Local session relay is available (bridge/v1-local). ' +
+      'Cross-public-internet SaaS relay is out of scope. ' +
+      (hasRemote
+        ? 'Remote MCP transports below are listed.'
+        : 'Configure remote MCP for cross-machine tools.'),
     alternatives: [
-      'Configure remote MCP in ~/.paude/mcp.json with type "sse", "http", or "websocket" + url',
-      'Use McpAuth tool for OAuth, then reconnect MCP',
-      'Use /mcp for all connections (stdio + remote); /bridge focuses on remote inventory',
+      'pacode bridge serve  — WebSocket relay on loopback',
+      '/bridge session list|attach <id> — local .paude/sessions',
+      'Remote MCP: ~/.paude/mcp.json type sse|http|websocket + url',
     ],
     remoteConfigured,
     remoteConnected,
@@ -81,11 +80,7 @@ export function getBridgeStatus(input: BridgeStatusInput = {}): BridgeStatusRepo
 }
 
 export function formatBridgeStatus(report: BridgeStatusReport = getBridgeStatus()): string {
-  const lines = [
-    `Bridge status: ${report.status}`,
-    report.message,
-    '',
-  ];
+  const lines = [`Bridge status: ${report.status}`, report.message, ''];
   if (report.remoteConfigured.length === 0) {
     lines.push('Remote MCP: (none configured)');
   } else {
@@ -106,8 +101,8 @@ export function formatBridgeStatus(report: BridgeStatusReport = getBridgeStatus(
   }
   lines.push(
     '',
-    'Session protocol: bridge/v0-session (list|attach|detach|status) — deferred.',
-    'Try: /bridge session list',
+    'Session protocol: bridge/v1-local (list|attach|detach|status).',
+    'Try: /bridge session list  |  pacode bridge serve',
     '',
     `contract=${report.contract}`
   );
@@ -119,8 +114,19 @@ export {
   bridgeSessionOp,
   formatBridgeSessionOp,
   parseBridgeSessionArgs,
+  listLocalSessionRefs,
+  loadLocalSession,
+  setAttachedSessionId,
+  getAttachedSessionId,
   type BridgeSessionAction,
   type BridgeSessionRef,
   type BridgeSessionRequest,
   type BridgeSessionOpResult,
 } from './session.js';
+
+export {
+  BRIDGE_RELAY_CONTRACT,
+  startSessionRelayServer,
+  type RelayServerOptions,
+  type RelayServerHandle,
+} from './relay.js';

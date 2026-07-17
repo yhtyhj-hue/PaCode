@@ -1,5 +1,5 @@
 /**
- * G6/v1: pluggable classifier registry — default deterministic; ML backend later
+ * G6/v1: pluggable classifier registry — deterministic | ml
  */
 
 import type { ToolCall, ToolDefinition } from '../pkg/types.js';
@@ -8,6 +8,7 @@ import {
   type ClassificationResult,
 } from './classifier-contract.js';
 import { classifyToolCallDeterministic } from './classifier-deterministic.js';
+import { mlClassifierBackend } from './classifier-ml.js';
 
 export interface ClassifierBackend {
   /** Backend id (e.g. deterministic | ml) */
@@ -32,16 +33,12 @@ export function getClassifierBackend(): ClassifierBackend {
   if (raw === '' || raw === 'deterministic' || raw === 'v0') {
     return deterministicBackend;
   }
-  // 未知 backend 安全回退，避免误开未实现的 ML
   if (raw === 'ml' || raw === 'v1-ml') {
-    console.error(
-      `[classifier ${CLASSIFIER_REGISTRY_CONTRACT}] PACODE_CLASSIFIER=${raw} not implemented; falling back to deterministic`
-    );
-  } else {
-    console.error(
-      `[classifier ${CLASSIFIER_REGISTRY_CONTRACT}] unknown PACODE_CLASSIFIER=${raw}; falling back to deterministic`
-    );
+    return mlClassifierBackend;
   }
+  console.error(
+    `[classifier ${CLASSIFIER_REGISTRY_CONTRACT}] unknown PACODE_CLASSIFIER=${raw}; falling back to deterministic`
+  );
   return deterministicBackend;
 }
 
@@ -55,4 +52,10 @@ export function resetClassifierBackend(): void {
 
 export function getClassifierRegistryContract(): typeof CLASSIFIER_REGISTRY_CONTRACT {
   return CLASSIFIER_REGISTRY_CONTRACT;
+}
+
+/** 供 /permissions 展示 */
+export function describeActiveClassifierBackend(): string {
+  const b = getClassifierBackend();
+  return `backend=${b.id} contract=${b.contract} (PACODE_CLASSIFIER / PACODE_CLASSIFIER_CMD)`;
 }

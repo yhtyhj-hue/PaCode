@@ -5,6 +5,7 @@
 import { PermissionMode } from '../pkg/types.js';
 import { PermissionRules } from './rules.js';
 import { SHIFT_TAB_MODES } from './cycle-mode.js';
+import { describeActiveClassifierBackend } from './classifier-backend.js';
 
 export function describePermissionMode(mode: PermissionMode): string {
   switch (mode) {
@@ -15,7 +16,7 @@ export function describePermissionMode(mode: PermissionMode): string {
     case PermissionMode.ACCEPT_EDITS:
       return 'auto-approve Read/Edit/Write/Glob/Grep; confirm others';
     case PermissionMode.AUTO:
-      return 'G6/v1 pluggable (default v0 deterministic; PACODE_CLASSIFIER / AUDIT)';
+      return `G6 AUTO — ${describeActiveClassifierBackend()}`;
     case PermissionMode.DONT_ASK:
       return 'auto-approve except bash-secure destructive / hard-blocked';
     case PermissionMode.BYPASS:
@@ -42,6 +43,7 @@ export function formatPermissionsReport(
   const lines: string[] = [
     'Permission Rules',
     `  Current mode: ${mode} — ${describePermissionMode(mode)}`,
+    `  Classifier: ${describeActiveClassifierBackend()}`,
     `  Shift+Tab cycles: ${SHIFT_TAB_MODES.join(' → ')}`,
     '  Layer order: deny → plan block → ask/allow → tool-gate → mode',
     ...formatRuleList('deny', rules?.deny),
@@ -49,6 +51,7 @@ export function formatPermissionsReport(
     ...formatRuleList('allow', rules?.allow),
     '  Configure: ~/.claude/settings.json or .claude/settings.json → "permissions"',
     '  Example: { "permissions": { "deny": ["Bash(rm *)"], "ask": ["Bash"], "allow": ["Read"] } }',
+    '  ML AUTO: PACODE_CLASSIFIER=ml  optional PACODE_CLASSIFIER_CMD  audit PACODE_CLASSIFIER_AUDIT=1',
   ];
   return lines;
 }

@@ -132,14 +132,13 @@ describe('K5 mergeMcpAuthHeaders', () => {
   });
 });
 
-describe('K5 Bridge v1-partial', () => {
-  it('reports deferred when no remote MCP configured', () => {
+describe('K5 Bridge v1-partial + v1-local', () => {
+  it('reports local when no remote MCP configured', () => {
     const status = getBridgeStatus({ config: { servers: {} }, connections: [] });
     expect(status.contract).toBe(BRIDGE_CONTRACT);
-    expect(status.status).toBe('deferred');
-    expect(formatBridgeStatus(status)).toContain('not implemented');
+    expect(status.status).toBe('local');
+    expect(formatBridgeStatus(status)).toContain('bridge/v1-local');
     expect(formatBridgeStatus(status)).toContain('mcp.json');
-    expect(formatBridgeStatus(status)).toContain('bridge/v0-session');
     expect(formatBridgeStatus(status)).toContain('Remote MCP: (none configured)');
   });
 
@@ -166,7 +165,7 @@ describe('K5 Bridge v1-partial', () => {
     expect(text).toContain('remote');
     expect(text).toContain('sse');
     expect(text).toContain('connected');
-    expect(text).toContain('sessions are not implemented');
+    expect(text).toContain('bridge/v1-local');
   });
 
   it('exposes /bridge in slash menu', () => {

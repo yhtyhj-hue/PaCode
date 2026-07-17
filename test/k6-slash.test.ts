@@ -26,11 +26,12 @@ describe('K6 slash menu sync', () => {
       '/diff',
       '/reset',
       '/quit',
+      '/effort',
+      '/vim',
+      '/new',
     ]) {
       expect(names).toContain(cmd);
     }
-    expect(names).not.toContain('/effort');
-    expect(names).not.toContain('/vim');
   });
 
   it('filters /doc to /doctor', () => {

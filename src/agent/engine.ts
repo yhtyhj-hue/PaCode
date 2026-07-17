@@ -97,6 +97,7 @@ export class QueryEngine {
   /** 工具执行根目录（Subagent worktree 隔离时覆盖 process.cwd） */
   private workingDirectory: string;
   private readLine?: (prompt: string) => Promise<string>;
+  private disableReflection: boolean;
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
@@ -108,6 +109,8 @@ export class QueryEngine {
     this.prefetchConfig = options.prefetch ?? appConfig.prefetch;
     this.workingDirectory = options.workingDirectory ?? process.cwd();
     this.readLine = options.readLine;
+    this.disableReflection =
+      Boolean(options.disableReflection) || process.env['PACODE_REFLECTION'] === '0';
     this.contextAssembler = options.contextAssembler ?? new ContextAssembler();
     this.compactionPipeline =
       options.compactionPipeline ??
@@ -384,6 +387,7 @@ export class QueryEngine {
           // the next turn can act on real evidence. Bounded to
           // MAX_REFLECTIONS_PER_QUERY to avoid infinite loops.
           if (
+            !this.disableReflection &&
             mutatedSinceReflection &&
             reflectionCount < MAX_REFLECTIONS_PER_QUERY
           ) {
@@ -1124,6 +1128,8 @@ export interface QueryEngineOptions {
   workingDirectory?: string;
   /** AskUser 等交互工具用的读行（REPL 在 pause editor 后注入） */
   readLine?: (prompt: string) => Promise<string>;
+  /** 关闭 I3 reflection（M5 live 等） */
+  disableReflection?: boolean;
 }
 
 /** 若流式未解析到 tool_use，从 finalMessage.content 补齐（代理兼容） */

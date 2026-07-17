@@ -88,6 +88,8 @@ export interface SessionState {
   sessionApprovals?: string[];
   /** I2：本会话已捕获的 checkpoint 序号 */
   checkpointIndex?: number;
+  /** /effort low|medium|high → maxTokens 预算 */
+  effort?: 'low' | 'medium' | 'high';
 }
 
 export interface Message {

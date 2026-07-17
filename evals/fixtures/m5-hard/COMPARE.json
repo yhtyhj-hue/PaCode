@@ -1,15 +1,22 @@
 {
-  "updatedAt": "2026-07-17T02:11:47.385Z",
+  "updatedAt": "2026-07-17T12:17:41.301Z",
   "threshold": 0.5,
   "pacodePassRate": 1,
   "ccPassRate": 1,
+  "pacodeTotalMs": 32850,
+  "ccTotalMs": 97984,
+  "pacodeWallMs": 15469,
+  "ccWallMs": 97985,
+  "speedMetric": "wall",
+  "speedRatio": 1,
+  "speedOk": true,
   "tasks": [
     {
       "id": "multi-file-bug",
       "pacodePassed": true,
       "ccPassed": true,
-      "pacodeDurationMs": 96974,
-      "ccDurationMs": 52965,
+      "pacodeDurationMs": 10365,
+      "ccDurationMs": 39191,
       "pacodeMessage": "verify passed",
       "ccMessage": "verify passed"
     },
@@ -17,8 +24,8 @@
       "id": "fail-then-fix",
       "pacodePassed": true,
       "ccPassed": true,
-      "pacodeDurationMs": 123123,
-      "ccDurationMs": 62147,
+      "pacodeDurationMs": 7023,
+      "ccDurationMs": 41302,
       "pacodeMessage": "verify passed",
       "ccMessage": "verify passed"
     },
@@ -26,12 +33,12 @@
       "id": "cross-module",
       "pacodePassed": true,
       "ccPassed": true,
-      "pacodeDurationMs": 69990,
-      "ccDurationMs": 20500,
+      "pacodeDurationMs": 15462,
+      "ccDurationMs": 17491,
       "pacodeMessage": "verify passed",
       "ccMessage": "verify passed"
     }
   ],
-  "note": "m5-hard head-to-head via cc-switch; model=claude-sonnet-4-6",
+  "note": "m5-hard head-to-head via cc-switch; model=claude-sonnet-4-6; speed=wall",
   "claudeVersion": "2.1.207 (Claude Code)"
 }

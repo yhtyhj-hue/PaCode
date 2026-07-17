@@ -2,7 +2,7 @@
  * Periodic eval: M5 PaCode live vs Claude Code CLI（同 fixture / verify）
  *
  * - 无 claude CLI 或无 API 凭证 → skip
- * - 写 COMPARE.json；双方均需 passRate ≥ 0.5
+ * - 写 COMPARE.json；双方均需 passRate ≥ 0.5；速度用套件墙钟
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -17,6 +17,7 @@ import {
 } from '../lib/m5-live-runner.js';
 import {
   buildM5CompareReport,
+  formatSpeedAssert,
   readClaudeVersion,
   resolveClaudeCli,
   runM5ClaudeCodeAgent,
@@ -53,33 +54,46 @@ describe.skipIf(!canCompare)('eval:periodic:m5-cc-compare (live head-to-head)', 
       const pacodeRoot = join(workDir, 'pacode');
       const ccRoot = join(workDir, 'cc');
 
-      const pacodeRuns = await runM5LiveAgent(FIXTURES, pacodeRoot, {
-        timeoutMs: 180_000,
-        apiKey: liveCreds.apiKey,
-        baseUrl: liveCreds.baseUrl,
-        model: liveCreds.model,
-      });
+      const timed = async <T>(fn: () => Promise<T>): Promise<{ value: T; wallMs: number }> => {
+        const t0 = Date.now();
+        const value = await fn();
+        return { value, wallMs: Date.now() - t0 };
+      };
 
-      const ccRuns = await runM5ClaudeCodeAgent(FIXTURES, ccRoot, {
-        cli: claudeCli!,
-        timeoutMs: 180_000,
-      });
+      // PaCode 任务并行（墙钟）；CC 保持串行（贴近真实 CLI 一次一任务）
+      const pacodePack = await timed(() =>
+        runM5LiveAgent(FIXTURES, pacodeRoot, {
+          timeoutMs: 180_000,
+          apiKey: liveCreds.apiKey,
+          baseUrl: liveCreds.baseUrl,
+          model: liveCreds.model,
+        })
+      );
+      const ccPack = await timed(() =>
+        runM5ClaudeCodeAgent(FIXTURES, ccRoot, {
+          cli: claudeCli!,
+          timeoutMs: 180_000,
+          concurrency: 1,
+        })
+      );
 
       const report = buildM5CompareReport({
-        pacode: pacodeRuns.map((r) => ({
+        pacode: pacodePack.value.map((r) => ({
           taskId: r.taskId,
           passed: r.passed,
           durationMs: r.durationMs,
           message: r.message,
         })),
-        cc: ccRuns.map((r) => ({
+        cc: ccPack.value.map((r) => ({
           taskId: r.taskId,
           passed: r.passed,
           durationMs: r.durationMs,
           message: r.message,
         })),
+        pacodeWallMs: pacodePack.wallMs,
+        ccWallMs: ccPack.wallMs,
         threshold: THRESHOLD,
-        note: `head-to-head via ${liveCreds.source}; pacode model=${liveCreds.model ?? 'default'}`,
+        note: `head-to-head via ${liveCreds.source}; pacode model=${liveCreds.model ?? 'default'}; speed=wall`,
         claudeVersion: claudeCli ? readClaudeVersion(claudeCli) : undefined,
       });
 
@@ -112,6 +126,15 @@ describe.skipIf(!canCompare)('eval:periodic:m5-cc-compare (live head-to-head)', 
               durationMs: x.ccDurationMs,
             }))
           )
+      ).toBe(true);
+      expect(
+        report.speedOk,
+        formatSpeedAssert(
+          report.pacodeWallMs ?? report.pacodeTotalMs,
+          report.ccWallMs ?? report.ccTotalMs,
+          report.speedRatio,
+          report.speedMetric
+        )
       ).toBe(true);
     },
     900_000

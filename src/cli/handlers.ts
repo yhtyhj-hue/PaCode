@@ -29,6 +29,7 @@ Usage:
   pacode resume [session-id]       Resume a saved REPL session
   pacode resume list               List saved sessions
   pacode worktree <command>        Manage git worktrees for parallel work
+  pacode bridge serve              Start local WebSocket session relay
 
 Options:
   -h, --help              Show this help
@@ -537,4 +538,50 @@ export async function handleCCSwitch(
       console.error('Run: pacode --help for usage');
       return false;
   }
+}
+
+/** pacode bridge serve [--port N] [--allow-lan] [--token-file path] */
+export async function handleBridge(args: string[]): Promise<boolean> {
+  const sub = args[0] ?? 'help';
+  if (sub === 'serve') {
+    const { startSessionRelayServer } = await import('../services/bridge/relay.js');
+    let port = 0;
+    let allowLan = false;
+    let tokenFile: string | undefined;
+    let token: string | undefined;
+    for (let i = 1; i < args.length; i++) {
+      const a = args[i]!;
+      if (a === '--allow-lan') allowLan = true;
+      else if (a === '--port' && args[i + 1]) {
+        port = Number.parseInt(args[++i]!, 10) || 0;
+      } else if (a === '--token-file' && args[i + 1]) {
+        tokenFile = args[++i];
+      } else if (a === '--token' && args[i + 1]) {
+        token = args[++i];
+      }
+    }
+    const handle = await startSessionRelayServer({
+      port,
+      allowLan,
+      tokenFile,
+      token,
+    });
+    console.log(`${GREEN}✓${RESET} Bridge relay listening on ${handle.url}`);
+    console.log(`${DIM}contract=bridge/v1-local  Ctrl+C to stop${RESET}`);
+    await new Promise<void>((resolve) => {
+      const stop = () => {
+        void handle.close().then(resolve);
+      };
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
+    });
+    return true;
+  }
+  console.log(`Usage:
+  pacode bridge serve [--port N] [--allow-lan] [--token TOKEN] [--token-file PATH]
+
+Default bind: 127.0.0.1. Non-loopback requires --allow-lan and a token.
+In REPL: /bridge session list|attach <id>
+`);
+  return sub === 'help';
 }

@@ -22,7 +22,7 @@ Reference for Claude Code-style keyboard shortcuts in PaCode.
 | Shortcut | Action | Status |
 |----------|--------|--------|
 | `Cmd+P` / `Meta+P` | Open model picker | 🔜 Use `/model` |
-| `Cmd+T` / `Meta+T` | Toggle thinking | 🔜 Not implemented (`/effort` stub) |
+| `Cmd+T` / `Meta+T` | Toggle thinking | ✅ Use `/effort low\|medium\|high` |
 
 ## Input
 
@@ -50,7 +50,9 @@ Shows:
 |---------|--------|
 | `/help` | Show all commands |
 | `/exit` / `/quit` | Exit REPL |
-| `/clear` | Clear conversation |
+| `/clear` / `/new` / `/reset` | Clear conversation |
+| `/effort low\|medium\|high` | Set reply maxTokens budget |
+| `/vim [on\|off]` | Toggle vi keybindings in line editor |
 | `/compact` | Compress context |
 | `/mode` | Change permission mode |
 | `/model` | Show/change model |

@@ -18,6 +18,7 @@ import {
   handleResume,
   handleWorktree,
   handleCCSwitch,
+  handleBridge,
   showHelp,
 } from './handlers.js';
 import { parseCliArgs } from './args.js';
@@ -66,6 +67,11 @@ async function main() {
   if (positionals[0] === 'worktree' || positionals[0] === 'wt') {
     await handleWorktree(positionals.slice(1));
     process.exit(0);
+  }
+
+  if (positionals[0] === 'bridge') {
+    const ok = await handleBridge(positionals.slice(1));
+    process.exit(ok ? 0 : 1);
   }
 
   const cc = getCCSwitch();

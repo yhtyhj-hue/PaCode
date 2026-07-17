@@ -24,7 +24,13 @@ import { getSessionResume, type SessionResume } from '../resume.js';
 import { formatMcpReportLines, listMcpConnections } from '../mcp-display.js';
 import { getMCPClient } from '../../mcp/client.js';
 import { runCompactForDisplay, type CompactDisplayOptions } from '../compact-display.js';
-import { formatVoiceStatus } from '../../services/voice/index.js';
+import {
+  formatVoiceStatus,
+  getVoiceStatus,
+  startVoiceListening,
+  stopVoiceListening,
+  setBuddyNarration,
+} from '../../services/voice/index.js';
 import { formatCostReport } from '../cost-estimate.js';
 import { listStyles, type OutputStyle } from '../output-styles.js';
 import { formatCheckpointList, listCheckpoints, rewindToDetailed } from '../../services/checkpoint.js';
@@ -39,10 +45,14 @@ import {
 } from '../info-display.js';
 import { initClaudeMd } from '../init-display.js';
 import { formatCronLines } from '../cron-display.js';
+import {
+  formatEffortStatus,
+  parseEffortLevel,
+} from '../effort.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
-  '/help /clear /status /mode /model /cost /style /context /memory /providers /cron /init /doctor /diff /agents /plan /resume /compact /mcp /bridge /voice /permissions /brief /rewind /exit';
+  '/help /clear /new /status /mode /model /effort /vim /cost /style /context /memory /providers /cron /init /doctor /diff /agents /plan /resume /compact /mcp /bridge /voice /permissions /brief /rewind /exit';
 
 export interface TuiSlashContext {
   ctl: TuiController;
@@ -86,6 +96,7 @@ export async function handleTuiSlash(
       return true;
     case 'clear':
     case 'reset':
+    case 'new':
       session.messages = [];
       ctl.appendSystem('Conversation cleared');
       return true;
@@ -174,6 +185,21 @@ export async function handleTuiSlash(
       ctl.appendSystem(`Model: ${name}`);
       return true;
     }
+    case 'effort': {
+      const level = parseEffortLevel(args[0]);
+      if (!level) {
+        ctl.appendSystem(formatEffortStatus(session.effort));
+        return true;
+      }
+      session.effort = level;
+      ctl.appendSystem(formatEffortStatus(level));
+      return true;
+    }
+    case 'vim':
+      ctl.appendSystem(
+        'Vim mode applies to the classic REPL line editor (/vim on|off). TUI uses Ink input.'
+      );
+      return true;
     case 'providers':
       for (const line of formatProvidersLines()) ctl.appendSystem(line);
       return true;
@@ -286,11 +312,21 @@ export async function handleTuiSlash(
       }
       return true;
     }
-    case 'voice':
-      for (const line of formatVoiceStatus().split('\n').filter(Boolean)) {
+    case 'voice': {
+      const sub = (args[0] ?? 'status').toLowerCase();
+      let report = getVoiceStatus();
+      if (sub === 'start') report = startVoiceListening();
+      else if (sub === 'stop') report = stopVoiceListening();
+      else if (sub === 'buddy') {
+        const on = (args[1] ?? 'on').toLowerCase();
+        setBuddyNarration(on !== 'off' && on !== '0' && on !== 'false');
+        report = getVoiceStatus();
+      }
+      for (const line of formatVoiceStatus(report).split('\n').filter(Boolean)) {
         ctl.appendSystem(line);
       }
       return true;
+    }
     case 'permissions': {
       const app = resolveAppConfig();
       for (const line of formatPermissionsReport(session.mode, app.permissions)) {

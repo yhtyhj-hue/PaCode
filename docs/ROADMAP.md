@@ -33,15 +33,16 @@
 | L1 预取（prefetch workers，非假 Subagent）+ 预取后仍可 tool | ✅ |
 | Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
 | 5 层 compact 管道形态 | ✅ L4 结构化折叠 + L5 5xx 重试 |
-| MCP stdio + SSE + HTTP + WebSocket | ✅；`/bridge`=v1-partial 远程清单 + **bridge/v0-session** 协议（中继 deferred） |
+| MCP stdio + SSE + HTTP + WebSocket | ✅；`/bridge`=v1-partial 远程清单 + **bridge/v1-local** 本机会话中继（`pacode bridge serve`） |
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
-| Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP alias) | ✅ |
+| Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP client) | ✅ LSP hover/definition；无 server 回退 tsc/eslint |
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
 | Ink TUI | ✅ K7：`--tui`（AskUser + 高频 slash；`/rewind <id>` 经确认后真恢复） |
-| Voice / Buddy | ❌ deferred 状态面（`/voice`，J4） |
-| M5 工程评测 | ✅ easy 3/3 live；**m5-hard** gate+periodic；vs CC COMPARE；mutation nudge |
+| Voice / Buddy | ✅ **voice/v1-stt-pipe**（`PACODE_STT_CMD` + `/voice start|stop`；Buddy 旁白开关） |
+| M5 工程评测 | ✅ easy/hard；vs CC COMPARE + **speed assert**（`PACODE_M5_SPEED_RATIO`）；并行任务 |
 | G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
 | PermissionRequest hook | ✅（stdout approve / exit 2 deny） |
+| G6 ML AUTO | ✅ **g6/v1-ml-features**（`PACODE_CLASSIFIER=ml` + 可选 `PACODE_CLASSIFIER_CMD`） |
 
 ---
 
@@ -84,7 +85,7 @@
 | J1 | Task 结果可见性 + TaskGet/List/Stop（先 3 个，再视需要扩到 6） | ✅（TaskStore + TaskList/Get/Stop；sync 登记 + background+Stop；/agents 展示 Task runs；曾 16→19） |
 | J2 | TeamCreate / SendMessage（最小可用） | ✅（TeamStore inbox；广播拆收件；嵌套保留 SendMessage、禁 TeamCreate；核心工具 19→21） |
 | J3 | Coordinator 模式（有限角色，强契约） | ✅（Coordinator assign/poll/collect；契约 j3/v1；lead→worker Task+inbox；collect 仅 SubagentReport；核心工具 21→22） |
-| J4 | Voice / Buddy | ❌ 默认不做，除非单独产品决策 |
+| J4 | Voice / Buddy | ✅ STT pipe（`PACODE_STT_CMD`）+ buddy 旁白 |
 
 ---
 
@@ -95,11 +96,10 @@
 | K1 | SkillTool / ToolSearch（延迟加载技能目录） | ✅（SkillTool load/list/search；ToolSearch；assembler 默认 lazy index；skillsFullCatalog opt-in；核心工具 22→24） |
 | K2 | ConfigTool（薄封装现有 settings） | ✅（get/set/list；writable 白名单；apiKey 脱敏；写入 user/project/local；核心工具 24→25） |
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | ✅（`/brief` 确定性构建 + `.claude/skills/brief`；无 BriefTool） |
-| K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP 别名) | ✅（诊断非真 language server） |
-| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；v1-partial 清单 + v0-session 契约（中继未实现） |
-| K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice`） |
+| K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP) | ✅ 真 LSP client（tsserver）；无 server 回退 tsc/eslint |
+| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；v1-partial + **bridge/v1-local** WS 中继 |
+| K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice` `/effort` `/vim` `/new`） |
 | K7 | Ink TUI | ✅ AskUser + 高频 slash；`/rewind <id>` askConfirm → rewindToDetailed |
-| J4 | Voice / Buddy | deferred 产品面（`/voice` 状态契约，非 STT） |
 
 Windows PowerShellTool：非 macOS 主线，defer。
 
@@ -132,7 +132,7 @@ J1 → J2 → J3
 K* 按需插入（永不阻塞 H）
 ```
 
-遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → **G6/v1-pluggable 已落地**（默认 v0 deterministic；真 ML 延后）。
+遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → **G6/v1-ml-features**（`PACODE_CLASSIFIER=ml`；默认仍 deterministic）。
 
 ---
 
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **超越 CC 六项**：M5 并行+速度断言；`/effort`/`/vim`/`/new`；bridge/v1-local；LSP client；Voice STT pipe；G6 ml backend |
 | 2026-07-17 | **对标 CC 深度质检**：M5 对齐；Voice/Bridge/LSP 落后；纠偏 M3/H7 文档过度声明 |
 | 2026-07-17 | **M5 vs CC 复验**：easy 双方 passRate=1（claude 2.1.207；pacode sonnet-4-6） |
 | 2026-07-17 | **质检核实**：31 工具；`npm test` 排除 periodic；gate 28 + unit 绿；live skipIf 认 cc-switch |
