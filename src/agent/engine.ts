@@ -146,9 +146,11 @@ export class QueryEngine {
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
     const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
 
-    // G4：把图片并入本轮用户消息（替换末尾纯文本 user，或追加）
+    // 核心：保证 request.message 进入会话；否则关预取时 API messages 为空（2013）
     if (request.images && request.images.length > 0) {
       attachImagesToLatestUserMessage(state, pinnedIntent, request.images);
+    } else if (pinnedIntent.trim()) {
+      ensureLatestUserTextMessage(state, pinnedIntent);
     }
 
     this.log.debug('Starting query', { mode });
@@ -329,7 +331,11 @@ export class QueryEngine {
 
         if (!response) break;
 
-        if (response.stopReason === 'end_turn') {
+        // 代理可能把 stop_reason 标成 end_turn 但仍带 tool_use blocks
+        const effectiveStop =
+          response.toolCalls.length > 0 ? 'tool_use' : response.stopReason;
+
+        if (effectiveStop === 'end_turn') {
           const noToolsUsed = response.toolCalls.length === 0;
 
           // I3: reflection — if the model just mutated code, run
@@ -421,7 +427,7 @@ export class QueryEngine {
           break;
         }
 
-        if (response.stopReason === 'tool_use') {
+        if (effectiveStop === 'tool_use') {
           deferredText = [];
           toolsUsedInQuery = true;
 
@@ -685,9 +691,11 @@ const stream = await withRetry(
       if (event.type === 'model_complete') {
         try {
           const finalMessage = await stream.finalMessage();
+          // 代理可能只在 finalMessage 带 tool_use，流事件缺失时补齐
+          const merged = mergeToolCallsFromFinalMessage(event, finalMessage);
           if (finalMessage.usage) {
             yield {
-              ...event,
+              ...merged,
               usage: {
                 input_tokens: finalMessage.usage.input_tokens,
                 output_tokens: finalMessage.usage.output_tokens,
@@ -695,6 +703,8 @@ const stream = await withRetry(
             };
             continue;
           }
+          yield merged;
+          continue;
         } catch {
           /* usage optional */
         }
@@ -894,6 +904,60 @@ export interface QueryEngineOptions {
   workingDirectory?: string;
   /** AskUser 等交互工具用的读行（REPL 在 pause editor 后注入） */
   readLine?: (prompt: string) => Promise<string>;
+}
+
+/** 若流式未解析到 tool_use，从 finalMessage.content 补齐（代理兼容） */
+export function mergeToolCallsFromFinalMessage(
+  event: Extract<ModelStreamEvent, { type: 'model_complete' }>,
+  finalMessage: { content?: Array<{ type: string; id?: string; name?: string; input?: unknown }>; stop_reason?: string | null }
+): Extract<ModelStreamEvent, { type: 'model_complete' }> {
+  if (event.toolCalls.length > 0) {
+    return event;
+  }
+  const toolCalls: ToolCall[] = [];
+  const content = [...event.content];
+  for (const block of finalMessage.content ?? []) {
+    if (block.type === 'tool_use' && block.id && block.name) {
+      const input =
+        block.input && typeof block.input === 'object'
+          ? (block.input as Record<string, unknown>)
+          : {};
+      toolCalls.push({ id: block.id, name: block.name, input });
+      content.push({
+        type: 'tool_use',
+        id: block.id,
+        name: block.name,
+        input,
+        jsonParts: '',
+      });
+    }
+  }
+  if (toolCalls.length === 0) return event;
+  const stopReason =
+    finalMessage.stop_reason === 'tool_use' || toolCalls.length > 0
+      ? ('tool_use' as const)
+      : event.stopReason;
+  return { ...event, content, toolCalls, stopReason };
+}
+export function ensureLatestUserTextMessage(state: SessionState, text: string): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const last = state.messages[state.messages.length - 1];
+  if (last?.role === 'user' && typeof last.content === 'string' && last.content === text) {
+    return;
+  }
+  if (
+    last?.role === 'user' &&
+    typeof last.content === 'string' &&
+    last.content.trim() === trimmed
+  ) {
+    return;
+  }
+  state.messages.push({
+    role: 'user',
+    content: text,
+    timestamp: Date.now(),
+  });
 }
 
 /** G4：将 images 并入最新 user 消息（ContentBlock[]） */

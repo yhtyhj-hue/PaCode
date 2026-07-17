@@ -49,7 +49,10 @@ export async function* consumeModelStream(
 
   for await (const event of stream) {
     if (event.type === 'message_stop') {
-      stopReason = 'end_turn';
+      // 勿覆盖 message_delta 已设的 tool_use / max_tokens
+      if (stopReason !== 'tool_use' && stopReason !== 'max_tokens') {
+        stopReason = 'end_turn';
+      }
     }
 
     if (event.type === 'content_block_start' && event.content_block) {

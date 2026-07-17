@@ -46,6 +46,15 @@ describe('requiresToolExecution', () => {
     expect(requiresToolExecution('explore codebase')).toBe(false);
     expect(requiresToolExecution('现在可以了?')).toBe(false);
   });
+
+  it('matches M5 engineering intents (fix / add-test / refactor)', () => {
+    expect(requiresToolExecution('Fix the bug in add.js so verify.sh passes')).toBe(true);
+    expect(requiresToolExecution('修好 add.js 里的 bug，让 verify 通过')).toBe(true);
+    expect(requiresToolExecution('Add a test for clamp in clamp.test.js')).toBe(true);
+    expect(requiresToolExecution('新增 clamp 的单元测试')).toBe(true);
+    expect(requiresToolExecution('Do a small refactor: extract formatName')).toBe(true);
+    expect(requiresToolExecution('小重构：提取 formatName 函数')).toBe(true);
+  });
 });
 
 describe('getLatestUserText', () => {

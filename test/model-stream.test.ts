@@ -97,4 +97,27 @@ describe('consumeModelStream', () => {
 
     expect(complete!.toolCalls[0]?.input).toEqual({ path: 'src/a.ts' });
   });
+
+  it('message_stop does not overwrite tool_use stop_reason', async () => {
+    const events: StreamEventLike[] = [
+      {
+        type: 'content_block_start',
+        content_block: { type: 'tool_use', id: 'tu_3', name: 'Write' },
+      },
+      {
+        type: 'content_block_delta',
+        delta: { type: 'input_json_delta', partial_json: '{"path":"x.js","content":"1"}' },
+      },
+      { type: 'message_delta', delta: { type: 'message_delta', stop_reason: 'tool_use' } },
+      { type: 'message_stop' },
+    ];
+
+    let complete: { stopReason: string; toolCalls: unknown[] } | undefined;
+    for await (const event of consumeModelStream(mockStream(events))) {
+      if (event.type === 'model_complete') complete = event;
+    }
+
+    expect(complete?.stopReason).toBe('tool_use');
+    expect(complete?.toolCalls).toHaveLength(1);
+  });
 });

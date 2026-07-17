@@ -1,8 +1,8 @@
 /**
  * Periodic eval: M5 一次成功率
  *
- * - 离线：golden 自检 + simulated mock agent（Write→grade）
- * - 有 API key：live QueryEngine 跑 fixture，passRate ≥ 0.5
+ * - 离线：golden 自检 + simulated mock agent
+ * - 有凭证（env 或 cc-switch）：live QueryEngine，passRate ≥ 0.5
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -17,6 +17,7 @@ import {
   readTaskPrompt,
 } from '../lib/m5-grader.js';
 import {
+  resolveM5LiveCredentials,
   runM5LiveAgent,
   runM5SimulatedAgent,
   writeM5Baseline,
@@ -25,7 +26,8 @@ import { buildSuiteReport, meetsThreshold } from '../lib/types.js';
 
 const FIXTURES = join(process.cwd(), 'evals/fixtures/m5');
 const BASELINE_THRESHOLD = 0.5;
-const hasApiKey = Boolean(process.env.ANTHROPIC_API_KEY);
+const liveCreds = resolveM5LiveCredentials();
+const hasLiveCreds = Boolean(liveCreds.apiKey);
 
 describe('eval:periodic:m5-once-success (offline baseline)', () => {
   let workDir: string;
@@ -96,9 +98,16 @@ describe('eval:periodic:m5-once-success (offline baseline)', () => {
       expect(prompt.length).toBeGreaterThan(10);
     }
   });
+
+  it('resolveM5LiveCredentials reports source without leaking secrets', () => {
+    const c = resolveM5LiveCredentials();
+    expect(['env', 'cc-switch', 'none']).toContain(c.source);
+    // 绝不把密钥写入断言消息
+    expect(JSON.stringify(c)).not.toMatch(/sk-ant-/);
+  });
 });
 
-describe.skipIf(!hasApiKey)('eval:periodic:m5-once-success (live agent)', () => {
+describe.skipIf(!hasLiveCreds)('eval:periodic:m5-once-success (live agent)', () => {
   let workDir: string;
 
   beforeEach(() => {
@@ -112,7 +121,12 @@ describe.skipIf(!hasApiKey)('eval:periodic:m5-once-success (live agent)', () => 
   it(
     'live QueryEngine meets once-success threshold on fixtures',
     async () => {
-      const runs = await runM5LiveAgent(FIXTURES, workDir, { timeoutMs: 180_000 });
+      const runs = await runM5LiveAgent(FIXTURES, workDir, {
+        timeoutMs: 180_000,
+        apiKey: liveCreds.apiKey,
+        baseUrl: liveCreds.baseUrl,
+        model: liveCreds.model,
+      });
       const results = runs.map((r) => ({
         id: r.taskId,
         lane: 'periodic' as const,
@@ -126,8 +140,13 @@ describe.skipIf(!hasApiKey)('eval:periodic:m5-once-success (live agent)', () => 
       writeM5Baseline(join(FIXTURES, 'BASELINE.json'), {
         threshold: BASELINE_THRESHOLD,
         passRate: report.passRate,
-        tasks: results.map((r) => ({ id: r.id, passed: r.passed })),
-        note: 'live agent QueryEngine',
+        tasks: results.map((r) => ({
+          id: r.id,
+          passed: r.passed,
+          durationMs: r.durationMs,
+          message: r.message.slice(0, 200),
+        })),
+        note: `live agent via ${liveCreds.source} (model=${liveCreds.model ?? 'default'})`,
       });
       expect(meetsThreshold(report.passRate, BASELINE_THRESHOLD)).toBe(true);
     },

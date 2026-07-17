@@ -11,6 +11,7 @@ import { QueryEngine } from '../../src/agent/engine.js';
 import { ToolRegistry } from '../../src/tools/registry.js';
 import { registerCoreTools } from '../../src/tools/bootstrap.js';
 import { PermissionMode } from '../../src/pkg/types.js';
+import { getCCSwitch } from '../../src/pkg/ccswitch/index.js';
 import {
   createMockAnthropicClient,
   textEndTurnScenario,
@@ -31,6 +32,44 @@ export interface M5RunResult {
   message: string;
   durationMs: number;
   mode: 'simulated' | 'live';
+  /** live 诊断：本轮用过的工具名 */
+  toolsUsed?: string[];
+  /** live 诊断：engine error 事件 */
+  errors?: string[];
+  /** live 诊断：助手文本预览 */
+  assistantPreview?: string;
+}
+
+/** 凭证：env 优先，否则 cc-switch active provider（不打印密钥） */
+export function resolveM5LiveCredentials(): {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  source: 'env' | 'cc-switch' | 'none';
+} {
+  const envKey = process.env['ANTHROPIC_API_KEY'];
+  if (envKey) {
+    return {
+      apiKey: envKey,
+      baseUrl: process.env['ANTHROPIC_BASE_URL'],
+      model: process.env['CLAUDE_MODEL'],
+      source: 'env',
+    };
+  }
+  try {
+    const creds = getCCSwitch().getCredentials();
+    if (creds.apiKey) {
+      return {
+        apiKey: creds.apiKey,
+        baseUrl: creds.baseUrl ?? process.env['ANTHROPIC_BASE_URL'],
+        model: creds.model ?? process.env['CLAUDE_MODEL'],
+        source: 'cc-switch',
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { source: 'none' };
 }
 
 function listFilesRecursive(dir: string, base = dir): string[] {
@@ -113,15 +152,22 @@ export async function runM5SimulatedAgent(
   return results;
 }
 
-/** 真实 API：broken 起点 → QueryEngine → grade；需 ANTHROPIC_API_KEY */
 export async function runM5LiveAgent(
   fixturesRoot: string,
   workRoot: string,
-  options: { apiKey?: string; model?: string; timeoutMs?: number } = {}
+  options: {
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+    timeoutMs?: number;
+  } = {}
 ): Promise<M5RunResult[]> {
-  const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
+  const resolved = resolveM5LiveCredentials();
+  const apiKey = options.apiKey ?? resolved.apiKey;
+  const baseUrl = options.baseUrl ?? resolved.baseUrl;
+  const model = options.model ?? resolved.model ?? 'claude-sonnet-4-5';
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY required for live M5');
+    throw new Error('API key required for live M5 (ANTHROPIC_API_KEY or cc-switch active provider)');
   }
   const results: M5RunResult[] = [];
   for (const taskId of M5_TASKS) {
@@ -132,15 +178,25 @@ export async function runM5LiveAgent(
     materializeBroken(fixtureRoot, workDir);
 
     const registry = new ToolRegistry();
+    // M5：精简工具，避免本地代理因 tools schema 过大而静默丢掉 tool_choice
     registerCoreTools(registry, {
-      task: { toolRegistry: registry, apiKey },
+      task: { toolRegistry: registry, apiKey, baseUrl, model },
     });
+    const m5Tools = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'];
+    const filtered = new ToolRegistry();
+    for (const name of m5Tools) {
+      const t = registry.get(name);
+      if (t) filtered.register(t);
+    }
 
     const engine = new QueryEngine({
       apiKey,
-      toolRegistry: registry,
+      baseUrl,
+      toolRegistry: filtered,
       workingDirectory: workDir,
       permissionPrompt: async () => true,
+      // M5：关预取，逼模型真改 fixture
+      prefetch: { enabled: false },
     });
 
     const state = {
@@ -156,23 +212,35 @@ export async function runM5LiveAgent(
     const prompt = [
       readTaskPrompt(fixtureRoot),
       '',
-      `Working directory is ${workDir}. Edit files in place. Run verify with: node verify.mjs`,
+      `Working directory is already set to the project root (tools run there).`,
+      `You MUST use Read/Edit/Write/Bash tools to change files — never only describe a plan.`,
+      `When finished, the harness runs: node verify.mjs`,
     ].join('\n');
 
+    const toolsUsed: string[] = [];
+    const errors: string[] = [];
+    let assistantPreview = '';
     const timeoutMs = options.timeoutMs ?? 180_000;
     const deadline = Date.now() + timeoutMs;
     try {
-      for await (const _ of engine.query(
+      for await (const event of engine.query(
         {
           message: prompt,
           options: {
-            model: options.model ?? 'claude-sonnet-4-5',
+            model,
+            toolChoice: 'any',
             shouldAbort: () => Date.now() > deadline,
           },
         },
         state
       )) {
-        /* drain */
+        if (event.type === 'tool_use' && event.tool) {
+          toolsUsed.push(event.tool.name);
+        } else if (event.type === 'content_block_delta' && event.delta?.text) {
+          assistantPreview = (assistantPreview + event.delta.text).slice(0, 400);
+        } else if (event.type === 'error' && event.error) {
+          errors.push(`${event.error.code ?? 'ERR'}: ${event.error.message}`);
+        }
       }
     } catch (e) {
       results.push({
@@ -181,17 +249,34 @@ export async function runM5LiveAgent(
         message: e instanceof Error ? e.message : String(e),
         durationMs: Date.now() - started,
         mode: 'live',
+        toolsUsed,
+        errors,
+        assistantPreview,
       });
       continue;
     }
 
     const grade = gradeM5Task(taskId, workDir);
+    const diag =
+      grade.passed
+        ? grade.message
+        : [
+            grade.message.trim(),
+            toolsUsed.length ? `tools=${toolsUsed.join(',')}` : 'tools=none',
+            errors.length ? `errors=${errors.join(' | ')}` : '',
+            assistantPreview ? `assistant=${assistantPreview.slice(0, 160)}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ');
     results.push({
       taskId,
       passed: grade.passed,
-      message: grade.message,
+      message: diag,
       durationMs: Date.now() - started,
       mode: 'live',
+      toolsUsed,
+      errors,
+      assistantPreview,
     });
   }
   return results;
@@ -203,7 +288,12 @@ export function writeM5Baseline(
   payload: {
     passRate: number;
     threshold: number;
-    tasks: Array<{ id: string; passed: boolean }>;
+    tasks: Array<{
+      id: string;
+      passed: boolean;
+      durationMs?: number;
+      message?: string;
+    }>;
     note: string;
   }
 ): void {
