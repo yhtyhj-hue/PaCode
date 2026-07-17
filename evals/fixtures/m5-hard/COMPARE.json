@@ -1,0 +1,37 @@
+{
+  "updatedAt": "2026-07-17T02:11:47.385Z",
+  "threshold": 0.5,
+  "pacodePassRate": 1,
+  "ccPassRate": 1,
+  "tasks": [
+    {
+      "id": "multi-file-bug",
+      "pacodePassed": true,
+      "ccPassed": true,
+      "pacodeDurationMs": 96974,
+      "ccDurationMs": 52965,
+      "pacodeMessage": "verify passed",
+      "ccMessage": "verify passed"
+    },
+    {
+      "id": "fail-then-fix",
+      "pacodePassed": true,
+      "ccPassed": true,
+      "pacodeDurationMs": 123123,
+      "ccDurationMs": 62147,
+      "pacodeMessage": "verify passed",
+      "ccMessage": "verify passed"
+    },
+    {
+      "id": "cross-module",
+      "pacodePassed": true,
+      "ccPassed": true,
+      "pacodeDurationMs": 69990,
+      "ccDurationMs": 20500,
+      "pacodeMessage": "verify passed",
+      "ccMessage": "verify passed"
+    }
+  ],
+  "note": "m5-hard head-to-head via cc-switch; model=claude-sonnet-4-6",
+  "claudeVersion": "2.1.207 (Claude Code)"
+}

@@ -1,0 +1,26 @@
+{
+  "updatedAt": "2026-07-17T02:11:47.385Z",
+  "threshold": 0.5,
+  "passRate": 1,
+  "tasks": [
+    {
+      "id": "multi-file-bug",
+      "passed": true,
+      "durationMs": 96974,
+      "message": "verify passed"
+    },
+    {
+      "id": "fail-then-fix",
+      "passed": true,
+      "durationMs": 123123,
+      "message": "verify passed"
+    },
+    {
+      "id": "cross-module",
+      "passed": true,
+      "durationMs": 69990,
+      "message": "verify passed"
+    }
+  ],
+  "note": "live agent m5-hard via cc-switch (from COMPARE)"
+}
