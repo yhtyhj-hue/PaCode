@@ -132,13 +132,40 @@ describe('K5 mergeMcpAuthHeaders', () => {
   });
 });
 
-describe('K5 Bridge deferred', () => {
-  it('reports deferred contract, not available', () => {
-    const status = getBridgeStatus();
+describe('K5 Bridge v1-partial', () => {
+  it('reports deferred when no remote MCP configured', () => {
+    const status = getBridgeStatus({ config: { servers: {} }, connections: [] });
     expect(status.contract).toBe(BRIDGE_CONTRACT);
     expect(status.status).toBe('deferred');
     expect(formatBridgeStatus(status)).toContain('not implemented');
     expect(formatBridgeStatus(status)).toContain('mcp.json');
+    expect(formatBridgeStatus(status)).toContain('Remote MCP: (none configured)');
+  });
+
+  it('reports partial with remote MCP inventory', () => {
+    const status = getBridgeStatus({
+      config: {
+        servers: {
+          remote: { type: 'sse', url: 'https://mcp.example/sse' },
+          local: { type: 'stdio', command: 'npx' },
+        },
+      },
+      connections: [
+        {
+          name: 'remote',
+          status: 'connected',
+          tools: [{ name: 'ping' }] as never,
+        },
+      ],
+    });
+    expect(status.status).toBe('partial');
+    expect(status.remoteConfigured).toHaveLength(1);
+    expect(status.remoteConnected).toBe(1);
+    const text = formatBridgeStatus(status);
+    expect(text).toContain('remote');
+    expect(text).toContain('sse');
+    expect(text).toContain('connected');
+    expect(text).toContain('sessions are not implemented');
   });
 
   it('exposes /bridge in slash menu', () => {

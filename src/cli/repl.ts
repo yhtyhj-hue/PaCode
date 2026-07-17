@@ -49,15 +49,12 @@ import { QueryProgressLine } from './query-progress.js';
 import { getAgentPool } from '../services/agent-scheduler/index.js';
 import { getTaskStore } from '../services/task-registry/index.js';
 import { getTeamStore } from '../services/team/index.js';
-import {
-  getCoordinatorStore,
-  coordinatorPoll,
-  formatCoordinatorAssignmentLine,
-} from '../services/coordinator/index.js';
+import { getCoordinatorStore } from '../services/coordinator/index.js';
+import { formatAgentsReport } from './agents-display.js';
 import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.js';
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
-import { formatBridgeStatus } from '../services/bridge/index.js';
+import { getBridgeStatus, formatBridgeStatus } from '../services/bridge/index.js';
 import { formatVoiceStatus } from '../services/voice/index.js';
 import {
   getCronStore,
@@ -522,7 +519,7 @@ export class REPL {
         ['/status', 'Show session info'],
         ['/doctor', 'Run local health checks'],
         ['/diff', 'git status + diff --stat (read-only)'],
-        ['/bridge', 'Bridge remote session status (deferred)'],
+        ['/bridge', 'Bridge status + remote MCP inventory (sessions deferred)'],
         ['/voice', 'Voice / Buddy status (deferred)'],
         ['/cron', 'List/create/delete in-process scheduled prompts'],
         ['/cost', 'Show token usage and cost'],
@@ -829,62 +826,9 @@ Project-specific instructions for PaCode/Claude Code.
   }
 
   private showAgents(): void {
-    const pool = getAgentPool();
-    const running = pool.snapshot();
-    const registered = getSubagentManager().list();
-    const tasks = getTaskStore().list().slice(0, 12);
-    const teams = getTeamStore().list().slice(0, 8);
-
     console.log('');
     console.log(`${CYAN}${BOLD}Agents${RESET}`);
-
-    if (pool.activeQueryId() && running.length > 0) {
-      console.log(`${DIM}Prefetch workers (same-process DAG): ${pool.activeQueryId()}${RESET}`);
-      for (const run of running) {
-        const marker =
-          run.status === 'done' ? `${GREEN}●${RESET}` : run.status === 'error' ? `${RED}●${RESET}` : `${YELLOW}●${RESET}`;
-        const hint = run.currentTool ?? run.status;
-        console.log(`  ${marker} ${run.label} (${run.agentType}) · ${run.toolCalls} tools · ${hint}`);
-      }
-      console.log('');
-    }
-
-    if (tasks.length > 0) {
-      console.log(`${DIM}Task runs (Subagent / TaskGet):${RESET}`);
-      for (const t of tasks) {
-        const marker =
-          t.status === 'done' ? `${GREEN}●${RESET}` : t.status === 'error' || t.status === 'stopped' ? `${RED}●${RESET}` : `${YELLOW}●${RESET}`;
-        console.log(
-          `  ${marker} ${t.id} · ${t.status} · ${t.subagentType} · ${t.description}${t.background ? ' (bg)' : ''}`
-        );
-      }
-      console.log('');
-    }
-
-    if (teams.length > 0) {
-      console.log(`${DIM}Teams (TeamCreate / SendMessage / Coordinator):${RESET}`);
-      for (const t of teams) {
-        const poll = coordinatorPoll(t.id);
-        const items = poll.ok ? poll.items : [];
-        console.log(
-          `  ${CYAN}●${RESET} ${t.id} · ${t.name} · ${t.memberCount} members · ${t.unreadCount} unread · ${items.length} assignments`
-        );
-        // assign_many / assign 明细：与 poll 同源，便于人工审计扇出状态
-        for (const a of items.slice(0, 12)) {
-          console.log(`    ${DIM}${formatCoordinatorAssignmentLine(a)}${RESET}`);
-        }
-      }
-      console.log('');
-    }
-
-    console.log(`${DIM}Registered subagent types:${RESET}`);
-    for (const agent of registered) {
-      console.log(`  ${CYAN}${agent.name}${RESET} — ${DIM}${agent.description}${RESET}`);
-    }
-    console.log('');
-    console.log(
-      `${DIM}Task/Team/Coordinator → real subagents + inbox. Prefetch workers ≠ Team. assign_many → assignment rows above.${RESET}`
-    );
+    console.log(formatAgentsReport());
     console.log('');
   }
 
@@ -1378,10 +1322,13 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     console.log('');
   }
 
-  /** K5: Bridge 状态（明确 deferred，不谎称可用） */
+  /** K5: Bridge 状态（会话 deferred；远程 MCP 清单 partial） */
   private handleBridge(): void {
+    const connections = this.mcpConnections.length
+      ? this.mcpConnections
+      : getMCPClient().listConnections();
     console.log('');
-    console.log(formatBridgeStatus());
+    console.log(formatBridgeStatus(getBridgeStatus({ connections })));
     console.log('');
   }
 

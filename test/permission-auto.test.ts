@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { PermissionSystem } from '../src/permission/system.js';
 import { PermissionMode } from '../src/pkg/types.js';
 import { matchPermissionRules } from '../src/permission/rules.js';
-import { classifyToolCall } from '../src/permission/classifier.js';
+import { classifyToolCall, CLASSIFIER_CONTRACT } from '../src/permission/classifier.js';
 
 describe('PermissionRules', () => {
   it('deny rule blocks before allow', () => {
@@ -121,5 +121,31 @@ describe('PermissionSystem AUTO mode', () => {
     });
     expect(result.allowed).toBe(true);
     expect(result.requiresInteraction).toBeFalsy();
+  });
+});
+
+describe('G6/v0 classifier contract', () => {
+  it('returns contract category confidence on classify', () => {
+    const r = classifyToolCall({ id: '1', name: 'Read', input: { path: 'x' } });
+    expect(r.contract).toBe(CLASSIFIER_CONTRACT);
+    expect(r.category).toBe('readonly');
+    expect(r.confidence).toBe('high');
+  });
+
+  it('classifies NotebookEdit and Coordinator as moderate', () => {
+    const n = classifyToolCall({
+      id: '1',
+      name: 'NotebookEdit',
+      input: { path: 'a.ipynb' },
+    });
+    expect(n.risk).toBe('moderate');
+    expect(n.category).toBe('mutation');
+    const c = classifyToolCall({
+      id: '2',
+      name: 'Coordinator',
+      input: { action: 'poll', team_id: 't' },
+    });
+    expect(c.risk).toBe('moderate');
+    expect(c.category).toBe('orchestration');
   });
 });

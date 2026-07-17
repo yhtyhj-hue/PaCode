@@ -19,6 +19,7 @@ import {
   formatCoordinatorAssignmentsForAgents,
   coordinatorPoll,
 } from '../src/services/coordinator/index.js';
+import { formatAgentsReport } from '../src/cli/agents-display.js';
 import type { SubagentReport } from '../src/agent/subagent.js';
 
 beforeEach(() => {
@@ -124,5 +125,13 @@ describe('J3 /agents coordinator visibility', () => {
       logSpy.mockRestore();
       rmSync(sessionDir, { recursive: true, force: true });
     }
+  });
+
+  it('formatAgentsReport includes coordinator rows', () => {
+    const { teamId, asnIds } = seedAssignMany();
+    const text = formatAgentsReport();
+    expect(text).toContain(teamId);
+    expect(text).toContain(asnIds[0]!);
+    expect(text).toContain('Teams (TeamCreate');
   });
 });

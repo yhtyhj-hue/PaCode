@@ -24,7 +24,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/status', description: 'Show session info' },
   { command: '/doctor', description: 'Run local health checks' },
   { command: '/diff', description: 'Show git status and diff --stat (read-only)' },
-  { command: '/bridge', description: 'Bridge remote session status (deferred)' },
+  { command: '/bridge', description: 'Bridge status + remote MCP inventory (sessions deferred)' },
   { command: '/voice', description: 'Voice / Buddy status (deferred)' },
   { command: '/tui', description: 'Hint: restart with --tui or PACODE_TUI=1 for Ink UI' },
   { command: '/cron', description: 'List/create/delete in-process scheduled prompts' },

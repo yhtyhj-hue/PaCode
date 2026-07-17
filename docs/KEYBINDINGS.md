@@ -61,7 +61,7 @@ Shows:
 | `/mcp` | MCP servers |
 | `/init` | Initialize project |
 | `/plan` | Generate plan |
-| `/agents` | List subagents |
+| `/agents` | List subagents, tasks, teams, coordinator assignments |
 | `/providers` | List providers |
 | `/review <file>` | Review code (custom) |
 | `/explain <file>` | Explain code (custom) |

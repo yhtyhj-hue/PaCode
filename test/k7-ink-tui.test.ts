@@ -81,9 +81,10 @@ describe('K7 TUI slash', () => {
     expect(TUI_SLASH_HELP).toMatch(/doctor/);
     expect(TUI_SLASH_HELP).toMatch(/diff/);
     expect(TUI_SLASH_HELP).toMatch(/voice/);
+    expect(TUI_SLASH_HELP).toMatch(/agents/);
   });
 
-  it('handles /help /status /mode /style /bridge /voice', async () => {
+  it('handles /help /status /mode /style /agents /bridge /voice', async () => {
     const ctl = mockCtl();
     const session = {
       sessionId: 't1',
@@ -115,6 +116,9 @@ describe('K7 TUI slash', () => {
 
     expect(await handleTuiSlash('/style cost', makeCtx())).toBe(true);
     expect(style).toBe('cost');
+
+    expect(await handleTuiSlash('/agents', makeCtx())).toBe(true);
+    expect(ctl.lines.some((l) => l === 'Agents' || l.includes('Registered subagent'))).toBe(true);
 
     expect(await handleTuiSlash('/bridge', makeCtx())).toBe(true);
     expect(ctl.lines.some((l) => /Bridge status/i.test(l))).toBe(true);

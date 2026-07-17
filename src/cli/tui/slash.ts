@@ -5,7 +5,9 @@
 import { PermissionMode, type SessionState } from '../../pkg/types.js';
 import { formatDoctorReport, runDoctorChecks } from '../doctor.js';
 import { formatGitDiffView } from '../git-diff-view.js';
-import { formatBridgeStatus } from '../../services/bridge/index.js';
+import { getBridgeStatus, formatBridgeStatus } from '../../services/bridge/index.js';
+import { formatAgentsReportLines } from '../agents-display.js';
+import { getMCPClient } from '../../mcp/client.js';
 import { formatVoiceStatus } from '../../services/voice/index.js';
 import { formatCostReport } from '../cost-estimate.js';
 import { listStyles, type OutputStyle } from '../output-styles.js';
@@ -16,7 +18,7 @@ import { resolveAppConfig } from '../../pkg/app-config.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
-  '/help /clear /status /mode /cost /style /doctor /diff /bridge /voice /permissions /brief /rewind /exit';
+  '/help /clear /status /mode /cost /style /doctor /diff /agents /bridge /voice /permissions /brief /rewind /exit';
 
 export interface TuiSlashContext {
   ctl: TuiController;
@@ -111,11 +113,26 @@ export async function handleTuiSlash(
       }
       return true;
     }
-    case 'bridge':
-      for (const line of formatBridgeStatus().split('\n').filter(Boolean)) {
+    case 'agents':
+      ctl.appendSystem('Agents');
+      for (const line of formatAgentsReportLines()) {
+        ctl.appendSystem(line || ' ');
+      }
+      return true;
+    case 'bridge': {
+      let connections: import('../../pkg/types.js').MCPServerConnection[] = [];
+      try {
+        connections = getMCPClient().listConnections();
+      } catch {
+        connections = [];
+      }
+      for (const line of formatBridgeStatus(getBridgeStatus({ connections }))
+        .split('\n')
+        .filter(Boolean)) {
         ctl.appendSystem(line);
       }
       return true;
+    }
     case 'voice':
       for (const line of formatVoiceStatus().split('\n').filter(Boolean)) {
         ctl.appendSystem(line);

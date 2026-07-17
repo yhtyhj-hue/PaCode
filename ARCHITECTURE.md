@@ -616,8 +616,8 @@ Permission Modes (Graduated Trust Spectrum)
 │   Layer 4: Tool Permission Level                                     │
 │   └─ Each tool declares minimum required permission                  │
 │                              ▼                                      │
-│   Layer 5: ML Classifier (auto mode)                                │
-│   └─ Speculative evaluation of bash commands                         │
+│   Layer 5: Deterministic Classifier (G6/v0; ML deferred)            │
+│   └─ classifyToolCall risk/category/confidence (AUTO + DEFAULT)      │
 │                              ▼                                      │
 │   Layer 6: User Interaction                                          │
 │   └─ Interactive confirmation prompt                                 │
@@ -1247,7 +1247,7 @@ PaCode/
 | **架构** | 闭源 (~512K LOC TypeScript) | 开源 TypeScript monolith |
 | **核心循环** | while-loop (~1.6% 代码) | AsyncGenerator QueryEngine ✅ |
 | **记忆** | 文件-based | 文件-based + 项目 hash 分区 ✅ |
-| **权限** | 7 modes + ML | 7 modes + regex AUTO + tool-gate + 工作区路径边界 ✅ |
+| **权限** | 7 modes + ML | 7 modes + G6/v0 deterministic AUTO + tool-gate + 工作区路径边界 ✅ |
 | **压缩** | 5-layer | 5-layer L1–L5（L1 降低 API max_tokens） ✅ |
 | **扩展** | Hooks/Skills/Plugins/MCP | 同上（Ink TUI defer） |
 | **工具** | 43 内置 + MCP | 8 核心 + Plugin + MCP；Bash 静态分析（非容器沙箱） ✅ |

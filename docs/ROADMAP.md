@@ -33,7 +33,7 @@
 | L1 预取（prefetch workers，非假 Subagent）+ 预取后仍可 tool | ✅ |
 | Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
 | 5 层 compact 管道形态 | ✅ L4 结构化折叠 + L5 5xx 重试 |
-| MCP stdio + SSE + HTTP + WebSocket | ✅；Bridge 远程会话仍 deferred（`/bridge`） |
+| MCP stdio + SSE + HTTP + WebSocket | ✅；Bridge 会话 deferred，`/bridge`=v1-partial 远程 MCP 清单 |
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
 | Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP alias) | ✅ |
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
@@ -96,7 +96,7 @@
 | K2 | ConfigTool（薄封装现有 settings） | ✅（get/set/list；writable 白名单；apiKey 脱敏；写入 user/project/local；核心工具 24→25） |
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | ✅（`/brief` 确定性构建 + `.claude/skills/brief`；无 BriefTool） |
 | K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP 别名) | ✅（诊断非真 language server） |
-| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；Bridge 仍 deferred（`/bridge`） |
+| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；Bridge 会话 deferred；`/bridge` v1-partial 远程 MCP 清单 |
 | K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice`） |
 | K7 | Ink TUI | ✅ AskUser + 高频 slash；`/rewind <id>` askConfirm → rewindToDetailed |
 | J4 | Voice / Buddy | deferred 产品面（`/voice` 状态契约，非 STT） |
@@ -132,7 +132,7 @@ J1 → J2 → J3
 K* 按需插入（永不阻塞 H）
 ```
 
-遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → I 之后或与 H2 并行（非 H 阻塞）。
+遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → **G6/v0-deterministic 已落地**（真 ML 延后 g6/v1-ml）。
 
 ---
 
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **G6/v0 + Bridge v1-partial + TUI /agents**：确定性分类器契约；远程 MCP 清单；TUI 对齐 |
 | 2026-07-17 | **J3 /agents assign_many 可见性**：per-assignment status 行（poll 同源） |
 | 2026-07-17 | **I4 plan execution report**：done/failed 可审计摘要；`/plan report`；complete 保留 failed |
 | 2026-07-17 | **I4 step retry + J3 assign_many**：失败有界重试/skip；并行多 worker |
