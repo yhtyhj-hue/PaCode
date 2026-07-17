@@ -63,6 +63,7 @@ export type ToolResultContent =
   | { type: 'resource'; resource: Resource };
 
 export interface ImageSource {
+  /** base64：data 为裸 base64；url：data 为 https URL */
   type: 'base64' | 'url';
   mediaType: string;
   data: string;
@@ -83,8 +84,10 @@ export interface SessionState {
   mode: PermissionMode;
   hooks: HookConfig;
   compactionHistory: CompactionRecord[];
-  /** 本会话已批准的工具键（H2）：`Read` / `Bash:npm` 等 */
+  /** 本会话已批准的工具键（H2）：`Read` / `Bash:npm:test` 等 */
   sessionApprovals?: string[];
+  /** I2：本会话已捕获的 checkpoint 序号 */
+  checkpointIndex?: number;
 }
 
 export interface Message {
@@ -94,11 +97,13 @@ export interface Message {
 }
 
 export interface ContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result';
+  type: 'text' | 'tool_use' | 'tool_result' | 'image';
   text?: string;
   toolUse?: ToolCall;
   toolUseId?: string;
   toolResult?: ToolResult;
+  /** G4：用户消息中的图片块 */
+  image?: ImageSource;
 }
 
 export interface CompactionRecord {
@@ -113,6 +118,8 @@ export interface QueryRequest {
   message?: string;
   mode?: PermissionMode;
   options?: QueryOptions;
+  /** G4：附加到本轮用户消息的图片（与 message 一并序列化进 API） */
+  images?: ImageSource[];
 }
 
 export interface QueryOptions {

@@ -67,9 +67,13 @@ Environment:
   PACODE_AUTO_APPROVE     Set to 1 to allow tool prompts in non-TTY environments
   PACODE_HOOK_FAIL_OPEN   Set to 1 to continue when PreToolUse hooks throw (default: deny)
 
+Options:
+  --image <path>          Attach image for vision (repeatable; png/jpeg/gif/webp)
+
 Examples:
   pacode "Read package.json and explain the project"
   pacode -m acceptEdits "Add error handling to index.ts"
+  pacode --image shot.png "Describe this screenshot"
   pacode cc-switch add anthropic --api-key sk-xxx
   pacode cc-switch use
 `);

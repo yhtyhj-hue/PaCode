@@ -37,3 +37,17 @@ evals/
 - **Gate tests**（`test/`）：单元/集成测试，验证实现正确性
 - **Gate evals**（`evals/gate/`）：行为/回归 eval，验证用户可见质量指标
 - **Periodic evals**：需要 LLM 的质量测量，允许非确定性但有阈值
+
+## M5 工程评测
+
+```
+evals/fixtures/m5/{fix-bug,add-test,small-refactor}/
+  TASK.md          # agent 提示
+  broken/          # 起点
+  golden/          # 参考解（gate 自检）
+  verify.mjs       # 确定性评分
+```
+
+- Gate：`evals/gate/m5-engineering-tasks.eval.ts` — broken 失败 / golden 通过
+- Periodic：`evals/periodic/m5-once-success.eval.ts` — 基线 passRate，写入 `BASELINE.json`
+- 联合冒烟：`test/smoke-joint-paths.test.ts`

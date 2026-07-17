@@ -20,7 +20,7 @@
 | M2 | DEFAULT 完成一次「项目质检」人工确认次数 | ≤ 1（Bash 批） |
 | M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | ≥ 90% 会话 |
 | M4 | 权限确认不卡死输入框 / Ctrl+C 可取消 | 100% |
-| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 持续提升并记录基线 |
+| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5（golden）；`evals/gate/m5` + `evals/periodic/m5`；见 `evals/fixtures/m5/BASELINE.json` |
 
 ---
 
@@ -37,6 +37,8 @@
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
 | Team / Coordinator / NotebookEdit / ScheduleCron / LSP(diagnostics) | ✅（K4/J2/J3） |
 | Ink TUI / Voice / Buddy | ❌ defer（K7 / J4） |
+| M5 工程评测 fixture（fix-bug / add-test / small-refactor） | ✅ gate + periodic 基线 |
+| G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
 
 ---
 
@@ -126,7 +128,7 @@ J1 → J2 → J3
 K* 按需插入（永不阻塞 H）
 ```
 
-遗留 G 项并入：G4 图片 → 建议紧接 H4/H6；G5 MCP → **H5**；G6 ML AUTO → I 之后或与 H2 并行（非 H 阻塞）。
+遗留 G 项并入：G4 图片 → ✅（serializer + CLI `--image`）；G5 MCP → **H5**；G6 ML AUTO → I 之后或与 H2 并行（非 H 阻塞）。
 
 ---
 
@@ -152,6 +154,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | 联合冒烟 + M5 工程评测基线 + G4 图片（--image / ContentBlock）+ Edit 后自动 checkpoint |
 | 2026-07-17 | 二次质检：approvedKeys；apiKey 禁 project；ExitPlanMode/PLAN 白名单；DONT_ASK←bash-secure；cron 下限；hooks execFile；AskUser interrupt |
 | 2026-07-17 | 质检 P0/P1：Bash 确认可执行 + 2>&1；symlink 嵌套写逃逸；DEFAULT Edit/Write；预取证据门闩；AskUser readLine；LSP 工作区；coverage/docs |
 | 2026-07-17 | K4 P2：NotebookEdit + ScheduleCron + LSP(diagnostics) |

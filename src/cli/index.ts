@@ -21,6 +21,8 @@ import {
   showHelp,
 } from './handlers.js';
 import { parseCliArgs } from './args.js';
+import { loadImageFromFile } from '../services/image-attach/index.js';
+import type { ImageSource } from '../pkg/types.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -151,6 +153,18 @@ Get a key at: https://console.anthropic.com/
 
   session.messages.push({ role: 'user', content: message, timestamp: Date.now() });
 
+  // G4：--image path（可重复）
+  const imagePaths = (values.image as string[] | undefined) ?? [];
+  const images: ImageSource[] = [];
+  for (const p of imagePaths) {
+    try {
+      images.push(loadImageFromFile(p));
+    } catch (e) {
+      log.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+  }
+
   const engine = new QueryEngine({
     apiKey,
     baseUrl,
@@ -163,7 +177,15 @@ Get a key at: https://console.anthropic.com/
 
   let hasAuthError = false;
   for await (const event of engine.query(
-    { message, options: { model, maxTokens: appConfig.maxTokens, temperature: appConfig.temperature } },
+    {
+      message,
+      images: images.length > 0 ? images : undefined,
+      options: {
+        model,
+        maxTokens: appConfig.maxTokens,
+        temperature: appConfig.temperature,
+      },
+    },
     session
   )) {
     if (event.type === 'content_block_delta' && event.delta) {

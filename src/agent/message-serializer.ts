@@ -5,23 +5,58 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { ContentBlock, Message, ToolResult } from '../pkg/types.js';
 
+type ApiImageBlock = {
+  type: 'image';
+  source:
+    | { type: 'base64'; media_type: string; data: string }
+    | { type: 'url'; url: string };
+};
+
 type ApiContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | ApiImageBlock;
 
-/** 将 ToolResult 转为 Anthropic tool_result content */
+/** 将 ToolResult 转为 Anthropic tool_result content（文本；图片另附注） */
 function toolResultContent(result: ToolResult): string {
-  return result.content
-    .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-    .map((c) => c.text)
-    .join('\n');
+  const parts: string[] = [];
+  for (const c of result.content) {
+    if (c.type === 'text') parts.push(c.text);
+    else if (c.type === 'image') {
+      parts.push(`[image ${c.source.mediaType} omitted from tool_result string]`);
+    }
+  }
+  return parts.join('\n');
+}
+
+/** G4：ImageSource → Anthropic image block（media_type snake_case） */
+export function serializeImageSource(image: {
+  type: 'base64' | 'url';
+  mediaType: string;
+  data: string;
+}): ApiImageBlock {
+  if (image.type === 'url') {
+    return { type: 'image', source: { type: 'url', url: image.data } };
+  }
+  return {
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: image.mediaType,
+      data: image.data,
+    },
+  };
 }
 
 /** 单条 ContentBlock → Anthropic content block */
 function serializeContentBlock(block: ContentBlock): ApiContentBlock | null {
   if (block.type === 'text') {
     return { type: 'text', text: block.text ?? '' };
+  }
+
+  if (block.type === 'image' && block.image) {
+    return serializeImageSource(block.image);
   }
 
   if (block.type === 'tool_use' && block.toolUse) {
@@ -58,7 +93,10 @@ export function serializeMessagesForApi(messages: Message[]): Anthropic.MessageP
         .map(serializeContentBlock)
         .filter((b): b is ApiContentBlock => b !== null);
 
-      return { role: m.role as 'user' | 'assistant', content: blocks as Anthropic.MessageParam['content'] };
+      return {
+        role: m.role as 'user' | 'assistant',
+        content: blocks as Anthropic.MessageParam['content'],
+      };
     });
 }
 

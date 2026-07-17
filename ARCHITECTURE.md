@@ -44,7 +44,9 @@
 - `src/services/skill-mount/` — everything-claude-code skill 挂载
 - `src/services/ask-user/` — REPL 交互式问题（对标 CC AskUserQuestionTool）
 
-**Defer:** Ink/React TUI（K7）、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、多模态 image upload、真 language server、Bridge 远程会话、WebSocket MCP、CC `BashOutput` (background)、Voice/Buddy（J4）
+**Defer:** Ink/React TUI（K7）、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、真 language server、Bridge 远程会话、WebSocket MCP、CC `BashOutput` (background)、Voice/Buddy（J4）
+
+**G4 图片：** `ContentBlock.image` + `message-serializer` → Anthropic `media_type`；CLI `--image`；`src/services/image-attach/`
 
 **已知遗留：**
 - claude-sonnet-4-0 EOL → 4-5（commit fe9f320 之后）

@@ -13,6 +13,8 @@ import {
   ToolContext,
   PermissionMode,
   QueryEvent,
+  ContentBlock,
+  ImageSource,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 import { ContextAssembler } from '../context/assembler.js';
@@ -40,6 +42,7 @@ import { withRetry } from './retry.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
 import { getLatestUserText, requiresToolExecution } from './tool-intent.js';
 import { compileMessagesForApi } from '../services/context-compiler/index.js';
+import { captureCheckpoint } from '../services/checkpoint.js';
 import {
   resolveDagPlanWithHistory,
   formatDagResults,
@@ -142,6 +145,11 @@ export class QueryEngine {
     let reflectionCount = 0;
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
     const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
+
+    // G4：把图片并入本轮用户消息（替换末尾纯文本 user，或追加）
+    if (request.images && request.images.length > 0) {
+      attachImagesToLatestUserMessage(state, pinnedIntent, request.images);
+    }
 
     this.log.debug('Starting query', { mode });
 
@@ -507,6 +515,31 @@ export class QueryEngine {
             this.sessionManager.addToolCall(state, toolCall);
           }
 
+          // I2：Edit/Write/NotebookEdit 成功批次后自动 stash checkpoint
+          if (
+            hasCodeMutatingToolCall(approvedCalls) &&
+            approvedCalls.some((c) => {
+              const r = resultById.get(c.id);
+              return r && !r.isError;
+            })
+          ) {
+            const idx = state.checkpointIndex ?? 0;
+            const label = approvedCalls
+              .filter((c) => ['Edit', 'Write', 'NotebookEdit'].includes(c.name))
+              .map((c) => c.name)
+              .join('+');
+            const meta = captureCheckpoint(
+              state.sessionId,
+              idx,
+              label || 'mutate',
+              this.workingDirectory
+            );
+            if (meta) {
+              state.checkpointIndex = idx + 1;
+              this.log.info(`Checkpoint captured: ${meta.id}`);
+            }
+          }
+
           state.messages.push({
             role: 'user',
             content: toolResultBlocks,
@@ -795,4 +828,31 @@ export interface QueryEngineOptions {
   workingDirectory?: string;
   /** AskUser 等交互工具用的读行（REPL 在 pause editor 后注入） */
   readLine?: (prompt: string) => Promise<string>;
+}
+
+/** G4：将 images 并入最新 user 消息（ContentBlock[]） */
+export function attachImagesToLatestUserMessage(
+  state: SessionState,
+  text: string,
+  images: ImageSource[]
+): void {
+  const blocks: ContentBlock[] = [];
+  if (text.trim()) {
+    blocks.push({ type: 'text', text });
+  }
+  for (const image of images) {
+    blocks.push({ type: 'image', image });
+  }
+  if (blocks.length === 0) return;
+
+  const last = state.messages[state.messages.length - 1];
+  if (last?.role === 'user' && typeof last.content === 'string') {
+    last.content = blocks;
+    return;
+  }
+  state.messages.push({
+    role: 'user',
+    content: blocks,
+    timestamp: Date.now(),
+  });
 }
