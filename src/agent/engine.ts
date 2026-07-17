@@ -40,7 +40,7 @@ import { executeToolCallsInOrder } from './tool-executor.js';
 import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-stream.js';
 import { withRetry } from './retry.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
-import { getLatestUserText, requiresToolExecution } from './tool-intent.js';
+import { getLatestUserText, requiresToolExecution, requiresCodeMutation } from './tool-intent.js';
 import { compileMessagesForApi } from '../services/context-compiler/index.js';
 import { captureCheckpoint } from '../services/checkpoint.js';
 import {
@@ -58,11 +58,16 @@ const DAG_PREFETCH_NOTE = 'Running intent DAG prefetch before model summary.';
 /** 模型未调工具时的重试上限 */
 export const MAX_TOOL_NUDGE_RETRIES = 1;
 
+export const MAX_MUTATION_NUDGE_RETRIES = 1;
+
 /** Agent 循环最大轮次，防止 tool_use 死循环 */
 export const MAX_AGENT_TURNS = 50;
 
 const TOOL_NUDGE_MESSAGE =
   'You must call at least one tool (Read, Glob, Grep, or Bash) before answering. Do not reply with text only.';
+
+const MUTATION_NUDGE_MESSAGE =
+  'You inspected the project but did not change any files. You MUST use Edit or Write to apply the fix before finishing. Do not only describe the change.';
 
 export type PermissionPromptFn = (
   tool: ToolCall,
@@ -135,6 +140,7 @@ export class QueryEngine {
     const mode = request.mode ?? state.mode;
     let effectiveOptions: QueryOptions = { ...(request.options ?? {}) };
     let toolNudgeAttempts = 0;
+    let mutationNudgeAttempts = 0;
     let turnCount = 0;
     let toolsUsedInQuery = false;
     let dagPrefetched = false;
@@ -400,6 +406,25 @@ export class QueryEngine {
               },
             };
             break;
+          }
+
+          if (
+            requiresCodeMutation(pinnedIntent) &&
+            mode !== PermissionMode.PLAN &&
+            toolsUsedInQuery &&
+            !hasCodeMutatingToolCall(state.toolCallHistory) &&
+            mutationNudgeAttempts < MAX_MUTATION_NUDGE_RETRIES
+          ) {
+            mutationNudgeAttempts++;
+            deferredText = [];
+            this.log.warn('Model ended without Edit/Write; nudging code mutation');
+            state.messages.push({
+              role: 'user',
+              content: MUTATION_NUDGE_MESSAGE,
+              timestamp: Date.now(),
+            });
+            effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+            continue;
           }
 
           const assistantBlocks = responseContentToBlocks(response.content);

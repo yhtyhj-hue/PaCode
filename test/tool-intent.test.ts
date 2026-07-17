@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { requiresToolExecution, getLatestUserText } from '../src/agent/tool-intent.js';
+import { requiresToolExecution, requiresCodeMutation, getLatestUserText } from '../src/agent/tool-intent.js';
 
 describe('requiresToolExecution', () => {
   it('matches analysis and inspection phrases', () => {
@@ -54,6 +54,16 @@ describe('requiresToolExecution', () => {
     expect(requiresToolExecution('新增 clamp 的单元测试')).toBe(true);
     expect(requiresToolExecution('Do a small refactor: extract formatName')).toBe(true);
     expect(requiresToolExecution('小重构：提取 formatName 函数')).toBe(true);
+    expect(requiresToolExecution('两个文件都有 bug，修好 verify.mjs')).toBe(true);
+    expect(requiresToolExecution('跨模块契约不一致，对齐 getUser 与 label')).toBe(true);
+  });
+});
+
+describe('requiresCodeMutation', () => {
+  it('matches engineering fix intents', () => {
+    expect(requiresCodeMutation('修好 bug 使 verify.mjs 通过')).toBe(true);
+    expect(requiresCodeMutation('跨模块契约不一致，对齐 getUser')).toBe(true);
+    expect(requiresCodeMutation('你好')).toBe(false);
   });
 });
 

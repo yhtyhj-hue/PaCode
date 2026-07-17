@@ -68,3 +68,5 @@ claude-code-sourcemap-main/
 # M5 derived baselines (canonical live KPI stays BASELINE.json)
 evals/fixtures/m5/BASELINE.offline.json
 evals/fixtures/m5/BASELINE.simulated.json
+evals/fixtures/m5-hard/BASELINE.offline.json
+evals/fixtures/m5-hard/BASELINE.simulated.json

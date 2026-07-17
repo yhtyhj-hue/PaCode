@@ -9,7 +9,6 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   M5_TASKS,
-  type M5TaskId,
   gradeM5Task,
   materializeBroken,
   readTaskPrompt,
@@ -17,7 +16,7 @@ import {
 import { resolveM5LiveCredentials } from './m5-live-runner.js';
 
 export interface M5CcRunResult {
-  taskId: M5TaskId;
+  taskId: string;
   passed: boolean;
   message: string;
   durationMs: number;
@@ -138,7 +137,12 @@ export async function runClaudePrint(options: {
 export async function runM5ClaudeCodeAgent(
   fixturesRoot: string,
   workRoot: string,
-  options: { cli?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {}
+  options: {
+    cli?: string;
+    timeoutMs?: number;
+    env?: NodeJS.ProcessEnv;
+    tasks?: string[];
+  } = {}
 ): Promise<M5CcRunResult[]> {
   const cli = options.cli ?? resolveClaudeCli();
   if (!cli) {
@@ -146,9 +150,10 @@ export async function runM5ClaudeCodeAgent(
   }
   const timeoutMs = options.timeoutMs ?? 180_000;
   const env = options.env ?? buildClaudeEnv();
+  const tasks = options.tasks ?? [...M5_TASKS];
   const results: M5CcRunResult[] = [];
 
-  for (const taskId of M5_TASKS) {
+  for (const taskId of tasks) {
     const started = Date.now();
     const fixtureRoot = join(fixturesRoot, taskId);
     const workDir = join(workRoot, taskId);
@@ -210,9 +215,10 @@ export function buildM5CompareReport(options: {
   threshold?: number;
   note: string;
   claudeVersion?: string;
+  taskIds?: string[];
 }): M5CompareReport {
   const threshold = options.threshold ?? 0.5;
-  const ids = M5_TASKS as string[];
+  const ids = options.taskIds ?? [...M5_TASKS];
   const tasks: M5CompareTaskRow[] = ids.map((id) => {
     const p = options.pacode.find((r) => r.taskId === id);
     const c = options.cc.find((r) => r.taskId === id);

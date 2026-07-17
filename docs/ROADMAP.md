@@ -20,7 +20,7 @@
 | M2 | DEFAULT 完成一次「项目质检」人工确认次数 | ≤ 1（Bash 批） |
 | M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | ≥ 90% 会话 |
 | M4 | 权限确认不卡死输入框 / Ctrl+C 可取消 | 100% |
-| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5；gate + periodic simulated；live 经 env 或 cc-switch（BASELINE passRate=1）；与 CC CLI 并排见 `COMPARE.json` |
+| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5；easy live passRate=1；**m5-hard**（多文件/失败再修/跨模块）≥ 0.5；vs CC 见 COMPARE.json |
 
 ---
 
@@ -39,7 +39,7 @@
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
 | Ink TUI | ✅ K7：`--tui`（AskUser + 高频 slash；`/rewind <id>` 经确认后真恢复） |
 | Voice / Buddy | ❌ deferred 状态面（`/voice`，J4） |
-| M5 工程评测 | ✅ golden + simulated；**live once-success** 经 env/`cc-switch`（3/3）；**vs Claude Code** periodic compare |
+| M5 工程评测 | ✅ easy 3/3 live；**m5-hard** gate+periodic；vs CC COMPARE；mutation nudge |
 | G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
 | PermissionRequest hook | ✅（stdout approve / exit 2 deny） |
 
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **M5-hard** + mutation nudge：multi-file / fail-then-fix / cross-module |
 | 2026-07-17 | **M5 vs Claude Code**：`claude -p` 同 fixture 并排；`COMPARE.json`；无 CLI/凭证则 skip |
 | 2026-07-17 | **M5 live once-success**：cc-switch 凭证；空 messages / message_stop 覆盖 tool_use / mergeToolCalls；BASELINE passRate=1（3/3） |
 | 2026-07-17 | K7 `/rewind`：TUI 确认后调用 rewindToDetailed（取消/脏树错误可测） |

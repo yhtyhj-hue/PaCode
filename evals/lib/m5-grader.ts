@@ -15,9 +15,10 @@ import {
 import { dirname, join } from 'node:path';
 
 export type M5TaskId = 'fix-bug' | 'add-test' | 'small-refactor';
+export type M5HardTaskId = 'multi-file-bug' | 'fail-then-fix' | 'cross-module';
 
 export interface M5GradeResult {
-  taskId: M5TaskId;
+  taskId: string;
   passed: boolean;
   message: string;
 }
@@ -58,7 +59,7 @@ export function runFixtureVerify(cwd: string): { ok: boolean; output: string } {
   }
 }
 
-export function gradeM5Task(taskId: M5TaskId, cwd: string): M5GradeResult {
+export function gradeM5Task(taskId: string, cwd: string): M5GradeResult {
   const result = runFixtureVerify(cwd);
   return {
     taskId,
@@ -95,3 +96,9 @@ export function materializeBroken(fixtureRoot: string, workDir: string): void {
 }
 
 export const M5_TASKS: M5TaskId[] = ['fix-bug', 'add-test', 'small-refactor'];
+
+export const M5_HARD_TASKS: M5HardTaskId[] = [
+  'multi-file-bug',
+  'fail-then-fix',
+  'cross-module',
+];

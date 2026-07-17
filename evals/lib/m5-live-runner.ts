@@ -20,14 +20,13 @@ import {
 import { stubAssembler, passthroughCompaction } from '../../test/helpers/engine-stubs.js';
 import {
   M5_TASKS,
-  type M5TaskId,
   gradeM5Task,
   materializeBroken,
   readTaskPrompt,
 } from './m5-grader.js';
 
 export interface M5RunResult {
-  taskId: M5TaskId;
+  taskId: string;
   passed: boolean;
   message: string;
   durationMs: number;
@@ -102,10 +101,12 @@ function buildWriteScenarios(fixtureRoot: string) {
 /** CI 可跑：mock agent 经 Write 应用 golden，再 grade */
 export async function runM5SimulatedAgent(
   fixturesRoot: string,
-  workRoot: string
+  workRoot: string,
+  options: { tasks?: string[] } = {}
 ): Promise<M5RunResult[]> {
+  const tasks = options.tasks ?? [...M5_TASKS];
   const results: M5RunResult[] = [];
-  for (const taskId of M5_TASKS) {
+  for (const taskId of tasks) {
     const started = Date.now();
     const fixtureRoot = join(fixturesRoot, taskId);
     const workDir = join(workRoot, taskId);
@@ -160,6 +161,7 @@ export async function runM5LiveAgent(
     baseUrl?: string;
     model?: string;
     timeoutMs?: number;
+    tasks?: string[];
   } = {}
 ): Promise<M5RunResult[]> {
   const resolved = resolveM5LiveCredentials();
@@ -169,8 +171,9 @@ export async function runM5LiveAgent(
   if (!apiKey) {
     throw new Error('API key required for live M5 (ANTHROPIC_API_KEY or cc-switch active provider)');
   }
+  const tasks = options.tasks ?? [...M5_TASKS];
   const results: M5RunResult[] = [];
-  for (const taskId of M5_TASKS) {
+  for (const taskId of tasks) {
     const started = Date.now();
     const fixtureRoot = join(fixturesRoot, taskId);
     const workDir = join(workRoot, taskId);
@@ -214,6 +217,7 @@ export async function runM5LiveAgent(
       '',
       `Working directory is already set to the project root (tools run there).`,
       `You MUST use Read/Edit/Write/Bash tools to change files — never only describe a plan.`,
+      `Before finishing you MUST have used Edit or Write at least once.`,
       `When finished, the harness runs: node verify.mjs`,
     ].join('\n');
 

@@ -25,6 +25,8 @@ const TOOL_REQUIRED_PATTERNS: RegExp[] = [
   /修好|修复\s*bug|fix[- ]?bug/i,
   /refactor|小重构|提取.{0,8}函数|formatName/i,
   /新增.{0,12}测试|add.{0,16}test|write.{0,12}test|clamp\.test/i,
+  /multi-file|fail-then-fix|cross-module|两个文件|跨模块|契约不一致/i,
+  /parseQuery|verify\.mjs|只改必要代码/i,
   /audit\s+(?:the\s+)?(?:project|codebase|repo)/i,
   /(?:project|codebase|repo).{0,24}quality\s+check/i,
   /full\s+project\s+quality\s+check/i,
@@ -41,6 +43,21 @@ const TOOL_REQUIRED_PATTERNS: RegExp[] = [
 export function requiresToolExecution(message: string): boolean {
   const trimmed = message.trim();
   return TOOL_REQUIRED_PATTERNS.some((re) => re.test(trimmed));
+}
+
+const MUTATION_REQUIRED_PATTERNS: RegExp[] = [
+  /(?:修复|修好|改好|fix).{0,40}(?:bug|错误|缺陷|代码|函数|测试|verify)/i,
+  /修好|修复\s*bug|fix[- ]?bug/i,
+  /refactor|小重构|提取.{0,8}函数|formatName/i,
+  /新增.{0,12}测试|add.{0,16}test|write.{0,12}test|clamp\.test/i,
+  /multi-file|fail-then-fix|cross-module|两个文件|跨模块|契约不一致/i,
+  /对齐契约|只改必要代码|使\s*`?verify/i,
+  /parseQuery|getUser|label\(/i,
+];
+
+export function requiresCodeMutation(message: string): boolean {
+  const trimmed = message.trim();
+  return MUTATION_REQUIRED_PATTERNS.some((re) => re.test(trimmed));
 }
 
 /** 从 session 取最近一条用户文本 */
