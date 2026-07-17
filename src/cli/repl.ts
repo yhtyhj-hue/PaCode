@@ -65,7 +65,13 @@ import { formatAgentsReport } from './agents-display.js';
 import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.js';
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
-import { getBridgeStatus, formatBridgeStatus } from '../services/bridge/index.js';
+import {
+  getBridgeStatus,
+  formatBridgeStatus,
+  bridgeSessionOp,
+  formatBridgeSessionOp,
+  parseBridgeSessionArgs,
+} from '../services/bridge/index.js';
 import { formatVoiceStatus } from '../services/voice/index.js';
 import {
   getCronStore,
@@ -488,7 +494,7 @@ export class REPL {
         this.handleDiff();
         break;
       case '/bridge':
-        this.handleBridge();
+        this.handleBridge(args);
         break;
       case '/voice':
         this.handleVoice();
@@ -529,7 +535,7 @@ export class REPL {
         ['/status', 'Show session info'],
         ['/doctor', 'Run local health checks'],
         ['/diff', 'git status + diff --stat (read-only)'],
-        ['/bridge', 'Bridge status + remote MCP inventory (sessions deferred)'],
+        ['/bridge', 'Bridge status + remote MCP; /bridge session list|attach'],
         ['/voice', 'Voice / Buddy status (deferred)'],
         ['/cron', 'List/create/delete in-process scheduled prompts'],
         ['/cost', 'Show token usage and cost'],
@@ -1271,7 +1277,14 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
   }
 
   /** K5: Bridge 状态（会话 deferred；远程 MCP 清单 partial） */
-  private handleBridge(): void {
+  private handleBridge(args: string[] = []): void {
+    const sessionReq = parseBridgeSessionArgs(args);
+    if (sessionReq) {
+      console.log('');
+      console.log(formatBridgeSessionOp(bridgeSessionOp(sessionReq)));
+      console.log('');
+      return;
+    }
     const connections = this.mcpConnections.length
       ? this.mcpConnections
       : getMCPClient().listConnections();

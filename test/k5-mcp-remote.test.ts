@@ -139,6 +139,7 @@ describe('K5 Bridge v1-partial', () => {
     expect(status.status).toBe('deferred');
     expect(formatBridgeStatus(status)).toContain('not implemented');
     expect(formatBridgeStatus(status)).toContain('mcp.json');
+    expect(formatBridgeStatus(status)).toContain('bridge/v0-session');
     expect(formatBridgeStatus(status)).toContain('Remote MCP: (none configured)');
   });
 

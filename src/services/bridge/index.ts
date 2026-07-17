@@ -104,6 +104,23 @@ export function formatBridgeStatus(report: BridgeStatusReport = getBridgeStatus(
   for (const a of report.alternatives) {
     lines.push(`- ${a}`);
   }
-  lines.push('', `contract=${report.contract}`);
+  lines.push(
+    '',
+    'Session protocol: bridge/v0-session (list|attach|detach|status) — deferred.',
+    'Try: /bridge session list',
+    '',
+    `contract=${report.contract}`
+  );
   return lines.join('\n');
 }
+
+export {
+  BRIDGE_SESSION_CONTRACT,
+  bridgeSessionOp,
+  formatBridgeSessionOp,
+  parseBridgeSessionArgs,
+  type BridgeSessionAction,
+  type BridgeSessionRef,
+  type BridgeSessionRequest,
+  type BridgeSessionOpResult,
+} from './session.js';

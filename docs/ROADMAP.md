@@ -33,7 +33,7 @@
 | L1 预取（prefetch workers，非假 Subagent）+ 预取后仍可 tool | ✅ |
 | Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
 | 5 层 compact 管道形态 | ✅ L4 结构化折叠 + L5 5xx 重试 |
-| MCP stdio + SSE + HTTP + WebSocket | ✅；Bridge 会话 deferred，`/bridge`=v1-partial 远程 MCP 清单 |
+| MCP stdio + SSE + HTTP + WebSocket | ✅；`/bridge`=v1-partial 远程清单 + **bridge/v0-session** 协议（中继 deferred） |
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
 | Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP alias) | ✅ |
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
@@ -96,7 +96,7 @@
 | K2 | ConfigTool（薄封装现有 settings） | ✅（get/set/list；writable 白名单；apiKey 脱敏；写入 user/project/local；核心工具 24→25） |
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | ✅（`/brief` 确定性构建 + `.claude/skills/brief`；无 BriefTool） |
 | K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP 别名) | ✅（诊断非真 language server） |
-| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；Bridge 会话 deferred；`/bridge` v1-partial 远程 MCP 清单 |
+| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；v1-partial 清单 + v0-session 契约（中继未实现） |
 | K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice`） |
 | K7 | Ink TUI | ✅ AskUser + 高频 slash；`/rewind <id>` askConfirm → rewindToDetailed |
 | J4 | Voice / Buddy | deferred 产品面（`/voice` 状态契约，非 STT） |
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **Bridge session protocol v0**：`bridge/v0-session` list/attach/detach/status 契约；`/bridge session` |
 | 2026-07-17 | **TUI slash gap**：/context /memory /model /providers /cron /init |
 | 2026-07-17 | **TUI /compact + /mcp**：共享 compact-display / mcp-display |
 | 2026-07-17 | **TUI /resume**：list + confirm 后恢复会话（与 REPL 共用 resume-display） |

@@ -5,7 +5,13 @@
 import { PermissionMode, type MCPServerConnection, type SessionState } from '../../pkg/types.js';
 import { formatDoctorReport, runDoctorChecks } from '../doctor.js';
 import { formatGitDiffView } from '../git-diff-view.js';
-import { getBridgeStatus, formatBridgeStatus } from '../../services/bridge/index.js';
+import {
+  getBridgeStatus,
+  formatBridgeStatus,
+  bridgeSessionOp,
+  formatBridgeSessionOp,
+  parseBridgeSessionArgs,
+} from '../../services/bridge/index.js';
 import { formatAgentsReportLines } from '../agents-display.js';
 import { formatPlanReadOnlyLines } from '../plan-display.js';
 import {
@@ -258,6 +264,15 @@ export async function handleTuiSlash(
       }
       return true;
     case 'bridge': {
+      const sessionReq = parseBridgeSessionArgs(args);
+      if (sessionReq) {
+        for (const line of formatBridgeSessionOp(bridgeSessionOp(sessionReq))
+          .split('\n')
+          .filter(Boolean)) {
+          ctl.appendSystem(line);
+        }
+        return true;
+      }
       let connections: import('../../pkg/types.js').MCPServerConnection[] = [];
       try {
         connections = getMCPClient().listConnections();
