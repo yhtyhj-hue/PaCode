@@ -1,20 +1,26 @@
 {
-  "updatedAt": "2026-07-17T01:19:41.197Z",
+  "updatedAt": "2026-07-17T01:19:09.533Z",
   "threshold": 0.5,
   "passRate": 1,
   "tasks": [
     {
       "id": "fix-bug",
-      "passed": true
+      "passed": true,
+      "durationMs": 37314,
+      "message": "verify passed"
     },
     {
       "id": "add-test",
-      "passed": true
+      "passed": true,
+      "durationMs": 143584,
+      "message": "verify passed"
     },
     {
       "id": "small-refactor",
-      "passed": true
+      "passed": true,
+      "durationMs": 14775,
+      "message": "verify passed"
     }
   ],
-  "note": "simulated mock agent (Write golden)"
+  "note": "live agent via cc-switch (model=claude-sonnet-4-6)"
 }

@@ -64,3 +64,7 @@ venv/
 # Reference / vendor trees (not part of PaCode)
 claude-code-sourcemap-main/
 .claude/worktrees/
+
+# M5 derived baselines (canonical live KPI stays BASELINE.json)
+evals/fixtures/m5/BASELINE.offline.json
+evals/fixtures/m5/BASELINE.simulated.json

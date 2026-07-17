@@ -58,7 +58,7 @@ describe('eval:periodic:m5-once-success (offline baseline)', () => {
     });
 
     const report = buildSuiteReport('periodic', results);
-    writeM5Baseline(join(FIXTURES, 'BASELINE.json'), {
+    writeM5Baseline(join(FIXTURES, 'BASELINE.offline.json'), {
       threshold: BASELINE_THRESHOLD,
       passRate: report.passRate,
       tasks: results.map((r) => ({ id: r.id, passed: r.passed })),
@@ -82,7 +82,8 @@ describe('eval:periodic:m5-once-success (offline baseline)', () => {
       durationMs: r.durationMs,
     }));
     const report = buildSuiteReport('periodic', results);
-    writeM5Baseline(join(FIXTURES, 'BASELINE.json'), {
+    // 勿覆盖 BASELINE.json（留给 live once-success）
+    writeM5Baseline(join(FIXTURES, 'BASELINE.simulated.json'), {
       threshold: BASELINE_THRESHOLD,
       passRate: report.passRate,
       tasks: results.map((r) => ({ id: r.id, passed: r.passed })),
