@@ -6,7 +6,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { M5_HARD_TASKS, applyGolden, gradeM5Task, materializeBroken, readTaskPrompt } from '../lib/m5-grader.js';
-import { resolveM5LiveCredentials, runM5LiveAgent, runM5SimulatedAgent, writeM5Baseline } from '../lib/m5-live-runner.js';
+import {
+  resolveM5LiveCredentials,
+  runM5LiveAgent,
+  runM5SimulatedAgent,
+  writeM5Baseline,
+  formatM5FailureSummary,
+} from '../lib/m5-live-runner.js';
 import { buildSuiteReport, meetsThreshold } from '../lib/types.js';
 
 const FIXTURES = join(process.cwd(), 'evals/fixtures/m5-hard');
@@ -28,13 +34,19 @@ describe('eval:periodic:m5-hard-once-success (offline)', () => {
     });
     const report = buildSuiteReport('periodic', results);
     writeM5Baseline(join(FIXTURES, 'BASELINE.offline.json'), { threshold: THRESHOLD, passRate: report.passRate, tasks: results.map((r) => ({ id: r.id, passed: r.passed })), note: 'offline golden baseline (m5-hard)' });
-    expect(meetsThreshold(report.passRate, THRESHOLD)).toBe(true);
+    expect(
+      meetsThreshold(report.passRate, THRESHOLD),
+      formatM5FailureSummary(report.passRate, THRESHOLD, results)
+    ).toBe(true);
   });
   it('simulated mock agent meets threshold', async () => {
     const runs = await runM5SimulatedAgent(FIXTURES, join(workDir, 'sim'), { tasks: [...M5_HARD_TASKS] });
     const report = buildSuiteReport('periodic', runs.map((r) => ({ id: r.taskId, lane: 'periodic' as const, passed: r.passed, score: r.passed ? 1 : 0, threshold: THRESHOLD, message: r.message, durationMs: r.durationMs })));
     writeM5Baseline(join(FIXTURES, 'BASELINE.simulated.json'), { threshold: THRESHOLD, passRate: report.passRate, tasks: report.results.map((r) => ({ id: r.id, passed: r.passed })), note: 'simulated mock agent (m5-hard)' });
-    expect(meetsThreshold(report.passRate, THRESHOLD)).toBe(true);
+    expect(
+      meetsThreshold(report.passRate, THRESHOLD),
+      formatM5FailureSummary(report.passRate, THRESHOLD, report.results)
+    ).toBe(true);
   });
   it('task prompts exist', () => {
     for (const taskId of M5_HARD_TASKS) expect(readTaskPrompt(join(FIXTURES, taskId)).length).toBeGreaterThan(10);
@@ -48,7 +60,12 @@ describe.skipIf(!hasLiveCreds)('eval:periodic:m5-hard-once-success (live)', () =
   it('live QueryEngine meets hard once-success threshold', async () => {
     const runs = await runM5LiveAgent(FIXTURES, workDir, { timeoutMs: 180_000, apiKey: liveCreds.apiKey, baseUrl: liveCreds.baseUrl, model: liveCreds.model, tasks: [...M5_HARD_TASKS] });
     const report = buildSuiteReport('periodic', runs.map((r) => ({ id: r.taskId, lane: 'periodic' as const, passed: r.passed, score: r.passed ? 1 : 0, threshold: THRESHOLD, message: r.message, durationMs: r.durationMs })));
-    writeM5Baseline(join(FIXTURES, 'BASELINE.json'), { threshold: THRESHOLD, passRate: report.passRate, tasks: runs.map((r) => ({ id: r.taskId, passed: r.passed, durationMs: r.durationMs, message: r.message.slice(0, 200) })), note: `live agent m5-hard via ${liveCreds.source} (model=${liveCreds.model ?? 'default'})` });
-    expect(meetsThreshold(report.passRate, THRESHOLD)).toBe(true);
+    const filtered = Boolean(process.env['PACODE_M5_TASKS']?.trim());
+    const baselineName = filtered ? 'BASELINE.partial.json' : 'BASELINE.json';
+    writeM5Baseline(join(FIXTURES, baselineName), { threshold: THRESHOLD, passRate: report.passRate, tasks: runs.map((r) => ({ id: r.taskId, passed: r.passed, durationMs: r.durationMs, message: r.message.slice(0, 200) })), note: `live agent m5-hard via ${liveCreds.source} (model=${liveCreds.model ?? 'default'})${filtered ? ` filter=${process.env['PACODE_M5_TASKS']}` : ''}` });
+    expect(
+      meetsThreshold(report.passRate, THRESHOLD),
+      formatM5FailureSummary(report.passRate, THRESHOLD, report.results)
+    ).toBe(true);
   }, 600_000);
 });

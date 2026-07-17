@@ -10,7 +10,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { meetsThreshold } from '../lib/types.js';
-import { resolveM5LiveCredentials, runM5LiveAgent } from '../lib/m5-live-runner.js';
+import {
+  resolveM5LiveCredentials,
+  runM5LiveAgent,
+  formatM5FailureSummary,
+} from '../lib/m5-live-runner.js';
 import {
   buildM5CompareReport,
   readClaudeVersion,
@@ -81,8 +85,34 @@ describe.skipIf(!canCompare)('eval:periodic:m5-cc-compare (live head-to-head)', 
 
       writeM5CompareReport(join(FIXTURES, 'COMPARE.json'), report);
 
-      expect(meetsThreshold(report.pacodePassRate, THRESHOLD)).toBe(true);
-      expect(meetsThreshold(report.ccPassRate, THRESHOLD)).toBe(true);
+      expect(
+        meetsThreshold(report.pacodePassRate, THRESHOLD),
+        'PaCode: ' +
+          formatM5FailureSummary(
+            report.pacodePassRate,
+            THRESHOLD,
+            report.tasks.map((x) => ({
+              id: x.id,
+              passed: x.pacodePassed,
+              message: x.pacodeMessage,
+              durationMs: x.pacodeDurationMs,
+            }))
+          )
+      ).toBe(true);
+      expect(
+        meetsThreshold(report.ccPassRate, THRESHOLD),
+        'Claude Code: ' +
+          formatM5FailureSummary(
+            report.ccPassRate,
+            THRESHOLD,
+            report.tasks.map((x) => ({
+              id: x.id,
+              passed: x.ccPassed,
+              message: x.ccMessage,
+              durationMs: x.ccDurationMs,
+            }))
+          )
+      ).toBe(true);
     },
     900_000
   );

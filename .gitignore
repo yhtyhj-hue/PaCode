@@ -70,3 +70,6 @@ evals/fixtures/m5/BASELINE.offline.json
 evals/fixtures/m5/BASELINE.simulated.json
 evals/fixtures/m5-hard/BASELINE.offline.json
 evals/fixtures/m5-hard/BASELINE.simulated.json
+
+# M5 filtered live diagnostics
+evals/fixtures/**/BASELINE.partial.json

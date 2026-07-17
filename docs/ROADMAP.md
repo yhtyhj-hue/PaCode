@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **M5 live 诊断**：failure summary 断言；`PACODE_M5_TASKS` 过滤；过滤时写 BASELINE.partial |
 | 2026-07-17 | **Bridge session protocol v0**：`bridge/v0-session` list/attach/detach/status 契约；`/bridge session` |
 | 2026-07-17 | **TUI slash gap**：/context /memory /model /providers /cron /init |
 | 2026-07-17 | **TUI /compact + /mcp**：共享 compact-display / mcp-display |

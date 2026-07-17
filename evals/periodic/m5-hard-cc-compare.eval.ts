@@ -7,7 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { M5_HARD_TASKS } from '../lib/m5-grader.js';
 import { meetsThreshold } from '../lib/types.js';
-import { resolveM5LiveCredentials, runM5LiveAgent } from '../lib/m5-live-runner.js';
+import {
+  resolveM5LiveCredentials,
+  runM5LiveAgent,
+  formatM5FailureSummary,
+} from '../lib/m5-live-runner.js';
 import { buildM5CompareReport, readClaudeVersion, resolveClaudeCli, runM5ClaudeCodeAgent, writeM5CompareReport } from '../lib/m5-cc-runner.js';
 
 const FIXTURES = join(process.cwd(), 'evals/fixtures/m5-hard');
@@ -32,7 +36,33 @@ describe.skipIf(!canCompare)('eval:periodic:m5-hard-cc-compare', () => {
       claudeVersion: claudeCli ? readClaudeVersion(claudeCli) : undefined,
     });
     writeM5CompareReport(join(FIXTURES, 'COMPARE.json'), report);
-    expect(meetsThreshold(report.pacodePassRate, THRESHOLD)).toBe(true);
-    expect(meetsThreshold(report.ccPassRate, THRESHOLD)).toBe(true);
+    expect(
+      meetsThreshold(report.pacodePassRate, THRESHOLD),
+      'PaCode: ' +
+        formatM5FailureSummary(
+          report.pacodePassRate,
+          THRESHOLD,
+          report.tasks.map((x) => ({
+            id: x.id,
+            passed: x.pacodePassed,
+            message: x.pacodeMessage,
+            durationMs: x.pacodeDurationMs,
+          }))
+        )
+    ).toBe(true);
+    expect(
+      meetsThreshold(report.ccPassRate, THRESHOLD),
+      'Claude Code: ' +
+        formatM5FailureSummary(
+          report.ccPassRate,
+          THRESHOLD,
+          report.tasks.map((x) => ({
+            id: x.id,
+            passed: x.ccPassed,
+            message: x.ccMessage,
+            durationMs: x.ccDurationMs,
+          }))
+        )
+    ).toBe(true);
   }, 900_000);
 });

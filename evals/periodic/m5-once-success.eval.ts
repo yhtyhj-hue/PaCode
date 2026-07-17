@@ -23,6 +23,7 @@ import {
   writeM5Baseline,
 } from '../lib/m5-live-runner.js';
 import { buildSuiteReport, meetsThreshold } from '../lib/types.js';
+import { formatM5FailureSummary } from '../lib/m5-live-runner.js';
 
 const FIXTURES = join(process.cwd(), 'evals/fixtures/m5');
 const BASELINE_THRESHOLD = 0.5;
@@ -65,7 +66,10 @@ describe('eval:periodic:m5-once-success (offline baseline)', () => {
       note: 'offline golden baseline',
     });
 
-    expect(meetsThreshold(report.passRate, BASELINE_THRESHOLD)).toBe(true);
+    expect(
+        meetsThreshold(report.passRate, BASELINE_THRESHOLD),
+        formatM5FailureSummary(report.passRate, BASELINE_THRESHOLD, results)
+      ).toBe(true);
     expect(report.passRate).toBe(1);
   });
 
@@ -89,7 +93,10 @@ describe('eval:periodic:m5-once-success (offline baseline)', () => {
       tasks: results.map((r) => ({ id: r.id, passed: r.passed })),
       note: 'simulated mock agent (Write golden)',
     });
-    expect(meetsThreshold(report.passRate, BASELINE_THRESHOLD)).toBe(true);
+    expect(
+        meetsThreshold(report.passRate, BASELINE_THRESHOLD),
+        formatM5FailureSummary(report.passRate, BASELINE_THRESHOLD, results)
+      ).toBe(true);
     expect(report.passRate).toBe(1);
   });
 
@@ -138,7 +145,9 @@ describe.skipIf(!hasLiveCreds)('eval:periodic:m5-once-success (live agent)', () 
         durationMs: r.durationMs,
       }));
       const report = buildSuiteReport('periodic', results);
-      writeM5Baseline(join(FIXTURES, 'BASELINE.json'), {
+      const filtered = Boolean(process.env['PACODE_M5_TASKS']?.trim());
+      const baselineName = filtered ? 'BASELINE.partial.json' : 'BASELINE.json';
+      writeM5Baseline(join(FIXTURES, baselineName), {
         threshold: BASELINE_THRESHOLD,
         passRate: report.passRate,
         tasks: results.map((r) => ({
@@ -147,9 +156,12 @@ describe.skipIf(!hasLiveCreds)('eval:periodic:m5-once-success (live agent)', () 
           durationMs: r.durationMs,
           message: r.message.slice(0, 200),
         })),
-        note: `live agent via ${liveCreds.source} (model=${liveCreds.model ?? 'default'})`,
+        note: `live agent via ${liveCreds.source} (model=${liveCreds.model ?? 'default'})${filtered ? ` filter=${process.env['PACODE_M5_TASKS']}` : ''}`,
       });
-      expect(meetsThreshold(report.passRate, BASELINE_THRESHOLD)).toBe(true);
+      expect(
+        meetsThreshold(report.passRate, BASELINE_THRESHOLD),
+        formatM5FailureSummary(report.passRate, BASELINE_THRESHOLD, results)
+      ).toBe(true);
     },
     600_000
   );

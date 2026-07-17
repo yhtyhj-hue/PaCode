@@ -39,6 +39,17 @@ export interface M5RunResult {
   assistantPreview?: string;
 }
 
+
+/** 可选：PACODE_M5_TASKS=fix-bug,add-test 限制 live/sim 任务（诊断用） */
+export function resolveM5TaskFilter(defaultTasks: readonly string[]): string[] {
+  const raw = process.env['PACODE_M5_TASKS']?.trim();
+  if (!raw) return [...defaultTasks];
+  const want = raw.split(',').map((t) => t.trim()).filter(Boolean);
+  const allowed = new Set(defaultTasks);
+  const picked = want.filter((t) => allowed.has(t));
+  return picked.length > 0 ? picked : [...defaultTasks];
+}
+
 /** 凭证：env 优先，否则 cc-switch active provider（不打印密钥） */
 export function resolveM5LiveCredentials(): {
   apiKey?: string;
@@ -104,7 +115,7 @@ export async function runM5SimulatedAgent(
   workRoot: string,
   options: { tasks?: string[] } = {}
 ): Promise<M5RunResult[]> {
-  const tasks = options.tasks ?? [...M5_TASKS];
+  const tasks = resolveM5TaskFilter(options.tasks ?? M5_TASKS);
   const results: M5RunResult[] = [];
   for (const taskId of tasks) {
     const started = Date.now();
@@ -171,7 +182,7 @@ export async function runM5LiveAgent(
   if (!apiKey) {
     throw new Error('API key required for live M5 (ANTHROPIC_API_KEY or cc-switch active provider)');
   }
-  const tasks = options.tasks ?? [...M5_TASKS];
+  const tasks = resolveM5TaskFilter(options.tasks ?? M5_TASKS);
   const results: M5RunResult[] = [];
   for (const taskId of tasks) {
     const started = Date.now();
@@ -313,4 +324,22 @@ export function writeM5Baseline(
       2
     )
   );
+}
+
+/** 断言消息：列出失败任务，避免 opaque expected false */
+export function formatM5FailureSummary(
+  passRate: number,
+  threshold: number,
+  results: Array<{ id?: string; taskId?: string; passed: boolean; message?: string; durationMs?: number }>
+): string {
+  const failed = results.filter((r) => !r.passed);
+  const lines = [
+    `passRate=${passRate} threshold=${threshold} failed=${failed.length}/${results.length}`,
+    ...failed.map((r) => {
+      const id = r.id ?? r.taskId ?? '?';
+      const msg = (r.message ?? '').replace(/\s+/g, ' ').slice(0, 180);
+      return `  - ${id} (${r.durationMs ?? '?'}ms): ${msg || '(no message)'}`;
+    }),
+  ];
+  return lines.join('\n');
 }
