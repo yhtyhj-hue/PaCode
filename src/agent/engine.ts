@@ -41,6 +41,7 @@ import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-s
 import { withRetry } from './retry.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
 import { getLatestUserText, requiresToolExecution, requiresCodeMutation } from './tool-intent.js';
+import { getPlanManager, formatPlanStepDriveMessage } from './plan-mode.js';
 import { compileMessagesForApi } from '../services/context-compiler/index.js';
 import { captureCheckpoint } from '../services/checkpoint.js';
 import {
@@ -137,7 +138,7 @@ export class QueryEngine {
     request: QueryRequest,
     state: SessionState
   ): AsyncGenerator<QueryEvent, void, unknown> {
-    const mode = request.mode ?? state.mode;
+    let mode = request.mode ?? state.mode;
     let effectiveOptions: QueryOptions = { ...(request.options ?? {}) };
     let toolNudgeAttempts = 0;
     let mutationNudgeAttempts = 0;
@@ -149,6 +150,9 @@ export class QueryEngine {
     const approvedKeys = new Set<string>();
     /** I3 reflection count within this query (capped at MAX_REFLECTIONS_PER_QUERY). */
     let reflectionCount = 0;
+    let mutatedSinceReflection = false;
+    let planStepHadTools = false;
+    let planStepNudgeAttempts = 0;
     const pinnedIntent = request.message ?? getLatestUserText(state.messages);
     const shouldAbort = (): boolean => effectiveOptions.shouldAbort?.() ?? false;
 
@@ -157,6 +161,30 @@ export class QueryEngine {
       attachImagesToLatestUserMessage(state, pinnedIntent, request.images);
     } else if (pinnedIntent.trim()) {
       ensureLatestUserTextMessage(state, pinnedIntent);
+    }
+
+    // I4: 若计划已在 executing，注入当前步
+    {
+      const active = getPlanManager().getActive();
+      if (active?.status === 'executing' && mode !== PermissionMode.PLAN) {
+        const step = getPlanManager().beginCurrentStep(active.id);
+        if (step) {
+          const drive = formatPlanStepDriveMessage(active, step);
+          const last = state.messages[state.messages.length - 1];
+          const already =
+            last?.role === 'user' &&
+            typeof last.content === 'string' &&
+            last.content.includes(`[Plan execution] Plan ${active.id}`);
+          if (!already) {
+            state.messages.push({ role: 'user', content: drive, timestamp: Date.now() });
+          }
+          planStepHadTools = false;
+          planStepNudgeAttempts = 0;
+          if (effectiveOptions.toolChoice !== 'any') {
+            effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+          }
+        }
+      }
     }
 
     this.log.debug('Starting query', { mode });
@@ -349,11 +377,11 @@ export class QueryEngine {
           // the next turn can act on real evidence. Bounded to
           // MAX_REFLECTIONS_PER_QUERY to avoid infinite loops.
           if (
-            !noToolsUsed &&
-            hasCodeMutatingToolCall(state.toolCallHistory) &&
+            mutatedSinceReflection &&
             reflectionCount < MAX_REFLECTIONS_PER_QUERY
           ) {
             reflectionCount += 1;
+            mutatedSinceReflection = false;
             const summary = await runReflection(this.workingDirectory);
             if (summary.failureMessage) {
               this.log.warn(
@@ -425,6 +453,72 @@ export class QueryEngine {
             });
             effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
             continue;
+          }
+
+          // I4: 计划执行中 — end_turn 推进下一步，或完成计划
+          {
+            const active = getPlanManager().getActive();
+            if (active?.status === 'executing' && mode !== PermissionMode.PLAN) {
+              const cur = getPlanManager().getCurrentStep(active);
+              const needsTool = Boolean(cur?.tool);
+              if (needsTool && !planStepHadTools && planStepNudgeAttempts < 1) {
+                planStepNudgeAttempts++;
+                deferredText = [];
+                state.messages.push({
+                  role: 'user',
+                  content:
+                    'Plan step requires tool use. Call the appropriate tool (e.g. ' +
+                    (cur?.tool ?? 'Read/Edit/Write') +
+                    ') before ending this step.',
+                  timestamp: Date.now(),
+                });
+                effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+                continue;
+              }
+              const adv = getPlanManager().advanceAfterTurn(active.id);
+              if (adv.completed && adv.plan) {
+                deferredText = [];
+                state.messages.push({
+                  role: 'assistant',
+                  content: responseContentToBlocks(response.content),
+                  timestamp: Date.now(),
+                });
+                yield* flushDeferredText();
+                yield {
+                  type: 'content_block_delta',
+                  delta: { index: 0, text: `\n[Plan ${adv.plan.id} completed: ${adv.plan.title}]\n` },
+                };
+                yield {
+                  type: 'message_stop',
+                  stopReason: response.stopReason,
+                  usage: response.usage
+                    ? {
+                        inputTokens: response.usage.input_tokens,
+                        outputTokens: response.usage.output_tokens,
+                        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+                      }
+                    : undefined,
+                };
+                break;
+              }
+              if (adv.next && adv.plan) {
+                deferredText = [];
+                state.messages.push({
+                  role: 'assistant',
+                  content: responseContentToBlocks(response.content),
+                  timestamp: Date.now(),
+                });
+                state.messages.push({
+                  role: 'user',
+                  content: formatPlanStepDriveMessage(adv.plan, adv.next),
+                  timestamp: Date.now(),
+                });
+                planStepHadTools = false;
+                planStepNudgeAttempts = 0;
+                effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+                continue;
+              }
+            }
           }
 
           const assistantBlocks = responseContentToBlocks(response.content);
@@ -601,6 +695,42 @@ export class QueryEngine {
             content: toolResultBlocks,
             timestamp: Date.now(),
           });
+
+          if (
+            hasCodeMutatingToolCall(approvedCalls) &&
+            approvedCalls.some((c) => {
+              const r = resultById.get(c.id);
+              return r && !r.isError;
+            })
+          ) {
+            mutatedSinceReflection = true;
+          }
+
+          const exitedPlan = approvedCalls.some((c) => {
+            if (c.name !== 'ExitPlanMode') return false;
+            const r = resultById.get(c.id);
+            return Boolean(r && !r.isError);
+          });
+          if (exitedPlan) {
+            mode = PermissionMode.ACCEPT_EDITS;
+            state.mode = PermissionMode.ACCEPT_EDITS;
+            const active = getPlanManager().getActive();
+            if (active?.status === 'executing') {
+              const step = getPlanManager().beginCurrentStep(active.id);
+              if (step) {
+                state.messages.push({
+                  role: 'user',
+                  content: formatPlanStepDriveMessage(active, step),
+                  timestamp: Date.now(),
+                });
+                planStepHadTools = false;
+                planStepNudgeAttempts = 0;
+                effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
+              }
+            }
+          } else if (getPlanManager().getActive()?.status === 'executing') {
+            planStepHadTools = true;
+          }
           continue;
         }
 

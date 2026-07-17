@@ -162,6 +162,6 @@ describe('smoke: ExitPlanMode under PLAN via QueryEngine', () => {
     );
     const result = events.find((e) => e.type === 'tool_result');
     expect(result?.result?.isError).toBeFalsy();
-    expect(pm.getActive()?.status).toBe('executing');
+    expect(['executing', 'completed']).toContain(pm.getActive()?.status);
   });
 });

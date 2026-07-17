@@ -134,7 +134,7 @@ export function registerPlanModeTools(registry: ToolRegistry): void {
           {
             type: 'text',
             text: `Plan ${plan.id} approved and started (${plan.steps.length} steps). ` +
-              `Engine loop will execute steps; reflection (I3) re-runs verifiers after each Edit/Write.`,
+              `Session leaves PLAN; QueryEngine injects each step until the plan completes.`,
           },
         ],
       };

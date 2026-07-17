@@ -24,7 +24,7 @@ import { Provider } from '../pkg/ccswitch/index.js';
 import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
-import { getPlanManager } from '../agent/plan-mode.js';
+import { getPlanManager, formatPlanExecutionKickoff } from '../agent/plan-mode.js';
 import { parsePlanFromMarkdown, extractLastAssistantText } from '../agent/plan-parser.js';
 import { ContextAssembler } from '../context/assembler.js';
 import { renderer } from './enhanced-renderer.js';
@@ -956,12 +956,10 @@ Project-specific instructions for PaCode/Claude Code.
       this.mode = PermissionMode.ACCEPT_EDITS;
       const session = this.getOrCreateSession();
       session.mode = this.mode;
-      console.log(`${GREEN}✓${RESET} Plan prepared (not auto-executed): ${executing.title}`);
-      console.log(
-        `${DIM}Steps are NOT run automatically. Switched to acceptEdits — tell me which step to run, or paste the plan.${RESET}`
-      );
-      console.log('');
+      console.log(`${GREEN}✓${RESET} Plan executing: ${executing.title}`);
       console.log(planManager.formatPlanMessage(executing));
+      console.log(`${DIM}Driving steps via QueryEngine (acceptEdits)...${RESET}`);
+      await this.processMessage(formatPlanExecutionKickoff(executing));
       return;
     }
 

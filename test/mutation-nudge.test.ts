@@ -1,7 +1,10 @@
 /**
  * Mutation nudge: engineering intents must Edit/Write, not only Read
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { QueryEngine } from '../src/agent/engine.js';
 import { PermissionMode } from '../src/pkg/types.js';
 import { ToolRegistry } from '../src/tools/registry.js';
@@ -9,6 +12,9 @@ import { createMockAnthropicClient, textEndTurnScenario, toolUseScenario } from 
 import { stubAssembler, passthroughCompaction } from './helpers/engine-stubs.js';
 
 describe('QueryEngine mutation nudge', () => {
+  let workDir: string;
+  beforeEach(() => { workDir = mkdtempSync(join(tmpdir(), 'mut-nudge-')); });
+  afterEach(() => { rmSync(workDir, { recursive: true, force: true }); });
   it('nudges Edit/Write after Read-only turn on fix intent', async () => {
     const client = createMockAnthropicClient([
       toolUseScenario('r1', 'Read', { path: 'src/store.js' }),

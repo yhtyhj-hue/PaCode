@@ -71,7 +71,7 @@
 | I1 | **可审计 auto-memory**：对话事实写入 `.paude/memory/`，可 diff / 回滚 | 比黑盒记忆更可检查 | ✅（heuristic 提取 is-def-zh/project-uses/set-config/decision 4 类；写入 ~/.paude/memory/auto/<date>.jsonl；Stop hook 自动触发；14 测试覆盖） |
 | I2 | **/rewind + 工作区 checkpoint**（按 tool 批次，慎重） | 强恢复；需快照权限与测试 | ✅（git-stash-backed checkpoint + /rewind slash：capture/list/rewindTo；read-tree -m -u --reset 强恢复；12 测试覆盖。已知限制：uncommitted 冲突时 rewind 返回 false 让用户手动 commit/stash） |
 | I3 | **Reflection 绑证据**：改码后强制/可选跑测或 lint，失败则继续 loop | 有信号的反思，不是空复读 | ✅（end_turn 时若 toolCallHistory 含 Edit/Write/NotebookEdit 且 reflectionCount < 2 触发；npm/cargo/go/pytest 项目自动检测；失败输出注入 user message 强制下一轮；12 测试覆盖） |
-| I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | ✅（PLAN 白名单工具暴露给 API；ExitPlanMode permissionMode=PLAN；PermissionSystem 放行 Exit/Read） |
+| I4 | **Planning 闭环**：EnterPlanMode / ExitPlanMode 工具 + `/plan` 真正执行步骤（非只 prepared） | 规划→执行可追踪 | ✅ QueryEngine 逐步注入；ExitPlanMode→acceptEdits；`/plan execute` 驱动 kickoff |
 | I5 | **Output styles + Compact 策略**（auto / forced / manual + 焦点） | 体感与可控性 | ✅（output-styles.ts：4 风格预设 default/cost/full/minimal；/style slash 切换 + 列表；7 测试覆盖。Compact 策略：auto/forced/manual 三模式 policy 锁定） |
 | I6 | **真 Subagent + worktree 隔离**（替换「prefetch = agents」认知） | 多代理有边界，无戏服 | ✅（QueryEngine.workingDirectory；Task 默认 ephemeral worktree + 固定 SubagentReport JSON；禁嵌套 Task；Bash/Glob/Grep 尊重 cwd；不 chdir） |
 
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **I4/I3/J3 补全**：plan step drive；reflection engine 环测；Coordinator live E2E |
 | 2026-07-17 | **M5-hard** + mutation nudge：multi-file / fail-then-fix / cross-module |
 | 2026-07-17 | **M5 vs Claude Code**：`claude -p` 同 fixture 并排；`COMPARE.json`；无 CLI/凭证则 skip |
 | 2026-07-17 | **M5 live once-success**：cc-switch 凭证；空 messages / message_stop 覆盖 tool_use / mergeToolCalls；BASELINE passRate=1（3/3） |

@@ -30,6 +30,8 @@ describe('PlanModeManager', () => {
 
     const executing = manager.startExecution(plan.id);
     expect(executing?.status).toBe('executing');
+    expect(executing?.steps[0]?.status).toBe('pending');
+    expect(executing?.currentStepIndex).toBe(0);
   });
 
   it('startExecution fails without approve', () => {
