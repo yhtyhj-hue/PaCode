@@ -5,8 +5,6 @@
  * Implements core Claude Code slash commands.
  */
 
-import { existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import readline from 'node:readline';
 import { QueryEngine } from '../agent/engine.js';
 import { SessionManager } from '../session/manager.js';
@@ -16,6 +14,14 @@ import { bootstrapMcpTools } from '../mcp/loader.js';
 import { getMCPClient } from '../mcp/client.js';
 import { formatMcpReportLines, listMcpConnections } from './mcp-display.js';
 import { runCompactForDisplay } from './compact-display.js';
+import {
+  formatContextLines,
+  formatMemoryLines,
+  formatModelLines,
+  formatProvidersLines,
+} from './info-display.js';
+import { initClaudeMd } from './init-display.js';
+import { formatCronLines } from './cron-display.js';
 import { bootstrapHooks, runSessionHooks, runStopHooks } from '../hooks/loader.js';
 import { bootstrapPlugins, PluginCommand } from '../plugins/bootstrap.js';
 import { HookRegistry } from '../hooks/registry.js';
@@ -27,7 +33,6 @@ import {
 } from './resume-display.js';
 import { PermissionMode, MCPServerConnection, SessionState, HookType } from '../pkg/types.js';
 import { Provider } from '../pkg/ccswitch/index.js';
-import { CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
 import {
@@ -77,7 +82,6 @@ const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const MAGENTA = '\x1b[35m';
 const RED = '\x1b[31m';
-const GRAY = '\x1b[90m';
 
 export class REPL {
   private inputEditor: ReplLineEditor | null = null;
@@ -631,11 +635,16 @@ export class REPL {
 
   private showContext(): void {
     console.log('');
-    console.log(`${CYAN}${BOLD}Context Usage${RESET}`);
     const session = this.sessionManager.getCurrentSession();
-    const msgCount = session?.messages.length ?? 0;
-    console.log(`  ${DIM}Messages:${RESET}   ${msgCount}`);
-    console.log(`  ${DIM}Tokens:${RESET}     ${this.tokenUsage.input + this.tokenUsage.output}`);
+    const lines = formatContextLines({
+      messageCount: session?.messages.length ?? 0,
+      inputTokens: this.tokenUsage.input,
+      outputTokens: this.tokenUsage.output,
+    });
+    console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
+    for (const line of lines.slice(1)) {
+      console.log(`${DIM}${line}${RESET}`);
+    }
     console.log('');
   }
 
@@ -651,57 +660,20 @@ export class REPL {
 
   private showMemory(): void {
     console.log('');
-    console.log(`${CYAN}${BOLD}Memory Locations${RESET}`);
-    console.log(`  ${DIM}User memory:${RESET}    ~/.paude/memory/`);
-    console.log(`  ${DIM}Project memory:${RESET} .paude/projects/{hash}/`);
-    console.log(`  ${DIM}Session memory:${RESET} ~/.paude/sessions/`);
+    const lines = formatMemoryLines();
+    console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
+    for (const line of lines.slice(1)) {
+      console.log(`${DIM}${line}${RESET}`);
+    }
     console.log('');
   }
 
   private async initProject(): Promise<void> {
-    const claudeMdPath = join(process.cwd(), 'CLAUDE.md');
-    if (existsSync(claudeMdPath)) {
-      console.log(`${YELLOW}⚠${RESET}  CLAUDE.md already exists at ${claudeMdPath}`);
-      return;
-    }
-
-    const template = `# CLAUDE.md
-
-Project-specific instructions for PaCode/Claude Code.
-
-## Project Overview
-
-[Briefly describe your project here]
-
-## Architecture
-
-[Describe the high-level architecture]
-
-## Key Files
-
-- [\`src/\`](src/) - Source code
-- [\`docs/\`](docs/) - Documentation
-- [\`tests/\`](tests/) - Test files
-
-## Development Workflow
-
-1. Read the relevant code first
-2. Make focused changes
-3. Run tests before committing
-4. Update documentation if needed
-
-## Conventions
-
-- Use TypeScript for all new code
-- Follow existing code style
-- Write tests for new features
-- Update CLAUDE.md when patterns change
-`;
-    try {
-      writeFileSync(claudeMdPath, template, 'utf-8');
-      console.log(`${GREEN}✓${RESET} Created CLAUDE.md at ${claudeMdPath}`);
-    } catch (e) {
-      console.log(`${RED}✗${RESET} Failed to create CLAUDE.md: ${e}`);
+    const result = initClaudeMd(process.cwd());
+    if (result.ok) {
+      console.log(`${GREEN}✓${RESET} ${result.lines[0]}`);
+    } else {
+      console.log(`${YELLOW}⚠${RESET}  ${result.lines[0]}`);
     }
   }
 
@@ -731,8 +703,9 @@ Project-specific instructions for PaCode/Claude Code.
 
   private handleModel(args: string[]): void {
     if (args.length === 0) {
-      console.log(`${DIM}Current model:${RESET} ${this.model}`);
-      console.log(`${DIM}Available models depend on your provider${RESET}`);
+      for (const line of formatModelLines(this.model)) {
+        console.log(`${DIM}${line}${RESET}`);
+      }
       return;
     }
     this.model = args.join(' ');
@@ -791,18 +764,11 @@ Project-specific instructions for PaCode/Claude Code.
   }
 
   private showProviders(): void {
-    const cc = new CCSwitchClient();
-    const providers = cc.list();
-    if (providers.length === 0) {
-      console.log(`${DIM}No providers configured${RESET}`);
-      return;
-    }
-    const active = cc.getActive();
     console.log('');
-    console.log(`${CYAN}${BOLD}API Providers${RESET}`);
-    for (const p of providers) {
-      const marker = active?.name === p.name ? `${GREEN}●${RESET}` : `${GRAY}○${RESET}`;
-      console.log(`  ${marker} ${p.name}${p.model ? ` (${p.model})` : ''}`);
+    const lines = formatProvidersLines();
+    console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
+    for (const line of lines.slice(1)) {
+      console.log(`${DIM}${line}${RESET}`);
     }
     console.log('');
   }
@@ -1323,48 +1289,12 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
   /** K4: 进程内 cron 管理（无 OS daemon） */
   private handleCron(args: string[]): void {
-    const store = getCronStore();
-    const sub = args[0] ?? 'list';
-    if (sub === 'list' || args.length === 0) {
-      console.log('');
-      console.log(JSON.stringify({ jobs: store.list() }, null, 2));
-      console.log('');
-      return;
+    const lines = formatCronLines(args);
+    console.log('');
+    for (const line of lines) {
+      console.log(line);
     }
-    if (sub === 'create') {
-      const expression = args[1];
-      const prompt = args.slice(2).join(' ').trim();
-      if (!expression || !prompt) {
-        console.log(`${YELLOW}?${RESET} Usage: /cron create <every:5m|@hourly> <prompt…>`);
-        return;
-      }
-      try {
-        const job = store.create({ expression, prompt });
-        console.log(`${GREEN}✓${RESET} Scheduled ${job.id} next=${new Date(job.nextRunAt).toISOString()}`);
-      } catch (e) {
-        console.log(`${RED}✗${RESET} ${e instanceof Error ? e.message : String(e)}`);
-      }
-      return;
-    }
-    if (sub === 'delete') {
-      const id = args[1];
-      if (!id) {
-        console.log(`${YELLOW}?${RESET} Usage: /cron delete <job_id>`);
-        return;
-      }
-      console.log(
-        store.delete(id)
-          ? `${GREEN}✓${RESET} Deleted ${id}`
-          : `${YELLOW}?${RESET} Unknown job ${id}`
-      );
-      return;
-    }
-    if (sub === 'due') {
-      const jobs = store.due();
-      console.log(JSON.stringify({ due_count: jobs.length, jobs }, null, 2));
-      return;
-    }
-    console.log(`${YELLOW}?${RESET} Usage: /cron [list|create|delete|due]`);
+    console.log('');
   }
 
   private drainCronDue(session: SessionState): void {

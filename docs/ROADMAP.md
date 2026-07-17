@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **TUI slash gap**：/context /memory /model /providers /cron /init |
 | 2026-07-17 | **TUI /compact + /mcp**：共享 compact-display / mcp-display |
 | 2026-07-17 | **TUI /resume**：list + confirm 后恢复会话（与 REPL 共用 resume-display） |
 | 2026-07-17 | **G6/v1 pluggable + TUI /plan 只读**：ClassifierBackend 可注入；TUI list/report |

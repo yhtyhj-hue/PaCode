@@ -25,10 +25,18 @@ import { formatCheckpointList, listCheckpoints, rewindToDetailed } from '../../s
 import { formatPermissionsReport } from '../../permission/format-display.js';
 import { buildProjectBrief, formatProjectBrief } from '../../services/brief/index.js';
 import { resolveAppConfig } from '../../pkg/app-config.js';
+import {
+  formatContextLines,
+  formatMemoryLines,
+  formatModelLines,
+  formatProvidersLines,
+} from '../info-display.js';
+import { initClaudeMd } from '../init-display.js';
+import { formatCronLines } from '../cron-display.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
-  '/help /clear /status /mode /cost /style /doctor /diff /agents /plan /resume /compact /mcp /bridge /voice /permissions /brief /rewind /exit';
+  '/help /clear /status /mode /model /cost /style /context /memory /providers /cron /init /doctor /diff /agents /plan /resume /compact /mcp /bridge /voice /permissions /brief /rewind /exit';
 
 export interface TuiSlashContext {
   ctl: TuiController;
@@ -53,6 +61,8 @@ export interface TuiSlashContext {
   onSessionCompacted?: (session: SessionState) => void;
   /** 测试注入 MCP connections */
   mcpConnections?: MCPServerConnection[];
+  setModel?: (model: string) => void;
+  providerName?: string;
 }
 
 /** 处理 TUI slash；返回 true 表示已处理 */
@@ -131,6 +141,53 @@ export async function handleTuiSlash(
       const view = formatGitDiffView(process.cwd());
       for (const line of view.split('\n').slice(0, 40)) {
         ctl.appendSystem(line || ' ');
+      }
+      return true;
+    }
+    case 'context':
+      for (const line of formatContextLines({
+        messageCount: session.messages.length,
+        inputTokens: ctx.tokenUsage.input,
+        outputTokens: ctx.tokenUsage.output,
+      })) {
+        ctl.appendSystem(line);
+      }
+      return true;
+    case 'memory':
+      for (const line of formatMemoryLines(ctx.cwd ?? process.cwd())) {
+        ctl.appendSystem(line);
+      }
+      return true;
+    case 'model': {
+      const name = args.join(' ').trim();
+      if (!name) {
+        for (const line of formatModelLines(ctx.model)) ctl.appendSystem(line);
+        return true;
+      }
+      ctx.setModel?.(name);
+      ctl.appendSystem(`Model: ${name}`);
+      return true;
+    }
+    case 'providers':
+      for (const line of formatProvidersLines()) ctl.appendSystem(line);
+      return true;
+    case 'cron': {
+      for (const line of formatCronLines(args)) {
+        for (const part of line.split('\n')) ctl.appendSystem(part || ' ');
+      }
+      return true;
+    }
+    case 'init': {
+      const cwd = ctx.cwd ?? process.cwd();
+      const confirmed = await ctl.askConfirm(`Create CLAUDE.md in ${cwd}?`);
+      if (!confirmed) {
+        ctl.appendSystem('Init cancelled');
+        return true;
+      }
+      const result = initClaudeMd(cwd);
+      for (const line of result.lines) {
+        if (result.ok) ctl.appendSystem(line);
+        else ctl.appendError(line);
       }
       return true;
     }

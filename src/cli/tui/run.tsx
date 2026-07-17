@@ -59,6 +59,7 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
   let interrupt = false;
   const tokenUsage = { input: 0, output: 0 };
   let outputStyle: OutputStyle = 'default';
+  let model = options.model;
 
   const engine = new QueryEngine({
     apiKey: options.apiKey,
@@ -89,10 +90,14 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
       const handled = await handleTuiSlash(text, {
         ctl,
         session,
-        model: options.model,
+        model,
         apiKeyPresent: Boolean(options.apiKey),
         apiKey: options.apiKey,
         baseUrl: options.baseUrl,
+        setModel: (m) => {
+          model = m;
+        },
+        providerName: options.provider.name,
         tokenUsage,
         outputStyle,
         setOutputStyle: (s) => {
@@ -119,7 +124,7 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
         {
           message: text,
           options: {
-            model: options.model,
+            model,
             shouldAbort: () => interrupt || exitRequested,
           },
         },
