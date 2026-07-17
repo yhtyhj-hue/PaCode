@@ -4,6 +4,7 @@
 
 import { ToolRegistry } from './registry.js';
 import { registerBashTool } from './bash.js';
+import { registerBashOutputTools } from './bash-output.js';
 import { registerReadTool } from './read.js';
 import { registerWriteTool } from './write.js';
 import { registerEditTool } from './edit.js';
@@ -37,6 +38,7 @@ export interface CoreToolsOptions {
 /** 注册核心工具到同一 Registry */
 export function registerCoreTools(registry: ToolRegistry, options: CoreToolsOptions = {}): void {
   registerBashTool(registry);
+  registerBashOutputTools(registry);
   registerReadTool(registry);
   registerWriteTool(registry);
   registerEditTool(registry);

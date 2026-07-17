@@ -14,12 +14,12 @@ describe('P0: ToolRegistry wired to QueryEngine', () => {
     resetToolRegistry();
   });
 
-  it('QueryEngine sees all 28 core tools after bootstrap', () => {
+  it('QueryEngine sees all 31 core tools after bootstrap', () => {
     const registry = new ToolRegistry();
     registerCoreTools(registry, { task: { toolRegistry: registry } });
 
     const engine = new QueryEngine({ apiKey: 'test', toolRegistry: registry });
-    expect(engine.getToolRegistry().list()).toHaveLength(28);
+    expect(engine.getToolRegistry().list()).toHaveLength(31);
     expect(engine.getToolRegistry().has('Bash')).toBe(true);
     expect(engine.getToolRegistry().has('Task')).toBe(true);
     expect(engine.getToolRegistry().has('NotebookEdit')).toBe(true);

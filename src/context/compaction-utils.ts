@@ -100,15 +100,13 @@ export function formatMessagesForSummary(messages: Message[]): string {
     .join('\n\n---\n\n');
 }
 
-/** L4 确定性折叠：旧消息压成 bullet 摘要 */
+/** L4 确定性折叠：旧消息压成结构化 bullet（路径/工具/错误优先） */
 export function collapseOlderMessages(messages: Message[], keepRecent = 4): Message[] {
   if (messages.length <= keepRecent) return messages;
 
   const older = messages.slice(0, messages.length - keepRecent);
   const recent = messages.slice(-keepRecent);
-  const summary = older
-    .map((m) => `- ${m.role}: ${messageToText(m.content).replace(/\s+/g, ' ').slice(0, 120)}`)
-    .join('\n');
+  const summary = older.map((m) => `- ${m.role}: ${summarizeMessageForCollapse(m)}`).join('\n');
 
   return [
     {
@@ -118,4 +116,29 @@ export function collapseOlderMessages(messages: Message[], keepRecent = 4): Mess
     },
     ...recent,
   ];
+}
+
+/** 抽取路径 / tool 名 / error 关键字，保留可检索信号 */
+export function summarizeMessageForCollapse(message: Message, maxLen = 160): string {
+  const raw = messageToText(message.content).replace(/\s+/g, ' ').trim();
+  if (!raw) return '(empty)';
+
+  const signals: string[] = [];
+  const toolNames = raw.match(/\b(?:Bash|Read|Write|Edit|Grep|Glob|Task|WebFetch|WebSearch|Diagnostics|LSP)\b/g);
+  if (toolNames) {
+    signals.push(`tools=${[...new Set(toolNames)].slice(0, 6).join(',')}`);
+  }
+  const paths = raw.match(/(?:[\w.-]+\/)+[\w.-]+\.\w{1,8}/g);
+  if (paths) {
+    signals.push(`paths=${[...new Set(paths)].slice(0, 4).join(',')}`);
+  }
+  if (/\b(error|failed|denied|blocked|ENOENT|EACCES)\b/i.test(raw)) {
+    signals.push('has_error');
+  }
+
+  const head = raw.slice(0, maxLen);
+  if (signals.length === 0) return head;
+  const meta = signals.join(' ');
+  const budget = Math.max(40, maxLen - meta.length - 3);
+  return `${meta} | ${raw.slice(0, budget)}`;
 }

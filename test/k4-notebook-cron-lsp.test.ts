@@ -226,13 +226,14 @@ src/b.ts(1,1): warning TS6133: 'x' is declared but its value is never read.`;
 });
 
 describe('K4 bootstrap', () => {
-  it('registers NotebookEdit, ScheduleCron, LSP (28 tools)', () => {
+  it('registers NotebookEdit, ScheduleCron, Diagnostics+LSP (31 tools)', () => {
     const reg = new ToolRegistry();
     registerCoreTools(reg, { task: { toolRegistry: reg } });
     expect(reg.has('NotebookEdit')).toBe(true);
     expect(reg.has('ScheduleCron')).toBe(true);
     expect(reg.has('LSP')).toBe(true);
+    expect(reg.has('Diagnostics')).toBe(true);
     expect(reg.get('NotebookEdit')?.permissionMode).toBe(PermissionMode.DEFAULT);
-    expect(reg.list()).toHaveLength(28);
+    expect(reg.list()).toHaveLength(31);
   });
 });

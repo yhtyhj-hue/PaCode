@@ -18,10 +18,13 @@ export const HookSchema = z.object({
   type: z.enum([
     'PreToolUse',
     'PostToolUse',
+    'PostToolUseFailure',
+    'PermissionRequest',
     'SessionStart',
     'SessionStop',
     'Notification',
     'SubagentStop',
+    'Stop',
   ]),
   command: z.union([z.string(), z.array(z.string())]),
   cwd: z.string().optional(),

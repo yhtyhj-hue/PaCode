@@ -22,6 +22,8 @@ const TOOL_REQUIRED_PATTERNS: RegExp[] = [
   /npm\s+(test|run)/i,
   /review\s+(?:the\s+)?(?:code|codebase|project|repo)/i,
   /audit\s+(?:the\s+)?(?:project|codebase|repo)/i,
+  /(?:project|codebase|repo).{0,24}quality\s+check/i,
+  /full\s+project\s+quality\s+check/i,
   /(?:读|看|审查|检查).{0,12}(?:代码|实现|源文件|源码)/,
   /代码实现|完整代码|源文件|source\s+code/i,
   /(?:自检|自测).{0,8}(?:代码|实现)/,

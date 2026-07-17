@@ -10,17 +10,17 @@
 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
-| Query Engine | ~92% | 全循环；L1 预取后仍保留 tools（CC 对齐）；成功预取才计证据；Subagent + SubagentStop |
+| Query Engine | ~94% | 全循环；PermissionRequest；5xx 重试；Subagent + 预取证据门闩 |
 | Context Assembly | ~85% | 9 源组装；Skills lazy index 默认 |
-| Compaction | ~90% | L1–L5 全实现；阈值/maxTokens 可配置 |
-| Tool Registry | ~95% | **28 核心工具**（Bash/Read/Write/Edit/Glob/Grep/Task*/Team*/Coordinator/Skill*/Config/NotebookEdit/ScheduleCron/LSP/AskUser/Web*/MCP* 等）+ Plugin |
-| Permission System | ~90% | 7 modes + AUTO 分类器 + Layer 4 tool-gate；Bash 确认后可执行；DEFAULT 可确认 Edit/Write |
-| Memory | ~85% | 用户 `.paude/memory/` + 项目 `.paude/projects/{hash}/` + auto-memory |
-| Hooks / Skills / Plugins / MCP | ~85% | Hooks ✅；Skills ✅；Plugin ✅；MCP stdio + SSE + HTTP ✅（WebSocket/Bridge deferred） |
-| CLI / REPL | ~90% | Shift+Tab；/rewind /style /doctor /diff /brief /cron；AskUser 注入 cooked readLine |
-| 模型/Retry | ✅ | SDK 0.111；model-stream 指数退避 |
-| 测试 | ≥80% | `npm test` + `eval:gate`（M1–M4）；coverage 仅 `src/**` |
-| Eval harness | ✅ | `evals/gate` + `evals/periodic` 分离 |
+| Compaction | ~92% | L1–L5；L4 路径/工具/错误信号；L5 withRetry |
+| Tool Registry | ~96% | **31 核心工具**（+BashOutput/BashStop/Diagnostics；LSP 别名）+ Plugin |
+| Permission System | ~92% | 7 modes + PermissionRequest hook + session memory |
+| Memory | ~85% | 用户 `.paude/memory/` + 项目 hash + auto-memory |
+| Hooks / Skills / Plugins / MCP | ~90% | MCP stdio/sse/http/**websocket**；Bridge deferred |
+| CLI / REPL | ~92% | 工具时间线；`/rewind` 结构化错误；`/voice` deferred |
+| 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
+| 测试 | ≥80% | `npm test` + `eval:gate`（M1–M5 + widened）；coverage 仅 `src/**` |
+| Eval harness | ✅ | M5 simulated agent CI；live 有 key 时跑 |
 
 ### 8 项安全修复（commit bdd7555）
 
@@ -43,15 +43,17 @@
 - `src/services/mcp-auth/` — OAuth PKCE + AES-256-GCM token store
 - `src/services/skill-mount/` — everything-claude-code skill 挂载
 - `src/services/ask-user/` — REPL 交互式问题（对标 CC AskUserQuestionTool）
+- `src/services/bash-jobs/` — 后台 Bash + BashOutput 环形缓冲
+- `src/services/voice/` — Voice/Buddy deferred 状态契约
 
-**Defer:** Ink/React TUI（K7）、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、真 language server、Bridge 远程会话、WebSocket MCP、CC `BashOutput` (background)、Voice/Buddy（J4）
+**Defer:** Ink/React TUI（K7）、Go agent core、SQLite、容器级 Bash 沙箱、ML 权限分类器、真 language server、Bridge 远程会话、完整 Voice STT（J4 仅 `/voice` 状态面）
 
 **G4 图片：** `ContentBlock.image` + `message-serializer` → Anthropic `media_type`；CLI `--image`；`src/services/image-attach/`
 
 **已知遗留：**
 - claude-sonnet-4-0 EOL → 4-5（commit fe9f320 之后）
 - 2 个 locked worktree（早期 audit 残留，harness 内部）
-- 第二次 query 偶发 500 proxy 错误（待用 4-5 复测）
+- M5 live once-success 依赖 `ANTHROPIC_API_KEY`（CI 用 simulated agent）
 
 ---
 

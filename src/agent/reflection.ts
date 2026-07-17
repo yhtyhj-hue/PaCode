@@ -177,6 +177,11 @@ export interface ReflectionSummary {
   skipped: number;
   /** Empty when no failure worth surfacing. */
   failureMessage: string;
+  /**
+   * Soft notice when verifiers were skipped (no real test script).
+   * Injected without forcing toolChoice — model must not claim tests passed.
+   */
+  skipNotice: string;
 }
 
 /** Run all available verifiers and produce a single user-message-shaped
@@ -185,12 +190,23 @@ export async function runReflection(cwd: string = process.cwd()): Promise<Reflec
   const verifiers = detectVerifiers(cwd);
   const results = await Promise.all(verifiers.map((v) => runVerifier(v, cwd)));
   const failures = results.filter((r) => !r.ok && !r.skipped);
-  const skipped = results.filter((r) => r.skipped).length;
+  const skippedResults = results.filter((r) => r.skipped);
+  const skipped = skippedResults.length;
+
+  const skipNotice =
+    failures.length === 0 && skipped > 0 && skipped === results.length
+      ? [
+          '[I3 Reflection] verification skipped:',
+          ...skippedResults.map((r) => `- ${r.kind}: ${r.reason ?? 'unavailable'}`),
+          'Do not claim tests or lint passed — no verifier ran.',
+        ].join('\n')
+      : '';
+
   if (results.length === 0 || (failures.length === 0 && skipped === results.length)) {
-    return { ran: results.length, failed: 0, skipped, failureMessage: '' };
+    return { ran: results.length, failed: 0, skipped, failureMessage: '', skipNotice };
   }
   if (failures.length === 0) {
-    return { ran: results.length, failed: 0, skipped, failureMessage: '' };
+    return { ran: results.length, failed: 0, skipped, failureMessage: '', skipNotice: '' };
   }
   const lines: string[] = ['[I3 Reflection] verification failed:'];
   for (const f of failures) {
@@ -203,6 +219,7 @@ export async function runReflection(cwd: string = process.cwd()): Promise<Reflec
     failed: failures.length,
     skipped,
     failureMessage: lines.join('\n'),
+    skipNotice: '',
   };
 }
 

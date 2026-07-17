@@ -342,7 +342,7 @@ export class QueryEngine {
             reflectionCount < MAX_REFLECTIONS_PER_QUERY
           ) {
             reflectionCount += 1;
-            const summary = await runReflection();
+            const summary = await runReflection(this.workingDirectory);
             if (summary.failureMessage) {
               this.log.warn(
                 `I3 reflection ${reflectionCount}/${MAX_REFLECTIONS_PER_QUERY}: ${summary.failed} verifier(s) failed`
@@ -356,6 +356,14 @@ export class QueryEngine {
               });
               effectiveOptions = { ...effectiveOptions, toolChoice: 'any' };
               continue;
+            }
+            // 无测脚本：软提示一次，不强制 toolChoice，避免假完成「已测」
+            if (summary.skipNotice) {
+              state.messages.push({
+                role: 'user',
+                content: summary.skipNotice,
+                timestamp: Date.now(),
+              });
             }
           }
 
@@ -463,7 +471,24 @@ export class QueryEngine {
                 });
                 continue;
               }
-              const confirmed = await this.permissionPrompt(toolCall);
+              // H3: PermissionRequest hooks — deny(exit 2) wins; stdout "approve" skips UI
+              const hookDecision = await this.runPermissionRequestHooks(toolCall, state);
+              if (hookDecision === 'deny') {
+                resultById.set(toolCall.id, {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Permission denied by PermissionRequest hook',
+                    },
+                  ],
+                  isError: true,
+                });
+                continue;
+              }
+              let confirmed = hookDecision === 'approve';
+              if (!confirmed) {
+                confirmed = await this.permissionPrompt(toolCall);
+              }
               if (shouldAbort() || !confirmed) {
                 resultById.set(toolCall.id, {
                   content: [
@@ -686,6 +711,47 @@ const stream = await withRetry(
       currentTool: toolCall,
       readLine: this.readLine,
     };
+  }
+
+  /** PermissionRequest：exit 2 / blocked → deny；stdout 含 approve → 跳过 UI；否则 ask */
+  private async runPermissionRequestHooks(
+    toolCall: ToolCall,
+    state: SessionState
+  ): Promise<'approve' | 'deny' | 'ask'> {
+    const ctx = this.buildToolContext(toolCall, state);
+    const hooks = this.hookRegistry.findMatching(HookType.PERMISSION_REQUEST, ctx);
+    let approve = false;
+    for (const hook of hooks) {
+      try {
+        const result = await this.hookRegistry.execute(hook);
+        const exitCode = result.exitCode ?? 0;
+        if (result.blocked || exitCode === 2) {
+          return 'deny';
+        }
+        if (exitCode !== 0) {
+          const msg = result.stderr || `Hook ${hook.name} exited with code ${exitCode}`;
+          if (process.env['PACODE_HOOK_FAIL_OPEN'] === '1') {
+            this.log.warn(`PermissionRequest hook non-zero exit (fail-open): ${msg}`);
+            continue;
+          }
+          return 'deny';
+        }
+        const out = (result.stdout ?? '').trim().toLowerCase();
+        if (out === 'approve' || out.startsWith('approve')) {
+          approve = true;
+        }
+        if (out === 'deny' || out.startsWith('deny')) {
+          return 'deny';
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.log.warn(`PermissionRequest hook failed: ${msg}`);
+        if (process.env['PACODE_HOOK_FAIL_OPEN'] !== '1') {
+          return 'deny';
+        }
+      }
+    }
+    return approve ? 'approve' : 'ask';
   }
 
   private async executeTool(toolCall: ToolCall, state: SessionState): Promise<ToolResult> {

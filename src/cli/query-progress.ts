@@ -9,8 +9,11 @@ const ORANGE = '\x1b[38;5;208m';
 export class QueryProgressLine {
   private startedAt = Date.now();
   private timer: ReturnType<typeof setInterval> | null = null;
-  private phase: 'thinking' | 'prefetch' | 'idle' = 'thinking';
+  private phase: 'thinking' | 'prefetch' | 'tool' | 'idle' = 'thinking';
   private prefetchLabel = '';
+  private toolLabel = '';
+  /** 本轮工具时间线（供 message_stop 后摘要） */
+  private timeline: string[] = [];
   /** 多行 agent 块已输出后禁止 \\r 刷新，避免覆盖上方内容 */
   private suspended = false;
 
@@ -18,6 +21,8 @@ export class QueryProgressLine {
     this.startedAt = Date.now();
     this.phase = 'thinking';
     this.prefetchLabel = '';
+    this.toolLabel = '';
+    this.timeline = [];
     this.suspended = false;
     this.startTimer();
   }
@@ -34,6 +39,24 @@ export class QueryProgressLine {
     this.phase = 'prefetch';
     this.prefetchLabel = label;
     this.render();
+  }
+
+  /** 工具执行阶段标签（Reading… / Bash…） */
+  setToolPhase(label: string): void {
+    if (this.suspended) return;
+    this.phase = 'tool';
+    this.toolLabel = label;
+    if (label && !this.timeline.includes(label)) {
+      this.timeline.push(label);
+      if (this.timeline.length > 12) this.timeline.shift();
+    }
+    this.render();
+  }
+
+  /** 本轮工具时间线摘要（不含 Ink；纯文本一行） */
+  formatTimelineSummary(): string {
+    if (this.timeline.length === 0) return '';
+    return `Tools: ${this.timeline.join(' → ')}`;
   }
 
   stop(): number {
@@ -68,10 +91,12 @@ export class QueryProgressLine {
   private render(): void {
     if (this.suspended) return;
     const secs = this.elapsedSeconds();
-    const label =
-      this.phase === 'prefetch' && this.prefetchLabel
-        ? this.prefetchLabel
-        : 'Accomplishing…';
+    let label = 'Accomplishing…';
+    if (this.phase === 'prefetch' && this.prefetchLabel) {
+      label = this.prefetchLabel;
+    } else if (this.phase === 'tool' && this.toolLabel) {
+      label = this.toolLabel;
+    }
     process.stdout.write(`\r${ORANGE}*${RESET} ${ORANGE}${label}${RESET}${DIM} (${secs}s)${RESET}  `);
   }
 }

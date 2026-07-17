@@ -37,8 +37,13 @@ describe('validateMcpServerEntry', () => {
     expect(validateMcpServerEntry({ type: 'http' })).toContain('requires a url');
   });
 
-  it('defers websocket with clear message', () => {
-    expect(validateMcpServerEntry({ type: 'websocket', url: 'ws://x' })).toContain('deferred');
+  it('allows websocket with ws/wss url', () => {
+    expect(validateMcpServerEntry({ type: 'websocket', url: 'ws://x' })).toBeNull();
+    expect(validateMcpServerEntry({ type: 'websocket', url: 'wss://mcp.example/ws' })).toBeNull();
+  });
+
+  it('rejects websocket with http url', () => {
+    expect(validateMcpServerEntry({ type: 'websocket', url: 'https://x' })).toMatch(/ws:\/\//);
   });
 
   it('rejects missing command', () => {

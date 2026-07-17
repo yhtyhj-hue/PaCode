@@ -142,27 +142,55 @@ export function listCheckpoints(
 
 /**
  * Restore a checkpoint by id (drops the stash after applying).
- * Returns true on success, false on failure.
+ * Returns structured result so REPL can show conflict/dirty-tree hints.
  */
+export type RewindResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'not_git'
+        | 'not_found'
+        | 'apply_failed'
+        | 'dirty_conflict';
+      message: string;
+    };
+
 export function rewindTo(checkpointId: string, cwd: string = process.cwd()): boolean {
-  if (!isGitRepo(cwd)) return false;
-  // Resolve stash ref by matching message via grep
+  return rewindToDetailed(checkpointId, cwd).ok;
+}
+
+export function rewindToDetailed(
+  checkpointId: string,
+  cwd: string = process.cwd()
+): RewindResult {
+  if (!isGitRepo(cwd)) {
+    return {
+      ok: false,
+      reason: 'not_git',
+      message: 'Not a git repository — checkpoints require git.',
+    };
+  }
   let raw = '';
   try {
-    raw = execFileSync(
-      'git',
-      ['stash', 'list', '--pretty=format:%gd'],
-      { cwd, stdio: 'pipe' }
-    ).toString();
+    raw = execFileSync('git', ['stash', 'list', '--pretty=format:%gd'], {
+      cwd,
+      stdio: 'pipe',
+    }).toString();
   } catch {
-    return false;
+    return {
+      ok: false,
+      reason: 'apply_failed',
+      message: 'Could not list git stashes.',
+    };
   }
   const stashRefs = raw
     .split('\n')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+
+  let matched = false;
   for (const ref of stashRefs) {
-    // Use git stash show to get the subject for filtering.
     let subject: string;
     try {
       subject = execFileSync('git', ['stash', 'show', '-s', '--format=%s', ref], {
@@ -174,34 +202,53 @@ export function rewindTo(checkpointId: string, cwd: string = process.cwd()): boo
     } catch {
       continue;
     }
-    if (!subject.includes(`${CHECKPOINT_PREFIX}/${checkpointId} `) &&
-        !subject.startsWith(`${CHECKPOINT_PREFIX}/${checkpointId}`)) {
+    if (
+      !subject.includes(`${CHECKPOINT_PREFIX}/${checkpointId} `) &&
+      !subject.startsWith(`${CHECKPOINT_PREFIX}/${checkpointId}`)
+    ) {
       continue;
     }
+    matched = true;
     try {
-      // Real rewind semantics: force-apply the stashed state
-      // by reading the stash's tree and checking it out over
-      // the working tree. This bypasses git's conflict-detection
-      // (which is what the user wants when they say /rewind).
-      const stashTreeOut = execFileSync(
-        'git',
-        ['rev-parse', `${ref}^{tree}`],
-        { cwd, stdio: 'pipe' }
-      )
+      const stashTreeOut = execFileSync('git', ['rev-parse', `${ref}^{tree}`], {
+        cwd,
+        stdio: 'pipe',
+      })
         .toString()
         .trim();
-      execFileSync(
-        'git',
-        ['read-tree', '-m', '-u', '--reset', stashTreeOut],
-        { cwd, stdio: 'pipe' }
-      );
+      execFileSync('git', ['read-tree', '-m', '-u', '--reset', stashTreeOut], {
+        cwd,
+        stdio: 'pipe',
+      });
       execFileSync('git', ['stash', 'drop', ref], { cwd, stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      // 脏树/冲突：引导用户先 commit 或 stash
+      return {
+        ok: false,
+        reason: /conflict|index|merge|unmerged/i.test(errMsg)
+          ? 'dirty_conflict'
+          : 'apply_failed',
+        message:
+          /conflict|index|merge|unmerged/i.test(errMsg)
+            ? `Rewind blocked by dirty/conflict tree. Commit or stash your changes, then retry /rewind ${checkpointId}.`
+            : `Rewind failed: ${errMsg.slice(0, 200)}`,
+      };
     }
   }
-  return false;
+  if (!matched) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: `Checkpoint not found: ${checkpointId}`,
+    };
+  }
+  return {
+    ok: false,
+    reason: 'apply_failed',
+    message: `Rewind failed for ${checkpointId}`,
+  };
 }
 
 /** Human-readable list of checkpoints for the /rewind slash. */

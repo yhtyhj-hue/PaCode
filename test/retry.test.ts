@@ -39,8 +39,14 @@ describe('isRetryableError', () => {
     expect(isRetryableError({ name: 'AbortError' })).toBe(false);
   });
 
+  it('returns true for 500/502/503 transient server errors', () => {
+    expect(isRetryableError({ status: 500 })).toBe(true);
+    expect(isRetryableError({ status: 502 })).toBe(true);
+    expect(isRetryableError({ status: 503 })).toBe(true);
+  });
+
   it('returns false for unknown errors', () => {
-    expect(isRetryableError({ status: 500 })).toBe(false);
+    expect(isRetryableError({ status: 418 })).toBe(false);
     expect(isRetryableError(new Error('random'))).toBe(false);
     expect(isRetryableError(null)).toBe(false);
   });

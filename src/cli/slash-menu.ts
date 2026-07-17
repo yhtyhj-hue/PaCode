@@ -25,6 +25,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/doctor', description: 'Run local health checks' },
   { command: '/diff', description: 'Show git status and diff --stat (read-only)' },
   { command: '/bridge', description: 'Bridge remote session status (deferred)' },
+  { command: '/voice', description: 'Voice / Buddy status (deferred)' },
   { command: '/cron', description: 'List/create/delete in-process scheduled prompts' },
   { command: '/cost', description: 'Show token usage and cost' },
   { command: '/memory', description: 'Show memory file locations' },

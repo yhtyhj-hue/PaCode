@@ -18,10 +18,13 @@ export interface HooksFile {
 const HOOK_TYPE_MAP: Record<string, HookType> = {
   PreToolUse: HookType.PRE_TOOL_USE,
   PostToolUse: HookType.POST_TOOL_USE,
+  PostToolUseFailure: HookType.POST_TOOL_USE_FAILURE,
+  PermissionRequest: HookType.PERMISSION_REQUEST,
   SessionStart: HookType.SESSION_START,
   SessionStop: HookType.SESSION_STOP,
   Notification: HookType.NOTIFICATION,
   SubagentStop: HookType.SUBAGENT_STOP,
+  Stop: HookType.STOP,
 };
 
 export function findHookConfigPaths(): string[] {

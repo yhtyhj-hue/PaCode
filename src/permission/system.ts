@@ -23,6 +23,9 @@ export const PLAN_ALLOWED_TOOLS = new Set([
   'Glob',
   'Grep',
   'TodoWrite',
+  'Diagnostics',
+  'LSP',
+  'BashOutput',
 ]);
 
 export interface PermissionSystemOptions {

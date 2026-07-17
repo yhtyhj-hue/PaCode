@@ -13,7 +13,7 @@ export interface BridgeStatusReport {
   alternatives: string[];
 }
 
-/** Bridge 远程会话尚未实现；引导用户用 MCP sse/http */
+/** Bridge 远程会话尚未实现；引导用户用 MCP sse/http/websocket */
 export function getBridgeStatus(): BridgeStatusReport {
   return {
     contract: BRIDGE_CONTRACT,
@@ -21,7 +21,7 @@ export function getBridgeStatus(): BridgeStatusReport {
     message:
       'Bridge remote sessions are not implemented yet (ROADMAP K5 deferred product surface).',
     alternatives: [
-      'Configure remote MCP in ~/.paude/mcp.json with type "sse" or "http" + url',
+      'Configure remote MCP in ~/.paude/mcp.json with type "sse", "http", or "websocket" + url',
       'Use McpAuth tool for OAuth, then reconnect MCP',
       'Use /mcp to inspect local MCP connections',
     ],

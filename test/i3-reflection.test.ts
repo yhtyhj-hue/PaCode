@@ -113,14 +113,14 @@ describe('I3 runReflection integration', () => {
     expect(summary.failureMessage).toBe('');
   });
 
-  it('returns failureMessage="" when no project manifest (verifier unavailable)', async () => {
+  it('returns failureMessage="" and skipNotice when no project manifest', async () => {
     // No project manifest -> detectVerifiers returns a single
-    // 'test' verifier with available=false, reason="...". The
-    // runReflection summary reflects that as skipped (not failed)
-    // and failureMessage stays empty.
+    // 'test' verifier with available=false. Soft skipNotice warns
+    // the model not to claim tests passed.
     const summary = await runReflection(workDir);
     expect(summary.failed).toBe(0);
     expect(summary.failureMessage).toBe('');
+    expect(summary.skipNotice).toMatch(/Do not claim tests/);
   });
 });
 

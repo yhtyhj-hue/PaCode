@@ -1,12 +1,13 @@
 /**
  * MCP Client - Model Context Protocol via @modelcontextprotocol/sdk
- * Transports: stdio / sse / http (K5 bootstrap). websocket deferred (no SDK client).
+ * Transports: stdio / sse / http / websocket
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
 import {
   MCPServerConfig,
   MCPServerConnection,
@@ -20,7 +21,8 @@ import { Logger } from '../pkg/logger/index.js';
 type AnyTransport =
   | StdioClientTransport
   | SSEClientTransport
-  | StreamableHTTPClientTransport;
+  | StreamableHTTPClientTransport
+  | WebSocketClientTransport;
 
 interface MCPRuntime {
   connection: MCPServerConnection;
@@ -105,9 +107,16 @@ export class MCPClient {
           requestInit: { headers: config.headers },
         });
       }
+      case 'websocket': {
+        if (!config.url) {
+          throw new Error('websocket MCP server requires url');
+        }
+        // 核心：SDK WebSocketClientTransport；ws:// 或 wss://
+        return new WebSocketClientTransport(new URL(config.url));
+      }
       default: {
         throw new Error(
-          `Unsupported MCP transport: ${String(config.type)} (only stdio/sse/http implemented)`
+          `Unsupported MCP transport: ${String(config.type)} (use stdio/sse/http/websocket)`
         );
       }
     }

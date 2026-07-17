@@ -35,7 +35,7 @@ const NON_MCP_COMMANDS = new Set([
   'zsh',
 ]);
 
-const SUPPORTED_TRANSPORTS = new Set(['stdio', 'sse', 'http']);
+const SUPPORTED_TRANSPORTS = new Set(['stdio', 'sse', 'http', 'websocket']);
 
 function baseCommandName(command: string): string {
   const token = command.trim().split(/\s+/)[0] ?? '';
@@ -52,18 +52,21 @@ function isHttpUrl(url: string): boolean {
   }
 }
 
+function isWebSocketUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'ws:' || u.protocol === 'wss:';
+  } catch {
+    return false;
+  }
+}
+
 /** 返回错误信息；合法则 null */
 export function validateMcpServerEntry(entry: McpServerEntry): string | null {
   const transport = entry.type ?? 'stdio';
 
   if (!SUPPORTED_TRANSPORTS.has(transport)) {
-    if (transport === 'websocket') {
-      return (
-        'Transport "websocket" is deferred (no MCP SDK WebSocket client). ' +
-        'Use type "sse" or "http" with a url.'
-      );
-    }
-    return `Unsupported MCP transport: "${transport}" (use stdio, sse, or http)`;
+    return `Unsupported MCP transport: "${transport}" (use stdio, sse, http, or websocket)`;
   }
 
   if (transport === 'stdio') {
@@ -79,6 +82,17 @@ export function validateMcpServerEntry(entry: McpServerEntry): string | null {
         'MCP needs a long-running process that speaks JSON-RPC over stdio ' +
         '(e.g. npx -y @modelcontextprotocol/server-filesystem /path).'
       );
+    }
+    return null;
+  }
+
+  if (transport === 'websocket') {
+    const url = entry.url?.trim();
+    if (!url) {
+      return 'websocket MCP server requires a url';
+    }
+    if (!isWebSocketUrl(url)) {
+      return 'websocket MCP server url must be ws://… or wss://…';
     }
     return null;
   }

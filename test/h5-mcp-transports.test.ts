@@ -14,23 +14,15 @@
 import { describe, it, expect, vi } from 'vitest';
 
 describe('H5 MCP transport dispatch', () => {
-  it('throws helpful error for non-supported transport types', async () => {
-    // Verify the default branch in createTransport surfaces a
-    // clear message. The Client constructor reaches into
-    // @modelcontextprotocol/sdk internals, so we mock it.
+  it('throws when websocket config lacks url', async () => {
     const { MCPClient } = await import('../src/mcp/client.js');
-    vi.resetModules();
-    const mod = await import('../src/mcp/client.js');
-    // Reach into the private factory via a typed stub config.
-    // We import the client and call .connect with a websocket
-    // type which is currently unsupported.
-    const client = new mod.MCPClient();
+    const client = new MCPClient();
     await expect(
       client.connect({
         name: 'ws-bad',
-        type: 'websocket' as never,
+        type: 'websocket',
       })
-    ).rejects.toThrow(/only stdio\/sse\/http implemented/i);
+    ).rejects.toThrow(/websocket MCP server requires url/i);
   });
 
   it('sse transport requires url', async () => {

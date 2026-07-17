@@ -12,6 +12,7 @@ import {
   collapseOlderMessages,
   formatMessagesForSummary,
 } from './compaction-utils.js';
+import { withRetry } from '../agent/retry.js';
 
 const AUTO_COMPACT_PROMPT = `Summarize the conversation below for context continuity.
 Preserve: user goals, decisions, file paths, errors, and unfinished tasks.
@@ -160,11 +161,16 @@ export class CompactionPipeline {
 
     const apiKey = this.llmOptions.apiKey ?? process.env['ANTHROPIC_API_KEY'];
     const client = new Anthropic({ apiKey, baseURL: this.llmOptions.baseUrl });
-    const response = await client.messages.create({
-      model: this.llmOptions.model ?? 'claude-sonnet-4-5',
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    // L5：瞬时 5xx/429 重试后再降级占位摘要
+    const response = await withRetry(
+      () =>
+        client.messages.create({
+          model: this.llmOptions.model ?? 'claude-sonnet-4-5',
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      { maxAttempts: 3, baseDelayMs: 400, maxDelayMs: 4000 }
+    );
     const block = response.content.find((b) => b.type === 'text');
     return block?.type === 'text' ? block.text : '[Compaction produced no summary]';
   }

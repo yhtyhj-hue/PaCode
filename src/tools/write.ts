@@ -2,7 +2,8 @@
  * Write Tool
  */
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
 import { resolvePathInWorkspace } from './path-utils.js';
 
@@ -26,6 +27,7 @@ export function registerWriteTool(registry: { register: (t: ToolDefinition) => v
         return { content: [{ type: 'text', text: resolved.reason }], isError: true };
       }
       try {
+        mkdirSync(dirname(resolved.resolved), { recursive: true });
         writeFileSync(resolved.resolved, content, 'utf-8');
         return { content: [{ type: 'text', text: `Written to ${path}` }] };
       } catch (e) {

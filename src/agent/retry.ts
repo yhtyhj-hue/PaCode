@@ -10,15 +10,16 @@ export interface RetryConfig {
   baseDelayMs?: number;
   /** 退避上限毫秒。默认 8000。 */
   maxDelayMs?: number;
-  /** 可重试错误码（默认 ['rate_limit_error', 'overloaded_error']）。 */
+  /** 可重试 HTTP 状态。默认 429 + 5xx 瞬时（500/502/503/529）。 */
   retryableStatus?: number[];
-  /** 不可重试错误码（命中直接 throw）。默认 ['invalid_request_error', 'authentication_error']。 */
+  /** 不可重试错误码（命中直接 throw）。默认 400/401/403/404。 */
   nonRetryableStatus?: number[];
   /** 用户中断信号 — AbortSignal。触发后立即抛 AbortError。 */
   signal?: AbortSignal;
 }
 
-const DEFAULT_RETRYABLE = [429, 529];
+/** 含 500/502/503：对标常见 Anthropic/代理瞬时故障（二次 query 偶发 500） */
+const DEFAULT_RETRYABLE = [429, 500, 502, 503, 529];
 const DEFAULT_NON_RETRYABLE = [400, 401, 403, 404];
 
 export class RetryAbortError extends Error {

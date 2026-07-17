@@ -50,6 +50,7 @@ import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.j
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
 import { formatBridgeStatus } from '../services/bridge/index.js';
+import { formatVoiceStatus } from '../services/voice/index.js';
 import {
   getCronStore,
   MAX_CRON_DUE_PER_TURN,
@@ -474,6 +475,9 @@ export class REPL {
       case '/bridge':
         this.handleBridge();
         break;
+      case '/voice':
+        this.handleVoice();
+        break;
       case '/cron':
         this.handleCron(args);
         break;
@@ -511,6 +515,7 @@ export class REPL {
         ['/doctor', 'Run local health checks'],
         ['/diff', 'git status + diff --stat (read-only)'],
         ['/bridge', 'Bridge remote session status (deferred)'],
+        ['/voice', 'Voice / Buddy status (deferred)'],
         ['/cron', 'List/create/delete in-process scheduled prompts'],
         ['/cost', 'Show token usage and cost'],
         ['/memory', 'Show memory file locations'],
@@ -1161,6 +1166,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
             break;
           case 'tool_use':
             if (event.tool) {
+              progress.setToolPhase(this.formatToolLabel(event.tool));
               stopProgress();
               modelToolCount++;
               renderer.renderToolUse(event.tool);
@@ -1200,6 +1206,11 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       }
 
       stopProgress();
+
+      const timeline = progress.formatTimelineSummary();
+      if (timeline) {
+        console.log(`${DIM}${timeline}${RESET}`);
+      }
 
       if (this.interruptRequested) {
         console.log(`${DIM}· Interrupted${RESET}\n`);
@@ -1347,6 +1358,13 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     console.log('');
   }
 
+  /** J4: Voice / Buddy 状态（明确 deferred） */
+  private handleVoice(): void {
+    console.log('');
+    console.log(formatVoiceStatus());
+    console.log('');
+  }
+
   /** K4: 进程内 cron 管理（无 OS daemon） */
   private handleCron(args: string[]): void {
     const store = getCronStore();
@@ -1458,7 +1476,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
   /** I2: /rewind — list checkpoints or roll back to a given one. */
   private async handleRewind(args: string[]): Promise<void> {
-    const { listCheckpoints, rewindTo, formatCheckpointList } = await import(
+    const { listCheckpoints, rewindToDetailed, formatCheckpointList } = await import(
       '../services/checkpoint.js'
     );
     if (args.length === 0) {
@@ -1466,11 +1484,11 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       return;
     }
     const id = args[0]!;
-    const ok = rewindTo(id);
-    if (ok) {
+    const result = rewindToDetailed(id);
+    if (result.ok) {
       console.log(`${GREEN}✓${RESET} Rewound to ${DIM}${id}${RESET}`);
     } else {
-      console.log(`${YELLOW}?${RESET} Rewind failed for ${id}. Working tree may have conflicting changes.`);
+      console.log(`${YELLOW}?${RESET} ${result.message}`);
     }
   }
 

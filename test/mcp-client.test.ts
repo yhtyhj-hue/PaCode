@@ -26,14 +26,14 @@ describe('MCPClient', () => {
     expect(client.getConnection('bad-server')).toBeUndefined();
   });
 
-  it('rejects unsupported transport types', async () => {
+  it('requires url for websocket transport', async () => {
     const client = new MCPClient();
     await expect(
       client.connect({
         name: 'ws-bad',
         type: 'websocket',
       })
-    ).rejects.toThrow(/only stdio\/sse\/http implemented/i);
+    ).rejects.toThrow(/websocket MCP server requires url/i);
   });
 
   it('sse transport attempts connection (and fails on bad URL)', async () => {

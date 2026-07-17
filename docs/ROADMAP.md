@@ -20,7 +20,7 @@
 | M2 | DEFAULT 完成一次「项目质检」人工确认次数 | ≤ 1（Bash 批） |
 | M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | ≥ 90% 会话 |
 | M4 | 权限确认不卡死输入框 / Ctrl+C 可取消 | 100% |
-| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5（golden）；`evals/gate/m5` + `evals/periodic/m5`；见 `evals/fixtures/m5/BASELINE.json` |
+| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5；gate + periodic simulated；live 需 API key |
 
 ---
 
@@ -32,13 +32,16 @@
 | 7 权限模式 + deny-first + DEFAULT 只读免确认 + 单键确认 | ✅ |
 | L1 预取（prefetch workers，非假 Subagent）+ 预取后仍可 tool | ✅ |
 | Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
-| 5 层 compact 管道形态 | ✅ 仍可加深 |
-| MCP stdio + SSE + HTTP | ✅；WebSocket / Bridge deferred |
+| 5 层 compact 管道形态 | ✅ L4 结构化折叠 + L5 5xx 重试 |
+| MCP stdio + SSE + HTTP + WebSocket | ✅；Bridge 远程会话仍 deferred（`/bridge`） |
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
-| Team / Coordinator / NotebookEdit / ScheduleCron / LSP(diagnostics) | ✅（K4/J2/J3） |
-| Ink TUI / Voice / Buddy | ❌ defer（K7 / J4） |
-| M5 工程评测 fixture（fix-bug / add-test / small-refactor） | ✅ gate + periodic 基线 |
+| Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP alias) | ✅ |
+| Bash `run_in_background` + BashOutput / BashStop | ✅ |
+| Ink TUI | ❌ defer（K7）；进度行工具时间线已增强 |
+| Voice / Buddy | ❌ deferred 状态面（`/voice`，J4） |
+| M5 工程评测 | ✅ golden + **simulated agent**；live 有 `ANTHROPIC_API_KEY` 时跑 |
 | G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
+| PermissionRequest hook | ✅（stdout approve / exit 2 deny） |
 
 ---
 
@@ -92,10 +95,11 @@
 | K1 | SkillTool / ToolSearch（延迟加载技能目录） | ✅（SkillTool load/list/search；ToolSearch；assembler 默认 lazy index；skillsFullCatalog opt-in；核心工具 22→24） |
 | K2 | ConfigTool（薄封装现有 settings） | ✅（get/set/list；writable 白名单；apiKey 脱敏；写入 user/project/local；核心工具 24→25） |
 | K3 | Brief → **Skill 或 slash**，不占核心工具编制 | ✅（`/brief` 确定性构建 + `.claude/skills/brief`；无 BriefTool） |
-| K4 | NotebookEdit / ScheduleCron / LSP | ✅ P2（NotebookEdit 改 .ipynb；ScheduleCron 进程内 every:@hourly + /cron；LSP=tsc/eslint 诊断非真 language server；核心工具 25→28） |
-| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ 部分（sse/http 校验+headers+OAuth Bearer 合并；websocket/Bridge 明确 deferred；`/bridge` 状态） |
-| K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（菜单对齐 resume/rewind/style；新增 /doctor /diff；/reset /quit 别名；不对齐 101） |
-| K7 | Ink TUI | defer |
+| K4 | NotebookEdit / ScheduleCron / Diagnostics(+LSP 别名) | ✅（诊断非真 language server） |
+| K5 | MCP 其余 transport；Bridge 远程会话 | ✅ sse/http/**websocket**；Bridge 仍 deferred（`/bridge`） |
+| K6 | 高频 slash 补齐（按使用统计，不对齐 101） | ✅（+ `/voice`） |
+| K7 | Ink TUI | defer（进度行工具时间线已增强） |
+| J4 | Voice / Buddy | deferred 产品面（`/voice` 状态契约，非 STT） |
 
 Windows PowerShellTool：非 macOS 主线，defer。
 
@@ -154,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **对标 CC P0–P2**：M5 simulated+live wiring；retry 500/502/503；BashOutput；PermissionRequest；L4 结构化 compact；MCP websocket；Diagnostics 别名；`/voice`；工具时间线；rewind 结构化错误 |
 | 2026-07-17 | 联合冒烟 + M5 工程评测基线 + G4 图片（--image / ContentBlock）+ Edit 后自动 checkpoint |
 | 2026-07-17 | 二次质检：approvedKeys；apiKey 禁 project；ExitPlanMode/PLAN 白名单；DONT_ASK←bash-secure；cron 下限；hooks execFile；AskUser interrupt |
 | 2026-07-17 | 质检 P0/P1：Bash 确认可执行 + 2>&1；symlink 嵌套写逃逸；DEFAULT Edit/Write；预取证据门闩；AskUser readLine；LSP 工作区；coverage/docs |
