@@ -2,9 +2,9 @@
 
 > 基于 Claude Code v2.1.88 源码分析验证的 AI 编程助手框架
 
-**版本:** 1.2.0
+**版本:** 1.3.0
 **日期:** 2026-07-17
-**状态:** Phase H–K 主线完成（K7 Ink / J4 Voice defer）；28 核心工具 + services + gate evals
+**状态:** Phase H–K 主线完成（K7 Ink / J4 Voice defer）；31 核心工具；`npm test`=unit+gate（periodic 另跑）
 
 ### 实施状态快照
 

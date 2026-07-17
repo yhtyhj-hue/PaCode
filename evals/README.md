@@ -54,3 +54,12 @@ evals/fixtures/m5/{fix-bug,add-test,small-refactor}/
 - Periodic：`evals/periodic/m5-hard-once-success.eval.ts` + `m5-hard-cc-compare.eval.ts`
 - Periodic：`evals/periodic/m5-cc-compare.eval.ts` — PaCode live vs `claude -p` 同 fixture，写入 `COMPARE.json`
 - 联合冒烟：`test/smoke-joint-paths.test.ts`
+
+## CI lanes
+
+- `npm test` — unit + `evals/gate`（排除 `evals/periodic/**`，避免 live API 拉长/挂起）
+- `npm run eval:gate` — 仅确定性门禁
+- `npm run eval:periodic` / `npm run test:all` — 含 live（需 env 或 cc-switch 凭证；M5 vs CC 还需 `claude` CLI）
+
+Live M5 使用 `resolveM5LiveCredentials()`（env **或** cc-switch）。有 cc-switch 时 `skipIf(!hasLiveCreds)` **不会**跳过。
+

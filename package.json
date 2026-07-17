@@ -11,13 +11,14 @@
     "watch": "tsc --watch",
     "start": "node dist/cli/index.js",
     "dev": "node dist/cli/index.js",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'evals/periodic/**'",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "eval:gate": "vitest run evals/gate",
     "eval:periodic": "vitest run evals/periodic",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test:all": "vitest run"
   },
   "keywords": [
     "claude",
