@@ -22,7 +22,7 @@ export interface PlanStep {
   tool?: string;
   description: string;
   estimatedRisk: 'low' | 'medium' | 'high';
-  status: PlanStepStatus;
+  status?: PlanStepStatus;
 }
 
 export class PlanModeManager {

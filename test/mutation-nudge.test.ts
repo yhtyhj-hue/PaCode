@@ -25,7 +25,7 @@ describe('QueryEngine mutation nudge', () => {
     const registry = new ToolRegistry();
     registry.register({ name: 'Read', description: 'read', inputSchema: { type: 'object', properties: {} }, concurrencySafe: true, permissionMode: PermissionMode.DEFAULT, execute: async () => ({ toolCallId: '', content: 'ok', isError: false }) });
     registry.register({ name: 'Write', description: 'write', inputSchema: { type: 'object', properties: {} }, concurrencySafe: false, permissionMode: PermissionMode.DEFAULT, execute: async () => ({ toolCallId: '', content: 'ok', isError: false }) });
-    const engine = new QueryEngine({ anthropicClient: client, toolRegistry: registry, contextAssembler: stubAssembler(), compactionPipeline: passthroughCompaction(), prefetch: { enabled: false } });
+    const engine = new QueryEngine({ anthropicClient: client, toolRegistry: registry, contextAssembler: stubAssembler(), compactionPipeline: passthroughCompaction(), prefetch: { enabled: false }, workingDirectory: workDir, permissionPrompt: async () => true });
     const state = { sessionId: 'mut-nudge', messages: [], toolCallHistory: [], maxOutputTokensRecoveryCount: 0, mode: PermissionMode.BYPASS, hooks: { hooks: {} }, compactionHistory: [] } as never;
     const events: string[] = [];
     for await (const e of engine.query({ message: '修好跨模块契约不一致，使 verify.mjs 通过' }, state)) {
