@@ -49,7 +49,11 @@ import { QueryProgressLine } from './query-progress.js';
 import { getAgentPool } from '../services/agent-scheduler/index.js';
 import { getTaskStore } from '../services/task-registry/index.js';
 import { getTeamStore } from '../services/team/index.js';
-import { getCoordinatorStore } from '../services/coordinator/index.js';
+import {
+  getCoordinatorStore,
+  coordinatorPoll,
+  formatCoordinatorAssignmentLine,
+} from '../services/coordinator/index.js';
 import { buildProjectBrief, formatProjectBrief } from '../services/brief/index.js';
 import { formatDoctorReport, runDoctorChecks } from './doctor.js';
 import { formatGitDiffView } from './git-diff-view.js';
@@ -527,7 +531,7 @@ export class REPL {
         ['/permissions', 'Show permission rules'],
         ['/providers', 'List API providers'],
         ['/brief', 'Project brief (CLAUDE.md / package.json / README)'],
-        ['/agents', 'List subagents, tasks, and teams'],
+        ['/agents', 'List subagents, tasks, teams, coordinator assignments'],
         ['/plan', 'Create or manage implementation plans'],
       ],
       Configuration: [
@@ -860,10 +864,15 @@ Project-specific instructions for PaCode/Claude Code.
     if (teams.length > 0) {
       console.log(`${DIM}Teams (TeamCreate / SendMessage / Coordinator):${RESET}`);
       for (const t of teams) {
-        const asn = getCoordinatorStore().listForTeam(t.id).length;
+        const poll = coordinatorPoll(t.id);
+        const items = poll.ok ? poll.items : [];
         console.log(
-          `  ${CYAN}●${RESET} ${t.id} · ${t.name} · ${t.memberCount} members · ${t.unreadCount} unread · ${asn} assignments`
+          `  ${CYAN}●${RESET} ${t.id} · ${t.name} · ${t.memberCount} members · ${t.unreadCount} unread · ${items.length} assignments`
         );
+        // assign_many / assign 明细：与 poll 同源，便于人工审计扇出状态
+        for (const a of items.slice(0, 12)) {
+          console.log(`    ${DIM}${formatCoordinatorAssignmentLine(a)}${RESET}`);
+        }
       }
       console.log('');
     }
@@ -874,7 +883,7 @@ Project-specific instructions for PaCode/Claude Code.
     }
     console.log('');
     console.log(
-      `${DIM}Task/Team → real subagents + inbox. Prefetch workers ≠ Team.${RESET}`
+      `${DIM}Task/Team/Coordinator → real subagents + inbox. Prefetch workers ≠ Team. assign_many → assignment rows above.${RESET}`
     );
     console.log('');
   }

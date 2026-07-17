@@ -379,6 +379,29 @@ export function coordinatorPoll(teamId: string):
   return { ok: true, contract: COORDINATOR_CONTRACT, items };
 }
 
+/** Plain lines for /agents (no ANSI) — assignment_id · to · status · description */
+export function formatCoordinatorAssignmentLine(item: CoordinatorPollItem): string {
+  const mark =
+    item.status === 'done'
+      ? '✓'
+      : item.status === 'error' || item.status === 'stopped'
+        ? '✗'
+        : '…';
+  const bg = item.background ? ' (bg)' : '';
+  return `${mark} ${item.assignment_id} · ${item.to} · ${item.status} · ${item.description}${bg}`;
+}
+
+/** Full section text for one team; empty string if no assignments */
+export function formatCoordinatorAssignmentsForAgents(teamId: string): string {
+  const poll = coordinatorPoll(teamId);
+  if (!poll.ok) return `Coordinator: ${poll.error}`;
+  if (poll.items.length === 0) return '';
+  return [
+    `Coordinator assignments (${poll.items.length}):`,
+    ...poll.items.map(formatCoordinatorAssignmentLine),
+  ].join('\n');
+}
+
 export function coordinatorCollect(
   teamId: string,
   assignmentIds?: string[]

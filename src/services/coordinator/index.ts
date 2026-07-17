@@ -17,6 +17,8 @@ export {
   coordinatorAssignMany,
   coordinatorPoll,
   coordinatorCollect,
+  formatCoordinatorAssignmentLine,
+  formatCoordinatorAssignmentsForAgents,
   parseCoordinatorEnvelope,
   type CoordinatorRunDeps,
   type AssignManyItem,

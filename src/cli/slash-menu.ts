@@ -36,7 +36,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/mode', description: 'Change permission mode' },
   { command: '/model', description: 'Show or change model' },
   { command: '/style', description: 'Switch output style (default/cost/full/minimal)' },
-  { command: '/agents', description: 'List subagents, tasks, and teams' },
+  { command: '/agents', description: 'List subagents, tasks, teams, coordinator assignments' },
   { command: '/plan', description: 'Create or manage plans (/plan report for execution summary)' },
   { command: '/resume', description: 'Resume a saved session' },
   { command: '/rewind', description: 'Rewind workspace to a checkpoint' },

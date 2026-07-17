@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-17 | **J3 /agents assign_many 可见性**：per-assignment status 行（poll 同源） |
 | 2026-07-17 | **I4 plan execution report**：done/failed 可审计摘要；`/plan report`；complete 保留 failed |
 | 2026-07-17 | **I4 step retry + J3 assign_many**：失败有界重试/skip；并行多 worker |
 | 2026-07-17 | **I4/I3/J3 补全**：plan step drive；reflection engine 环测；Coordinator live E2E |
