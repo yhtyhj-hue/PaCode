@@ -17,7 +17,7 @@
 | Permission System | ~95% | 7 modes + G6 ml/deterministic classifier + session memory |
 | Memory | ~85% | 用户 `.paude/memory/` + 项目 hash + auto-memory |
 | Hooks / Skills / Plugins / MCP | ~92% | MCP stdio/sse/http/**websocket**；Bridge **v1-local** 中继 |
-| CLI / REPL | ~96% | readline + Ink；`/effort` `/vim` `/voice` STT；`pacode bridge serve` |
+| CLI / REPL | ~96% | readline + Ink；`-p`/SDK；`/btw`；statusline 钩子；`/effort` `/vim` `/voice`；`pacode bridge serve`（本机） |
 | 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
 | 测试 | coverage 四维 | lines/statements ≥80；functions ≥79；branches ≥73.9；CI 跑 `test:coverage` |
 | Eval harness | ✅ | M5 simulated；live+vs CC COMPARE + speed assert |
