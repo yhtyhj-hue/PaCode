@@ -23,6 +23,7 @@ export function showHelp(): void {
 
 Usage:
   pacode [options] [message]       Run AI agent with a message
+  pacode -p [message]              Headless print (no REPL; stdin if no args)
   pacode init                      Initialize .paude/ and CLAUDE.md
   pacode mcp <command>             Manage MCP server configuration
   pacode cc-switch <command>       Manage API providers (ccswitch integration)
@@ -34,6 +35,7 @@ Usage:
 Options:
   -h, --help              Show this help
   -v, --version           Show version
+  -p, --print             Headless mode (skip boot/REPL; exit 1 on agent error)
   -m, --mode <mode>       Permission mode (plan|default|acceptEdits|auto|dontAsk|bypass)
   --resume                Resume latest saved session (REPL mode)
   --session-id <id>       Resume specific session id
@@ -70,12 +72,15 @@ Environment:
   PACODE_AUTO_APPROVE     Set to 1 to allow tool prompts in non-TTY environments
   PACODE_HOOK_FAIL_OPEN   Set to 1 to continue when PreToolUse hooks throw (default: deny)
   PACODE_TUI              Set to 1 to launch Ink TUI instead of readline REPL
-
-Options:
-  --image <path>          Attach image for vision (repeatable; png/jpeg/gif/webp)
+  PACODE_STATUSLINE_CMD   Statusline script (stdin JSON → one stdout line); else ~/.paude/statusline.sh
+  PACODE_LSP_PYTHON       Override Python LSP command (e.g. "pyright-langserver --stdio")
+  PACODE_CLASSIFIER       auto|deterministic|ml (ml = feature heuristics + optional CMD, not a neural net)
+  PACODE_CLASSIFIER_CMD   Optional shell classifier for AUTO mode
 
 Examples:
   pacode "Read package.json and explain the project"
+  pacode -p "Summarize this repo"
+  echo "list TODOs" | pacode -p
   pacode --tui
   pacode -m acceptEdits "Add error handling to index.ts"
   pacode --image shot.png "Describe this screenshot"

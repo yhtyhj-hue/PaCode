@@ -6,6 +6,7 @@
 
 import stringWidth from 'string-width';
 import { PermissionMode } from '../pkg/types.js';
+import { runStatuslineHook, type StatuslineContext } from './statusline.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -144,13 +145,24 @@ export function formatStatusBarRight(tokens: number): string {
   return `${DIM}new task? /clear to save ${RESET}${CYAN}${tokenStr}${RESET}`;
 }
 
-/** 左对齐模式 + 右对齐 token，中间空格填充（总宽不超过 width） */
+/** 左对齐模式 + 右对齐 token，中间空格填充；可选 statusline 钩子追加 */
 export function formatStatusBar(
   mode: PermissionMode,
   tokens: number,
-  width = getUiWidth()
+  width = getUiWidth(),
+  statusCtx?: Omit<StatuslineContext, 'mode' | 'tokens'>
 ): string {
-  const right = formatStatusBarRight(tokens);
+  const hook = runStatuslineHook({
+    mode,
+    tokens,
+    model: statusCtx?.model,
+    cwd: statusCtx?.cwd,
+    sessionId: statusCtx?.sessionId,
+  });
+  const rightBase = formatStatusBarRight(tokens);
+  const right = hook
+    ? `${DIM}${hook}${RESET} ${rightBase}`
+    : rightBase;
   let left = formatStatusBarLeft(mode);
   const rightW = visibleWidth(right);
 

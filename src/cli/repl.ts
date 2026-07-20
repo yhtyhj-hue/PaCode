@@ -154,17 +154,19 @@ export class REPL {
     });
     bootstrapHooks(this.hookRegistry);
 
-    this.engine = new QueryEngine({
-      apiKey: this.apiKey,
-      baseUrl: this.baseUrl,
-      toolRegistry: this.toolRegistry,
-      sessionManager: this.sessionManager,
-      hookRegistry: this.hookRegistry,
-      contextAssembler: new ContextAssembler({ skillsLoader: this.skillsLoader }),
-      permissionPrompt: async (tool, batchTools) => this.promptForPermission(tool, batchTools),
-      // AskUser：processMessage 已 pause editor（cooked stdin），禁止再开抢 raw mode 的 reader
-      readLine: (prompt) => this.readAskUserLine(prompt),
-    });
+    this.engine =
+      options.engine ??
+      new QueryEngine({
+        apiKey: this.apiKey,
+        baseUrl: this.baseUrl,
+        toolRegistry: this.toolRegistry,
+        sessionManager: this.sessionManager,
+        hookRegistry: this.hookRegistry,
+        contextAssembler: new ContextAssembler({ skillsLoader: this.skillsLoader }),
+        permissionPrompt: async (tool, batchTools) => this.promptForPermission(tool, batchTools),
+        // AskUser：processMessage 已 pause editor（cooked stdin），禁止再开抢 raw mode 的 reader
+        readLine: (prompt) => this.readAskUserLine(prompt),
+      });
 
     if (options.initialSession) {
       this.sessionManager.restoreSession(options.initialSession);
@@ -257,6 +259,14 @@ export class REPL {
       }
 
       this.printUserTurn(trimmed);
+      // 主轮消息以 ` &` 结尾 → 后台跑（非 Bash &）
+      if (/\s&$/.test(trimmed)) {
+        const prompt = trimmed.replace(/\s&$/, '').trim();
+        if (prompt) {
+          this.startBackgroundTurn(prompt);
+          continue;
+        }
+      }
       await this.processMessage(trimmed);
       if (this.exitRequested) break;
     }
@@ -488,6 +498,15 @@ export class REPL {
       case '/agents':
         this.showAgents();
         break;
+      case '/btw': {
+        const prompt = arg.trim();
+        if (!prompt) {
+          console.log(`${DIM}Usage: /btw <prompt> — run agent turn in background${RESET}`);
+          break;
+        }
+        this.startBackgroundTurn(prompt);
+        break;
+      }
       case '/plan':
         await this.handlePlan(arg);
         break;
@@ -582,6 +601,7 @@ export class REPL {
         ['/providers', 'List API providers'],
         ['/brief', 'Project brief (CLAUDE.md / package.json / README)'],
         ['/agents', 'List subagents, tasks, teams, coordinator assignments'],
+        ['/btw <prompt>', 'Run an agent turn in background (also: message &)'],
         ['/plan', 'Create or manage implementation plans'],
       ],
       Configuration: [
@@ -819,10 +839,96 @@ export class REPL {
   }
 
   private showAgents(): void {
-    console.log('');
-    console.log(`${CYAN}${BOLD}Agents${RESET}`);
     console.log(formatAgentsReport());
-    console.log('');
+  }
+
+  /** C2: 主轮后台任务 — TaskStore 登记 + 完成后一行通知 */
+  startBackgroundTurn(prompt: string): string {
+    const store = getTaskStore();
+    let aborted = false;
+    const task = store.begin({
+      description: prompt.slice(0, 80),
+      subagentType: 'main-btw',
+      background: true,
+      abort: () => {
+        aborted = true;
+      },
+    });
+    const session = this.getOrCreateSession();
+    // 快照会话，避免与前台轮次交叉写
+    const bgSession: SessionState = {
+      ...session,
+      sessionId: `${session.sessionId}_btw_${task.id}`,
+      messages: [...session.messages],
+      toolCallHistory: [...(session.toolCallHistory ?? [])],
+    };
+    bgSession.messages.push({
+      role: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+    });
+
+    console.log(
+      `${DIM}[bg ${task.id}] started — /agents to list; TaskStop via Task tool${RESET}`
+    );
+
+    void (async () => {
+      const started = Date.now();
+      let text = '';
+      let toolCalls = 0;
+      let error: string | undefined;
+      try {
+        for await (const event of this.engine.query(
+          {
+            message: prompt,
+            options: {
+              model: this.model,
+              maxTokens: effortMaxTokens(session.effort ?? 'medium'),
+              systemPrompt: buddySystemHint() ?? undefined,
+              shouldAbort: () => aborted || this.exitRequested,
+            },
+          },
+          bgSession
+        )) {
+          if (aborted || this.exitRequested) break;
+          if (event.type === 'content_block_delta' && event.delta?.text) {
+            text += event.delta.text;
+          } else if (event.type === 'tool_use') {
+            toolCalls += 1;
+          } else if (event.type === 'error' && event.error) {
+            error = event.error.message;
+          }
+        }
+        if (aborted) {
+          store.markStopped(task.id);
+          process.stdout.write(`\n${DIM}[bg ${task.id}] stopped${RESET}\n`);
+          return;
+        }
+        const success = !error;
+        store.complete(task.id, {
+          report: {
+            agent: 'main-btw',
+            success,
+            summary: (text || error || 'done').slice(0, 200),
+            toolCalls,
+            durationMs: Date.now() - started,
+            isolation: 'none',
+            error,
+          },
+          output: text,
+        });
+        const preview = (text || error || 'done').replace(/\s+/g, ' ').slice(0, 80);
+        process.stdout.write(
+          `\n${DIM}[bg ${task.id}] ${success ? 'done' : 'error'}: ${preview}${RESET}\n`
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        store.fail(task.id, msg);
+        process.stdout.write(`\n${DIM}[bg ${task.id}] error: ${msg}${RESET}\n`);
+      }
+    })();
+
+    return task.id;
   }
 
   private async handlePlan(description: string): Promise<void> {
@@ -1482,6 +1588,8 @@ export interface REPLOptions {
   toolRegistry?: ToolRegistry;
   hookRegistry?: HookRegistry;
   initialSession?: SessionState;
+  /** 测试注入 mock QueryEngine */
+  engine?: QueryEngine;
 }
 
 export type SlashPeekResult =

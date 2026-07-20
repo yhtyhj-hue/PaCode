@@ -33,16 +33,17 @@
 | L1 预取 | ✅ **默认真 LLM explore Subagent**（inspect/review/audit）；`PACODE_PREFETCH_DAG=1` 才用脚本 DAG |
 | Edit 唯一匹配 / replaceAll；DEFAULT 确认后可 Edit/Write | ✅ |
 | 5 层 compact 管道形态 | ✅ L4 结构化折叠 + L5 5xx 重试 |
-| MCP stdio + SSE + HTTP + WebSocket | ✅；`/bridge`=v1-partial 远程清单 + **bridge/v1-local** 本机会话中继（`pacode bridge serve`） |
+| MCP stdio + SSE + HTTP + WebSocket | ✅；`/bridge`=v1-partial + **bridge/v1-local**；**公网 SaaS / cloud resume 明确不做（C4）** |
 | Subagent / Worktree CLI | ✅ I6：Task→worktree 隔离 + 固定 report schema |
-| Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP client) | ✅ LSP hover/definition；无 server 回退 tsc/eslint |
+| Team / Coordinator / NotebookEdit / ScheduleCron / Diagnostics(+LSP client) | ✅ LSP：TS + 发现 py/go/rust（有二进制才启）；无 server 回退 tsc/eslint |
 | Bash `run_in_background` + BashOutput / BashStop | ✅ |
-| Ink TUI | ✅ K7：`--tui`（AskUser + 高频 slash；`/rewind <id>` 经确认后真恢复） |
+| Ink TUI | ✅ K7：`--tui`；`/btw` 主轮后台；statusline 钩子 |
 | Voice / Buddy | ✅ **voice/v1-stt-pipe**（`PACODE_STT_CMD` + `/voice start|stop`；Buddy 旁白开关） |
+| Headless / SDK | ✅ `pacode -p` / `import { runAgent } from 'pacode'` |
 | M5 工程评测 | ✅ easy/hard；vs CC COMPARE + **speed assert**（`PACODE_M5_SPEED_RATIO`）；并行任务 |
 | G4 多模态图片（ContentBlock + `--image` + serializer） | ✅ |
 | PermissionRequest hook | ✅（stdout approve / exit 2 deny） |
-| G6 ML AUTO | ✅ **g6/v1-ml-features**（`PACODE_CLASSIFIER=ml` + 可选 `PACODE_CLASSIFIER_CMD`） |
+| G6 ML AUTO | ✅ **g6/v1-ml-features**（特征启发式 + 可选 `PACODE_CLASSIFIER_CMD`；**非神经网络**；默认 deterministic） |
 
 ---
 
@@ -158,6 +159,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-20 | **Wave C**：`-p`/SDK；`/btw` 主轮后台；statusline 钩子；Bridge SaaS 明确不做；多语言 LSP 发现；ML 命名诚实 |
 | 2026-07-20 | **Wave A+B**：coverage CI+branches；Gate/Periodic M1 引擎行为；M3 harness≥90%；PostToolUse/Stop stdout；web-fetch md links；COMPARE metadata |
 | 2026-07-17 | **真 LLM explore**：inspect/review/audit 默认 SubagentManager 并行；脚本 DAG 需 PACODE_PREFETCH_DAG=1 |
 | 2026-07-17 | **超越 CC 六项**：M5 并行+速度断言；`/effort`/`/vim`/`/new`；bridge/v1-local；LSP client；Voice STT pipe；G6 ml backend |

@@ -7,6 +7,7 @@ import { ToolDefinition, PermissionMode, ToolContext } from '../pkg/types.js';
 import { collectDiagnostics } from '../services/diagnostics/index.js';
 import {
   LspClient,
+  resolveLanguageServer,
   resolveTypescriptServerCommand,
   type LspPosition,
 } from '../services/lsp-client/index.js';
@@ -91,7 +92,9 @@ async function tryLspDiagnostics(
   root: string,
   path?: string
 ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean } | null> {
-  const cmd = resolveTypescriptServerCommand(root);
+  const cmd = path
+    ? resolveLanguageServer(path, root)
+    : resolveTypescriptServerCommand(root);
   if (!cmd) return null;
   const client = new LspClient();
   const ok = await client.start(cmd.command, cmd.args, root);
@@ -106,6 +109,7 @@ async function tryLspDiagnostics(
             {
               engine: 'lsp',
               contract: client.contract,
+              languageId: 'languageId' in cmd ? cmd.languageId : 'typescript',
               cwd: root,
               path: path ?? null,
               note: 'LSP server started; use action=hover|definition for positions. Full push diagnostics not buffered yet — fallback engines still available via prefer=tsc|eslint.',
@@ -144,7 +148,7 @@ async function runLspAction(
     line: line ?? 0,
     character: character ?? 0,
   };
-  const cmd = resolveTypescriptServerCommand(root);
+  const cmd = resolveLanguageServer(path, root);
   if (!cmd) {
     // 无 LSP：diagnostics 回退；hover/definition 明确失败
     const fallback = await collectDiagnostics(root);
@@ -154,7 +158,7 @@ async function runLspAction(
           type: 'text',
           text: JSON.stringify(
             {
-              error: 'No typescript-language-server; install it or use action=diagnostics',
+              error: 'No language server for this file; install typescript-language-server / pyright / gopls / rust-analyzer or use action=diagnostics',
               fallbackEngine: fallback.engine,
               fallbackCount: fallback.diagnostics.length,
             },

@@ -3,9 +3,16 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+export {
+  resolveLanguageServer,
+  resolveTypescriptServerCommand,
+  languageIdFromPath,
+  canStartTypescriptLsp,
+  type LspLanguageId,
+  type LspServerCommand,
+} from './resolve-server.js';
 
 export const LSP_CLIENT_CONTRACT = 'lsp/v1-stdio' as const;
 
@@ -221,21 +228,4 @@ function normalizeLocations(result: unknown): LspLocation[] {
     }
   }
   return out;
-}
-
-/** 解析可用的 TS language server 启动命令 */
-export function resolveTypescriptServerCommand(
-  cwd = process.cwd()
-): { command: string; args: string[] } | null {
-  const localBin = join(cwd, 'node_modules', '.bin', 'typescript-language-server');
-  if (existsSync(localBin)) {
-    return { command: localBin, args: ['--stdio'] };
-  }
-  // 可选：全局 / npx（慢）；无则 null → 工具回退 tsc/eslint
-  return null;
-}
-
-/** 探测是否可启动（不等 initialize）— 供 skipIf */
-export function canStartTypescriptLsp(cwd = process.cwd()): boolean {
-  return resolveTypescriptServerCommand(cwd) != null;
 }

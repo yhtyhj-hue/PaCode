@@ -3,10 +3,6 @@
  * CLI Entry Point
  */
 
-import { QueryEngine } from '../agent/engine.js';
-import { SessionManager } from '../session/manager.js';
-import { setupToolRegistry } from '../tools/setup.js';
-import { getSubagentManager } from '../agent/subagent.js';
 import { Logger } from '../pkg/logger/index.js';
 import { bootAnimation } from './animation.js';
 import { getCCSwitch } from '../pkg/ccswitch/index.js';
@@ -25,6 +21,7 @@ import { parseCliArgs } from './args.js';
 import { loadImageFromFile } from '../services/image-attach/index.js';
 import type { ImageSource } from '../pkg/types.js';
 import { shouldEnableTui, startInkRepl } from './tui/index.js';
+import { runAgent } from '../sdk/run-agent.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -93,12 +90,25 @@ async function main() {
   const model = appConfig.model;
   const activeProvider = cc.getActive();
 
-  await bootAnimation.show({
-    model,
-    apiKeyConfigured: Boolean(appConfig.apiKey),
-    providerCount: cc.list().length,
-    activeProvider: activeProvider?.name,
-  });
+  const printMode = Boolean(values.print);
+  let message = positionals.join(' ').trim();
+  // -p 且无 positional：从 stdin 读（管道友好）
+  if (printMode && !message && !process.stdin.isTTY) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    }
+    message = Buffer.concat(chunks).toString('utf-8').trim();
+  }
+
+  if (!printMode) {
+    await bootAnimation.show({
+      model,
+      apiKeyConfigured: Boolean(appConfig.apiKey),
+      providerCount: cc.list().length,
+      activeProvider: activeProvider?.name,
+    });
+  }
 
   const apiKey = appConfig.apiKey;
   const baseUrl = appConfig.baseUrl;
@@ -122,13 +132,11 @@ Get a key at: https://console.anthropic.com/
 
   const mode = appConfig.mode;
 
-  if (activeProvider) {
+  if (activeProvider && !printMode) {
     console.log(
       `\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
     );
   }
-
-  const message = positionals.join(' ');
 
   if (values.resume && !message) {
     await handleResume([], values);
@@ -136,6 +144,10 @@ Get a key at: https://console.anthropic.com/
   }
 
   if (!message) {
+    if (printMode) {
+      log.error('No message for -p / --print (pass args or pipe stdin)');
+      process.exit(1);
+    }
     const useTui = shouldEnableTui({
       tuiFlag: Boolean(values.tui),
       env: process.env,
@@ -161,20 +173,6 @@ Get a key at: https://console.anthropic.com/
     return;
   }
 
-  const { registry: toolRegistry, hookRegistry } = await setupToolRegistry({
-    apiKey,
-    baseUrl,
-    model,
-    bootstrapPlugins: true,
-    subagentManager: getSubagentManager(),
-  });
-
-  const sessionManager = new SessionManager();
-  const session = sessionManager.createSession({ mode });
-
-  session.messages.push({ role: 'user', content: message, timestamp: Date.now() });
-
-  // G4：--image path（可重复）
   const imagePaths = (values.image as string[] | undefined) ?? [];
   const images: ImageSource[] = [];
   for (const p of imagePaths) {
@@ -186,45 +184,42 @@ Get a key at: https://console.anthropic.com/
     }
   }
 
-  const engine = new QueryEngine({
-    apiKey,
-    baseUrl,
-    toolRegistry,
-    sessionManager,
-    hookRegistry,
-  });
-
-  console.log('\nPaCode:\n');
+  if (!printMode) {
+    console.log('\nPaCode:\n');
+  }
 
   let hasAuthError = false;
-  for await (const event of engine.query(
-    {
-      message,
-      images: images.length > 0 ? images : undefined,
-      options: {
-        model,
-        maxTokens: appConfig.maxTokens,
-        temperature: appConfig.temperature,
-      },
-    },
-    session
-  )) {
-    if (event.type === 'content_block_delta' && event.delta) {
-      process.stdout.write(event.delta.text);
-    } else if (event.type === 'tool_use' && event.tool) {
-      console.log(`\n[Using tool: ${event.tool.name}]\n`);
-    } else if (event.type === 'message_stop') {
-      console.log('\n');
-    } else if (event.type === 'error' && event.error) {
-      log.error(event.error.message);
-      if (
-        event.error.message.includes('401') ||
-        event.error.message.includes('Invalid token') ||
-        event.error.message.includes('authentication')
-      ) {
-        hasAuthError = true;
+  const result = await runAgent({
+    message,
+    mode,
+    model,
+    apiKey,
+    baseUrl,
+    maxTokens: appConfig.maxTokens,
+    temperature: appConfig.temperature,
+    images: images.length > 0 ? images : undefined,
+    onEvent: (event) => {
+      if (event.type === 'content_block_delta' && event.delta) {
+        process.stdout.write(event.delta.text);
+      } else if (event.type === 'tool_use' && event.tool && !printMode) {
+        console.log(`\n[Using tool: ${event.tool.name}]\n`);
+      } else if (event.type === 'message_stop' && !printMode) {
+        console.log('\n');
+      } else if (event.type === 'error' && event.error) {
+        log.error(event.error.message);
+        if (
+          event.error.message.includes('401') ||
+          event.error.message.includes('Invalid token') ||
+          event.error.message.includes('authentication')
+        ) {
+          hasAuthError = true;
+        }
       }
-    }
+    },
+  });
+
+  if (printMode && result.text && !result.text.endsWith('\n')) {
+    process.stdout.write('\n');
   }
 
   if (hasAuthError) {
@@ -233,10 +228,12 @@ Get a key at: https://console.anthropic.com/
     console.log(`  pacode cc-switch use <name>`);
   }
 
-  sessionManager.saveSession(session);
+  if (printMode && result.hadError) {
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {
-  log.error('Fatal:', err);
+  log.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

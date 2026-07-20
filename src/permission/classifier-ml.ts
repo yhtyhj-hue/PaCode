@@ -1,5 +1,7 @@
 /**
- * G6 ML classifier backend — 特征打分 + 可选 PACODE_CLASSIFIER_CMD；失败回退 deterministic
+ * G6 ML classifier backend — **特征启发式** + 可选 PACODE_CLASSIFIER_CMD；失败回退 deterministic
+ *
+ * 合同名含 ml，但实现不是神经网络；外部真模型请用 PACODE_CLASSIFIER_CMD。
  */
 
 import { spawnSync } from 'node:child_process';

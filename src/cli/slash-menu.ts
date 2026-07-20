@@ -40,6 +40,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/model', description: 'Show or change model' },
   { command: '/style', description: 'Switch output style (default/cost/full/minimal)' },
   { command: '/agents', description: 'List subagents, tasks, teams, coordinator assignments' },
+  { command: '/btw', description: 'Background agent turn: /btw <prompt> (or end message with &)' },
   { command: '/plan', description: 'Create or manage plans (/plan report for execution summary)' },
   { command: '/resume', description: 'Resume a saved session' },
   { command: '/rewind', description: 'Rewind workspace to a checkpoint' },
