@@ -13,7 +13,7 @@
     "dev": "node dist/cli/index.js",
     "test": "vitest run --exclude 'evals/periodic/**'",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --exclude 'evals/periodic/**'",
     "eval:gate": "vitest run evals/gate",
     "eval:periodic": "vitest run evals/periodic",
     "lint": "eslint src --ext .ts",

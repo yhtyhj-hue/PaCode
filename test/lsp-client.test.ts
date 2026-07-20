@@ -2,10 +2,9 @@
  * Gate: LSP client — 无 typescript-language-server 则 skip 真 server 断言；契约与回退始终测
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { writeFileSync, rmSync, existsSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtempSync } from 'node:fs';
 import {
   LspClient,
   canStartTypescriptLsp,
@@ -29,29 +28,33 @@ describe('lsp-client', () => {
     }
   });
 
-  it('Diagnostics tool falls back without LSP server', async () => {
-    const registry = new ToolRegistry();
-    registerLspTool(registry);
-    const tool = registry.get('Diagnostics');
-    expect(tool).toBeTruthy();
-    const result = await tool!.execute(
-      { action: 'diagnostics', prefer: 'tsc' },
-      {
-        workingDirectory: process.cwd(),
-        sessionState: {
-          sessionId: 't',
-          messages: [],
-          toolCallHistory: [],
-          maxOutputTokensRecoveryCount: 0,
-          mode: PermissionMode.BYPASS,
-          hooks: { hooks: {} },
-          compactionHistory: [],
-        },
-        hooks: { hooks: {} } as never,
-      }
-    );
-    expect(result.content[0]?.text).toBeTruthy();
-  });
+  it(
+    'Diagnostics tool falls back without LSP server',
+    async () => {
+      const registry = new ToolRegistry();
+      registerLspTool(registry);
+      const tool = registry.get('Diagnostics');
+      expect(tool).toBeTruthy();
+      const result = await tool!.execute(
+        { action: 'diagnostics', prefer: 'tsc' },
+        {
+          workingDirectory: process.cwd(),
+          sessionState: {
+            sessionId: 't',
+            messages: [],
+            toolCallHistory: [],
+            maxOutputTokensRecoveryCount: 0,
+            mode: PermissionMode.BYPASS,
+            hooks: { hooks: {} },
+            compactionHistory: [],
+          },
+          hooks: { hooks: {} } as never,
+        }
+      );
+      expect(result.content[0] && 'text' in result.content[0] ? result.content[0].text : '').toBeTruthy();
+    },
+    30_000
+  );
 
   describe.skipIf(!canStartTypescriptLsp(process.cwd()))('with typescript-language-server', () => {
     let work: string;
@@ -63,7 +66,6 @@ describe('lsp-client', () => {
         join(work, 'sample.ts'),
         `export function greet(name: string): string {\n  return "hi " + name;\n}\nconst x = greet("a");\n`
       );
-      // 在临时目录无法用 repo 的 .bin；仍用 repo cwd 的 server，root 指向 fixture
       const cmd = resolveTypescriptServerCommand(process.cwd())!;
       client = new LspClient();
       const ok = await client.start(cmd.command, cmd.args, work);

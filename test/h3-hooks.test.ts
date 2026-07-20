@@ -64,7 +64,10 @@ describe('H3 Stop hook', () => {
     hooks.register({ type: HookType.STOP, name: 'broken', command: 'fail' });
 
     // Must not throw — Stop hook failures are isolated
-    await expect(runStopHooks(hooks, makeSession())).resolves.toBeUndefined();
+    await expect(runStopHooks(hooks, makeSession())).resolves.toEqual({
+      stopped: false,
+      reason: undefined,
+    });
   });
 
   it('does nothing when no Stop hook registered', async () => {

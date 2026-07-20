@@ -35,6 +35,10 @@ import {
 import { authorizePrefetchTool } from '../permission/prefetch-gate.js';
 import { SessionManager } from '../session/manager.js';
 import { HookRegistry } from '../hooks/registry.js';
+import {
+  applyPostToolUseDecision,
+  parsePostToolUseDecision,
+} from '../hooks/hook-decision.js';
 import { responseContentToBlocks } from './message-serializer.js';
 import { executeToolCallsInOrder } from './tool-executor.js';
 import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-stream.js';
@@ -1122,14 +1126,58 @@ const stream = await withRetry(
     }
 
     try {
-      const result = await tool.execute(toolCall.input, ctx);
+      let result = await tool.execute(toolCall.input, ctx);
 
+      // PostToolUse：消费 stdout JSON（block / modify）；exit 2 = block
       const postHooks = this.hookRegistry.findMatching(HookType.POST_TOOL_USE, ctx);
       for (const hook of postHooks) {
         try {
-          await this.hookRegistry.execute(hook);
+          const hookResult = await this.hookRegistry.execute(hook);
+          const exitCode = hookResult.exitCode ?? 0;
+          if (exitCode !== 0 && exitCode !== 2) {
+            const msg = hookResult.stderr || `Hook ${hook.name} exited with code ${exitCode}`;
+            if (process.env['PACODE_HOOK_FAIL_OPEN'] === '1') {
+              this.log.warn(`PostToolUse hook non-zero exit (fail-open): ${msg}`);
+              continue;
+            }
+            result = {
+              content: [
+                {
+                  type: 'text',
+                  text: `Tool result blocked: PostToolUse hook failed: ${msg}`,
+                },
+              ],
+              isError: true,
+            };
+            break;
+          }
+          result = applyPostToolUseDecision(
+            result,
+            hookResult.stdout ?? '',
+            exitCode,
+            hook.name
+          );
+          if (result.isError && exitCode === 2) break;
+          if (
+            result.isError &&
+            parsePostToolUseDecision(hookResult.stdout ?? '').kind === 'block'
+          ) {
+            break;
+          }
         } catch (e) {
           this.log.warn(`PostToolUse hook failed: ${e instanceof Error ? e.message : String(e)}`);
+          if (process.env['PACODE_HOOK_FAIL_OPEN'] !== '1') {
+            result = {
+              content: [
+                {
+                  type: 'text',
+                  text: `PostToolUse hook failed: ${e instanceof Error ? e.message : String(e)}`,
+                },
+              ],
+              isError: true,
+            };
+            break;
+          }
         }
       }
 

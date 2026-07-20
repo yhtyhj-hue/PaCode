@@ -106,6 +106,15 @@ export function htmlToText(html: string): string {
   working = working.replace(COMMENT_RE, ' ');
 
   // Walk tags, emitting newlines for block-level boundaries.
+  // 先把 <a href> 换成 markdown 链接，保留引用场景
+  working = working.replace(
+    /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+    (_m, href: string, inner: string) => {
+      const label = inner.replace(TAG_RE, '').replace(/\s+/g, ' ').trim() || href;
+      return `[${label}](${href})`;
+    }
+  );
+
   const out: string[] = [];
   const tagMatcher = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
   let lastIndex = 0;

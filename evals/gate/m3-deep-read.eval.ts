@@ -1,23 +1,19 @@
 /**
- * Gate eval: M3 (深读触发真 Read ≥ 90%)
+ * Gate eval: M3 深读 — policy + 确定性会话 harness（≥90% fixture）
  *
- * M3: "逐行/完整读触发真 Read 全文件 (非浅预取摘要) ≥ 90%".
- *
- * PaCode's intent detection recognizes "逐行读"/"完整读" and
- * disables shallow prefetch (DEEP_FULL_READ_PATTERN). When
- * triggered, the engine's dagPlan is null — meaning the
- * engine doesn't inject a prefetched user message and the
- * model must use Read directly.
- *
- * What we verify at the policy layer:
- * - requiresToolExecution + the engine's DEEP_FULL_READ
- *   override: deep-read queries get a null dagPlan
- * - The Read tool's input schema accepts offset + limit so
- *   the model can paginate through large files
+ * - Policy：逐行/完整读 → requiresToolExecution
+ * - Harness：fixture 工具史上全文件 Read 比例（非 live 用户语料）
  */
 
 import { describe, it, expect } from 'vitest';
 import { requiresToolExecution } from '../../src/agent/tool-intent.js';
+import {
+  defaultM3FixtureSuite,
+  isFullFileRead,
+  scoreDeepReadSuite,
+} from '../lib/m3-session-harness.js';
+
+const M3_THRESHOLD = 0.9;
 
 describe('eval:gate:m3-deep-read', () => {
   it('triggers tool execution for "deep read" intents', () => {
@@ -29,5 +25,18 @@ describe('eval:gate:m3-deep-read', () => {
   it('does not require tools for casual chat', () => {
     expect(requiresToolExecution('你好')).toBe(false);
     expect(requiresToolExecution('thanks')).toBe(false);
+  });
+
+  it('scores full-file Read vs shallow limit', () => {
+    expect(isFullFileRead({ path: 'a.ts' }, 100)).toBe(true);
+    expect(isFullFileRead({ path: 'a.ts', limit: 100, offset: 0 }, 100)).toBe(true);
+    expect(isFullFileRead({ path: 'a.ts', limit: 20, offset: 0 }, 100)).toBe(false);
+  });
+
+  it('default fixture suite meets ≥90% full-read passRate', () => {
+    const { passRate, scores } = scoreDeepReadSuite(defaultM3FixtureSuite());
+    expect(passRate).toBeGreaterThanOrEqual(M3_THRESHOLD);
+    expect(scores).toHaveLength(10);
+    expect(scores.filter((s) => s.score < 1)).toHaveLength(1);
   });
 });

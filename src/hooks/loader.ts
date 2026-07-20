@@ -7,6 +7,7 @@ import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 import { Hook, HookType, SessionState } from '../pkg/types.js';
 import { HookRegistry } from './registry.js';
+import { parseStopHookDecision } from './hook-decision.js';
 import { HookSchema } from '../pkg/config/index.js';
 import { loadConfig } from '../pkg/config/index.js';
 import { Logger } from '../pkg/logger/index.js';
@@ -143,17 +144,25 @@ export async function runSessionHooks(
 export async function runStopHooks(
   registry: HookRegistry,
   session: SessionState
-): Promise<void> {
+): Promise<{ stopped: boolean; reason?: string }> {
   const ctx = {
     workingDirectory: process.cwd(),
     sessionState: session,
     hooks: registry,
   };
 
+  let stopped = false;
+  let reason: string | undefined;
+
   const matching = registry.findMatching(HookType.STOP, ctx);
   for (const hook of matching) {
     try {
-      await registry.execute(hook);
+      const result = await registry.execute(hook);
+      const decision = parseStopHookDecision(result.stdout ?? '');
+      if (decision.kind === 'stop') {
+        stopped = true;
+        reason = decision.reason;
+      }
     } catch {
       // Stop hook errors must never escape this loop
     }
@@ -169,4 +178,6 @@ export async function runStopHooks(
   } catch {
     // Auto-memory failures must never propagate to REPL finally
   }
+
+  return { stopped, reason };
 }

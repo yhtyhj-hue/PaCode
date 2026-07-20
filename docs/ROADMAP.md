@@ -16,11 +16,11 @@
 
 | ID | 指标 | 目标 |
 |----|------|------|
-| M1 | 假完成率（声称检查/已测但无 tool 证据） | → 0（gate） |
+| M1 | 假完成率（声称检查/已测但无 tool 证据） | → 0：**Gate** = policy + 引擎 mock（`m1-fake-completion` / `m1-engine-behavior`）；**Periodic** 复跑同源 runner |
 | M2 | DEFAULT 完成一次「项目质检」人工确认次数 | ≤ 1（Bash 批） |
-| M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | gate：意图正则→Read；**会话 ≥90% 尚未度量** |
+| M3 | 「逐行/完整读」触发真 Read 全文件（非浅预取摘要） | **Gate**：意图正则 + **确定性 harness ≥90%**（fixture 工具史，非 live 用户会话） |
 | M4 | 权限确认不卡死输入框 / Ctrl+C 可取消 | 100% |
-| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5；easy live passRate=1；**m5-hard**（多文件/失败再修/跨模块）≥ 0.5；vs CC 见 COMPARE.json |
+| M5 | 工程评测套件（改 bug / 加测 / 小重构）一次成功率 | 基线 ≥ 0.5；easy live passRate=1；**m5-hard** ≥ 0.5；vs CC 见 COMPARE.json（含 `ccVersion`/`model`/`updatedAt`） |
 
 ---
 
@@ -54,11 +54,11 @@
 |---|------|----------|------|
 | H1 | **预取可选加速**：配置 `prefetch.enabled` / intent 白名单 / `PACODE_PREFETCH=0` | 关预取时：质检纯 tool loop；开预取时：只加速且可继续 Read | ✅ |
 | H2 | **权限会话记忆**：批准写入 `sessionApprovals`（`Bash:npm` 指纹）；`/clear` 重置 | 同 session 不再对同类 Bash 连环确认；deny 仍最终 | ✅ |
-| H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PostToolUseFailure + Stop + PermissionRequest：stdout approve / exit 2 deny；REPL confirm 仍为默认 UI） |
+| H3 | **Agentic Loop 钩子补全**：PermissionRequest、PostToolUseFailure、Stop 接线真实行为 | hooks 事件可在配置中生效并有测试；失败路径有用户可见结果 | ✅（PermissionRequest stdout approve/deny；**PostToolUse** JSON block/modify；**Stop** JSON stop/continue；PostToolUseFailure fire；REPL confirm 仍为默认 UI） |
 | H4 | **工具保真**：Grep 常用旗标；Read 大文件/分页体验；Bash 超时与截断产品化文案 | 对应 unit + 至少 1 条集成 | ✅（Grep: -i/--glob/--exclude/-A/-B/-C/output_mode；Read: offset+limit, 大文件拒绝 + 提示；Bash: truncate 提示加 PaCode 操作建议） |
 | H5 | **MCP HTTP 或 SSE（至少一种）** | 真实 server 可连、tool execute 不丢 `this`；类型不再谎称已支持 | ✅（client.ts createTransport switch on type: stdio/sse/http 全部接线；MCPServerConfig 加 headers 字段；transport 字段类型 union AnyTransport） |
 | H6 | **AskUserQuestion 真接线**（services/ask-user 已有 → 注册为工具 + REPL） | 模型可提问；TTY 确认不与 line editor 冲突 | ✅（DEFAULT 权限；REPL pause 后注入 cooked `readLine`；工具优先 `ctx.readLine`） |
-| H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | ✅（gate 拆为 m1/m2/m3/m4 + widened；M3 为 policy/正则触发，**非会话 ≥90% 度量**；`npm test`≈955 阻断，不含 periodic live） |
+| H7 | **Eval 门禁升级**：质检 / 继续 / 深读 / 确认 UX 场景进 gate | CI 失败则禁止合并；跟踪 M1–M4 | ✅（gate：m1 policy+引擎行为 / m2 / m3 policy+harness≥90% fixture / m4；**非 live 用户会话语料**；`npm test` 不含 periodic live） |
 | H8 | **主循环失败可恢复**：中断、权限拒绝后可续跑同一任务 | 无卡死确认框；会话可 resume | ✅（engine 8 处 shouldAbort ABORTED 检查 + confirm-prompt Ctrl+C 取消 + `/resume` slash command 接入 SessionResume.list/load + SessionManager.restoreSession 替换当前会话） |
 
 **Phase H 明确不做：** LSP、Notebook、Cron、Voice、Buddy、Team、刷 slash 到 80+、Ink TUI。
@@ -158,6 +158,7 @@ K* 按需插入（永不阻塞 H）
 
 | 日期 | 完成项 |
 |------|--------|
+| 2026-07-20 | **Wave A+B**：coverage CI+branches；Gate/Periodic M1 引擎行为；M3 harness≥90%；PostToolUse/Stop stdout；web-fetch md links；COMPARE metadata |
 | 2026-07-17 | **真 LLM explore**：inspect/review/audit 默认 SubagentManager 并行；脚本 DAG 需 PACODE_PREFETCH_DAG=1 |
 | 2026-07-17 | **超越 CC 六项**：M5 并行+速度断言；`/effort`/`/vim`/`/new`；bridge/v1-local；LSP client；Voice STT pipe；G6 ml backend |
 | 2026-07-17 | **对标 CC 深度质检**：M5 对齐；Voice/Bridge/LSP 落后；纠偏 M3/H7 文档过度声明 |

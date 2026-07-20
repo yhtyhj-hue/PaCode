@@ -208,6 +208,13 @@ describe('htmlToText', () => {
     expect(text).toBe('Hello world & friends');
   });
 
+  it('preserves anchor tags as markdown links', () => {
+    const text = htmlToText('<p>See <a href="https://ex.com/x">docs</a> here</p>');
+    expect(text).toContain('[docs](https://ex.com/x)');
+    expect(text).toContain('See');
+    expect(text).toContain('here');
+  });
+
   it('returns empty string for empty input', () => {
     expect(htmlToText('')).toBe('');
   });

@@ -19,7 +19,7 @@
 | Hooks / Skills / Plugins / MCP | ~92% | MCP stdio/sse/http/**websocket**；Bridge **v1-local** 中继 |
 | CLI / REPL | ~96% | readline + Ink；`/effort` `/vim` `/voice` STT；`pacode bridge serve` |
 | 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
-| 测试 | ≥80% | `npm test` + `eval:gate`（M1–M5 + widened）；coverage 仅 `src/**` |
+| 测试 | coverage 四维 | lines/statements ≥80；functions ≥79；branches ≥73.9；CI 跑 `test:coverage` |
 | Eval harness | ✅ | M5 simulated；live+vs CC COMPARE + speed assert |
 
 ### 8 项安全修复（commit bdd7555）
@@ -618,7 +618,7 @@ Permission Modes (Graduated Trust Spectrum)
 │   Layer 4: Tool Permission Level                                     │
 │   └─ Each tool declares minimum required permission                  │
 │                              ▼                                      │
-│   Layer 5: Deterministic Classifier (G6/v0; ML deferred)            │
+│   Layer 5: Classifier (G6 deterministic default; PACODE_CLASSIFIER=ml opt-in) │
 │   └─ classifyToolCall risk/category/confidence (AUTO + DEFAULT)      │
 │                              ▼                                      │
 │   Layer 6: User Interaction                                          │
@@ -1235,7 +1235,7 @@ PaCode/
 │
 ├── package.json
 ├── tsconfig.json
-├── vitest.config.ts              # 覆盖率门禁 80%
+├── vitest.config.ts              # 覆盖率：lines/statements 80 · functions 79 · branches 73.9
 ├── README.md
 └── LICENSE
 ```

@@ -25,6 +25,9 @@ jobs:
       - name: Gate tests
         run: npm test
 
+      - name: Coverage thresholds
+        run: npm run test:coverage
+
       - name: Gate evals
         run: npm run eval:gate
 

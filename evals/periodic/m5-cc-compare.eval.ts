@@ -95,6 +95,9 @@ describe.skipIf(!canCompare)('eval:periodic:m5-cc-compare (live head-to-head)', 
         threshold: THRESHOLD,
         note: `head-to-head via ${liveCreds.source}; pacode model=${liveCreds.model ?? 'default'}; speed=wall`,
         claudeVersion: claudeCli ? readClaudeVersion(claudeCli) : undefined,
+        ccVersion: claudeCli ? readClaudeVersion(claudeCli) : undefined,
+        pacodeVersion: process.env['npm_package_version'] ?? '0.1.0',
+        model: liveCreds.model,
       });
 
       writeM5CompareReport(join(FIXTURES, 'COMPARE.json'), report);

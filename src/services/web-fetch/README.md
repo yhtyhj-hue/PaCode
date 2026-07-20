@@ -1,6 +1,6 @@
 # services/web-fetch
 
-A safe, dependency-free WebFetch tool for PaCode. Mirrors Claude Code's `WebFetchTool`: fetches a URL, extracts plain text from HTML, and strips prompt-injection carriers before returning the result to the agent.
+A safe, dependency-free WebFetch tool for PaCode. Mirrors Claude Code's `WebFetchTool`: fetches a URL, extracts plain text from HTML (preserving links as markdown), and strips prompt-injection carriers before returning the result to the agent.
 
 ## Public API
 
@@ -15,7 +15,7 @@ registerWebFetchTool(registry);
 Re-exported:
 
 - `webFetch(url, options?) -> Promise<WebFetchOutput>` — pure entry point, useful outside the tool layer.
-- `htmlToText(html) -> string` — vanilla HTML-to-text converter.
+- `htmlToText(html) -> string` — vanilla HTML-to-text converter (anchors → `[label](url)`).
 - `sanitizePromptInjection(text) -> { text, warnings }` — strips HTML comments, CSS-hidden blocks, base64 blobs, and known override patterns.
 - `WebFetchException` — thrown for transport-level errors.
 - `WebFetchInput`, `WebFetchOptions`, `WebFetchOutput`, `WebFetchError`, `WebFetchErrorKind`, `SanitizationWarning` — types.
@@ -59,17 +59,7 @@ GET URL
 
 ## Test coverage
 
-`test/services/web-fetch.test.ts` — 28 tests:
-
-- happy path: HTML extraction, plain-text passthrough
-- error classification: 404, timeout, oversized, network
-- URL validation: `file://`, `javascript:`, empty, malformed
-- redirects: single hop, redirect loop at cap
-- HTML extraction: script/style removal, entity decoding, empty input
-- prompt-injection: comments, `display:none`, `visibility:hidden`, base64 masking, ignore-instructions patterns, benign passthrough
-- tool registration: tool identity, schema, `execute` success, `execute` http_status error, `execute` invalid URL, `execute` malformed input
-
-Run with:
+`test/services/web-fetch.test.ts` — HTML extraction, links, injection, errors, tool registration.
 
 ```
 npx vitest run test/services/web-fetch.test.ts
@@ -81,25 +71,16 @@ npx vitest run test/services/web-fetch.test.ts
 - **No character-encoding negotiation.** Body is decoded as UTF-8. Pages in legacy encodings may show as mojibake.
 - **Single connection per request.** Manual redirect handling does not preserve cookies across hops.
 - **No robots.txt / rate-limit awareness.** The tool treats the URL as untrusted input; the caller is responsible for any domain-specific etiquette.
-- **Inline `style` attribute detection is heuristic.** We catch the common CSS-hiding properties (`display`, `visibility`, `opacity`, `font-size`, `color`). A determined attacker with arbitrary CSS classes can still smuggle text via `data-*` attributes or CSS pseudo-elements; the sanitizer emits warnings but does not delete every conceivable carrier.
-- **Override-pattern regex list is fixed.** New adversarial patterns are not detected until the list is updated. Stripped, not blocked, so the page is still partly readable.
-- **`tsconfig.json` does not include `services/`.** The project tsconfig is restricted to `src/**/*`; the service compiles cleanly when fed through the same compiler options but is not part of the default `tsc --noEmit` run. Stage 2 should add `services/**/*` to `include` (out of scope here per task constraints).
+- **Inline `style` attribute detection is heuristic.** Common CSS-hiding properties are caught; determined attackers can still smuggle via exotic CSS.
+- **Override-pattern regex list is fixed.** New adversarial patterns are not detected until the list is updated.
 
 ## Differences vs. Claude Code's WebFetchTool
 
-- Claude Code's tool uses a dedicated HTML-to-markdown converter that preserves links; this implementation produces plain text and drops anchors. Suitable for summarization, less so for citation.
-- We always sanitize the body. Claude Code's tool relies on the model to ignore embedded instructions; this implementation strips known carriers defensively and surfaces them in a footer.
-- Redirect handling is identical (manual, capped), but we report `redirect_loop` as a first-class error kind so callers can distinguish it from generic network errors.
+- Claude Code uses a fuller HTML→markdown converter; PaCode converts HTML→text and **preserves `<a href>` as `[label](url)`**. Other structures stay plain-text biased.
+- We always sanitize the body. Claude Code relies on the model to ignore embedded instructions; we strip known carriers and surface warnings in a footer.
+- Redirect handling is identical (manual, capped), but we report `redirect_loop` as a first-class error kind.
+- No cookie jar across redirects; no robots.txt / rate-limit awareness (caller responsibility).
 
-## Integration (Stage 2)
+## Integration
 
-In `src/tools/bootstrap.ts` (or wherever tools are registered):
-
-```ts
-import { registerWebFetchTool } from '../../services/web-fetch/index.js';
-
-// after other register* calls:
-registerWebFetchTool(registry);
-```
-
-The tool name `WebFetch` is the registration key. The engine already passes the `input` object through the schema validation layer, so a missing `url` will be rejected before `execute` is called; the `parseInput` defensive check inside `execute` is a second line of defense.
+Registered from `src/tools/bootstrap.ts` via `registerWebFetchTool` (already wired).

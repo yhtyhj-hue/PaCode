@@ -24,7 +24,7 @@ describe('m5-cc-runner', () => {
     );
   });
 
-  it('buildM5CompareReport computes both pass rates', () => {
+  it('buildM5CompareReport computes both pass rates and metadata', () => {
     const report = buildM5CompareReport({
       pacode: [
         { taskId: 'fix-bug', passed: true, durationMs: 10 },
@@ -38,10 +38,16 @@ describe('m5-cc-runner', () => {
       ],
       note: 'unit',
       claudeVersion: '2.1.207',
+      pacodeVersion: '0.1.0',
+      model: 'claude-sonnet-4-6',
     });
     expect(report.pacodePassRate).toBeCloseTo(2 / 3);
     expect(report.ccPassRate).toBeCloseTo(2 / 3);
     expect(report.tasks).toHaveLength(3);
     expect(report.claudeVersion).toBe('2.1.207');
+    expect(report.ccVersion).toBe('2.1.207');
+    expect(report.pacodeVersion).toBe('0.1.0');
+    expect(report.model).toBe('claude-sonnet-4-6');
+    expect(report.updatedAt).toBeTruthy();
   });
 });

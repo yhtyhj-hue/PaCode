@@ -60,7 +60,14 @@ export interface M5CompareReport {
   speedOk: boolean;
   tasks: M5CompareTaskRow[];
   note: string;
+  /** @deprecated 使用 ccVersion；保留兼容旧 fixture */
   claudeVersion?: string;
+  /** Claude Code CLI 版本字符串 */
+  ccVersion?: string;
+  /** PaCode package.json version */
+  pacodeVersion?: string;
+  /** 评测所用模型 id */
+  model?: string;
 }
 
 /** 解析本机 claude CLI；无则 null（CI skip） */
@@ -231,6 +238,9 @@ export function buildM5CompareReport(options: {
   threshold?: number;
   note: string;
   claudeVersion?: string;
+  ccVersion?: string;
+  pacodeVersion?: string;
+  model?: string;
   taskIds?: string[];
   pacodeWallMs?: number;
   ccWallMs?: number;
@@ -264,6 +274,7 @@ export function buildM5CompareReport(options: {
     ccSumMs: ccTotalMs,
   });
   const speedOk = meetsSpeedRatio(metric.pacodeMs, metric.ccMs, speedRatio);
+  const ccVersion = options.ccVersion ?? options.claudeVersion;
   return {
     updatedAt: new Date().toISOString(),
     threshold,
@@ -278,7 +289,10 @@ export function buildM5CompareReport(options: {
     speedOk,
     tasks,
     note: options.note,
-    claudeVersion: options.claudeVersion,
+    claudeVersion: ccVersion,
+    ccVersion,
+    pacodeVersion: options.pacodeVersion,
+    model: options.model,
   };
 }
 
