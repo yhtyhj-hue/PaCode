@@ -1,0 +1,58 @@
+Business Source License 1.1
+
+Licensor:             PaCode Authors
+Licensed Work:        PaCode v0.1.0
+Change Date:          2030-07-20
+Change License:       Apache License, Version 2.0
+
+Additional Use Grant:
+
+  Personal use, non-production use, academic research, and individual
+  evaluation are permitted without a commercial license. Any use by an
+  organization — including but not limited to use by employees, contractors,
+  or automated systems of that organization — for any purpose other than
+  evaluation, testing, or non-production development constitutes Production
+  Use and requires a separate commercial license from the Licensor.
+
+  For commercial licensing inquiries, contact the Licensor.
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant for additional permitted uses.
+
+Production Use of the Licensed Work is not permitted without a separate
+commercial license from the Licensor. Production Use includes, without
+limitation, use of the Licensed Work:
+
+  (a) by an organization (including its employees, contractors, and agents)
+      for any purpose other than evaluation, testing, or non-production
+      development;
+  (b) to provide services to third parties;
+  (c) in connection with any product or service that is offered to third
+      parties; or
+  (d) that integrates with or embeds into a product or service offered to
+      third parties.
+
+Subject to the terms and conditions of this License, each Contributor hereby
+grants You a perpetual, worldwide, non-exclusive, no-charge, royalty-free,
+irrevocable (except as stated in this section) patent license to make, have
+made, use, offer to sell, sell, import, and otherwise transfer the Licensed
+Work. The patent license granted in this section shall terminate if You
+initiate patent litigation (including a cross-claim or counterclaim in a
+lawsuit) alleging that the Licensed Work infringes a patent.
+
+The Licensor may publish updated versions of this License at:
+  https://mariadb.com/bsl11/
+but the Licensor shall not apply the terms of any updated version of this
+License to the Licensed Work that was distributed under a prior version of
+this License.
+
+THE LICENSED WORK IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT
+SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
+OR IN CONNECTION WITH THE LICENSED WORK OR THE USE OR OTHER DEALINGS IN THE
+LICENSED WORK.

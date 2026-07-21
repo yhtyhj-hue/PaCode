@@ -1,5 +1,7 @@
 # PaCode
 
+[![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue.svg)](./LICENSE)
+
 > 类 Claude Code 架构的 AI 编程助手框架
 
 ## 项目概述
@@ -107,4 +109,17 @@ PaCode/
 
 ## 许可证
 
-MIT
+**Business Source License 1.1 (BUSL-1.1)** — 源码可见，但**不**是 OSI 开源协议。
+
+| 用途 | 是否需要商业许可 |
+|------|------------------|
+| 个人本地试用 / 学习 / 学术研究 | ❌ 免费 |
+| 个人小项目开发（非生产） | ❌ 免费 |
+| **任何组织**的**员工 / 承包商 / 自动化系统**用于开发、测试之外的场景 | ✅ 需要 |
+| 对外提供服务 / 嵌入第三方产品 / 多用户部署 | ✅ 需要 |
+
+判定边界：**只要有"组织"在用 PaCode 处理真实工作流，就算生产用途（Production Use）**，与该组织员工是否独立安装无关。详见 `LICENSE`。
+
+**Change Date**：2030-07-20 — 此后自动转为 Apache License 2.0。
+
+商用授权联系：见 `LICENSE` 顶部 Licensor。

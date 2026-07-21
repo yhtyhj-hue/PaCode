@@ -1,7 +1,7 @@
 {
   "name": "pacode",
   "version": "0.1.0",
-  "description": "Claude Code-like AI programming assistant framework",
+  "description": "Claude Code-like AI programming assistant framework. Source-available under BUSL-1.1 — personal/non-production use free; production use by any organization (including employee use) requires a commercial license. See LICENSE.",
   "type": "module",
   "bin": {
     "pacode": "./dist/cli/index.js"
@@ -37,7 +37,7 @@
     "assistant"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
