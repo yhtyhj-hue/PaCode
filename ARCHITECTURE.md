@@ -11,7 +11,7 @@
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
 | Query Engine | ~94% | 全循环；PermissionRequest；5xx 重试；Subagent + 预取证据门闩 |
-| Context Assembly | ~85% | 9 源组装；Skills lazy index 默认 |
+| Context Assembly | ~85% | 10 源组装（含 Recent Results）；Skills lazy index 默认 |
 | Compaction | ~92% | L1–L5；L4 路径/工具/错误信号；L5 withRetry |
 | Tool Registry | ~96% | **31 核心工具**（Diagnostics/LSP=真 client + tsc 回退）+ Plugin |
 | Permission System | ~95% | 7 modes + G6 ml/deterministic classifier + session memory |
@@ -33,7 +33,7 @@
 7. path-utils realpath 防止 symlink 跳出 workspace
 8. engine DAG 旁路（**已回退**——bash-secure + deny 已足够；guard 过度收紧）
 
-### 8 个 service 目录
+### Service 目录（12 个核心 + 扩展）
 
 - `src/services/agent-scheduler/` — DAG 预取 + **默认真 LLM explore Subagent**（`PACODE_PREFETCH_DAG=1` 回退脚本）
 - `src/services/context-compiler/` — 消息编译 + pairing
@@ -48,14 +48,16 @@
 - `src/services/bash-jobs/` — 后台 Bash + BashOutput 环形缓冲
 - `src/services/voice/` — Voice STT pipe（`PACODE_STT_CMD`）+ Buddy 旁白
 
+扩展（同级）：`brief/`、`coordinator/`、`cron/`、`team/`、`task-registry/`、`diagnostics/`、`image-attach/`；另有顶层 `checkpoint.ts`。
+
 **Defer:** Go agent core、SQLite、容器级 Bash 沙箱、公网 Bridge SaaS、内置 Whisper 权重
 
 **G4 图片：** `ContentBlock.image` + `message-serializer` → Anthropic `media_type`；CLI `--image`；`src/services/image-attach/`
 
 **已知遗留：**
-- claude-sonnet-4-0 EOL → 4-5（commit fe9f320 之后）
+- 默认模型 MiniMax-M3 + `api.minimaxi.com/anthropic`（不再依赖 `~/.claude/settings.json`）
 - 2 个 locked worktree（早期 audit 残留，harness 内部）
-- M5 live once-success 依赖 `ANTHROPIC_API_KEY`（CI 用 simulated agent）
+- M5 live once-success 依赖 API Key（CI 用 simulated agent）
 
 ---
 
@@ -119,7 +121,7 @@
 | **5 层压缩管道** | Budget → Snip → Microcompact → Collapse → Auto-compact |
 | **7 级权限模式** | plan → default → acceptEdits → auto → dontAsk → bypassPermissions → bubble |
 | **4 种扩展机制** | Hooks (zero) → Skills (low) → Plugins (medium) → MCP (high) |
-| **9 个上下文源** | 系统提示词、CLAUDE.md、Rules、Skills、Memory、MCP Tools 等 |
+| **10 个上下文源** | 系统提示词、CLAUDE.md、Rules、Skills、Memory、MCP Tools、Recent Results 等 |
 
 ### 2.2 架构原则
 
@@ -162,7 +164,7 @@
 │  ┌─────────────┐         ┌─────────────┐         ┌─────────────┐  │
 │  │   Context   │         │   Tool      │         │  Permission  │  │
 │  │   Assembly  │         │   Registry  │         │    System    │  │
-│  │  (9 sources)│         │             │         │  (7 modes)   │  │
+│  │ (10 sources)│         │             │         │  (7 modes)   │  │
 │  └─────────────┘         └─────────────┘         └─────────────┘  │
 │         │                        │                        │         │
 │         ▼                        ▼                        ▼         │
@@ -211,7 +213,7 @@ User Input
     │
     ▼
 ┌───────────────┐
-│   Context     │ ─── 9 sources assembly + 5-layer compaction
+│   Context     │ ─── 10 sources assembly + 5-layer compaction
 │   Assembly    │
 └───────────────┘
     │
@@ -727,21 +729,22 @@ async function secureBashExecute(
 
 ## 8. 上下文管理
 
-### 8.1 9 个上下文源
+### 8.1 10 个上下文源
 
-Claude Code 按优先级顺序组合以下来源：
+按优先级顺序组合以下来源（实现见 `src/context/assembler.ts:45-99`）：
 
 | # | 来源 | 描述 | 上下文成本 |
 |---|------|------|----------|
 | 1 | System Prompt | 核心指令和行为定义 | 固定 |
 | 2 | CLAUDE.md | 项目级指令文件 | 低 |
-| 3 | Rules Layer | `~/.claude/rules/` 规则 | 低 |
-| 4 | Skills | `.claude/skills/` 技能 | 低-中 |
-| 5 | Working Memory | 当前会话历史 | 高 |
-| 6 | Task Context | 任务状态和待办事项 | 中 |
-| 7 | MCP Tools | 外部工具定义 | 高 |
+| 3 | Rules Layer | `~/.claude/rules/` + `.claude/rules/` 规则 | 低 |
+| 4 | Skills | `.claude/skills/` 技能（默认 lazy index） | 低-中 |
+| 5 | Working Memory | 当前会话历史摘要 | 高 |
+| 6 | Task Context | TodoWrite 任务状态和待办事项 | 中 |
+| 7 | MCP Tools | 外部工具定义摘要 | 高 |
 | 8 | Project Context | 项目结构、依赖等 | 中 |
-| 9 | Recent Results | 最近工具执行结果 | 高 |
+| 9 | Memory | 用户偏好 `~/.paude/memory/` + 项目 hash 分区 | 中 |
+| 10 | Recent Results | 最近工具执行结果 | 高 |
 
 ### 8.2 5 层压缩管道
 
@@ -752,7 +755,7 @@ Claude Code 按优先级顺序组合以下来源：
 │                                                                      │
 │   Trigger: effectiveContextWindow > ~83% (167K / 200K tokens)        │
 │                                                                      │
-│   Layer 1: Budget Reduction                                          │
+│   Layer 1: Budget Reduction（限速，非剪消息）                        │
 │   └─ 降低 max_tokens 预算，强制更短输出                              │
 │                              ▼                                      │
 │   Layer 2: Snip                                                     │
@@ -1208,7 +1211,7 @@ PaCode/
 │   │   ├── repl.ts
 │   │   └── worktree.ts
 │   ├── context/                  # 上下文管理
-│   │   ├── assembler.ts          # 9 sources assembly
+│   │   ├── assembler.ts          # 10 sources assembly
 │   │   ├── compaction.ts         # 5-layer pipeline
 │   │   └── session-compactor.ts
 │   ├── memory/                   # 记忆系统
