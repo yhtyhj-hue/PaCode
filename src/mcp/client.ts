@@ -9,6 +9,10 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
 import {
+  buildSseTransport,
+  buildHttpTransport,
+} from '../services/mcp-sse-http/transport-builder.js';
+import {
   MCPServerConfig,
   MCPServerConnection,
   ConnectionStatus,
@@ -95,17 +99,15 @@ export class MCPClient {
         if (!config.url) {
           throw new Error('sse MCP server requires url');
         }
-        return new SSEClientTransport(new URL(config.url), {
-          requestInit: { headers: config.headers },
-        });
+        // 收敛：与 remote 工具共享 transport-builder，单点构造 SSE transport
+        return buildSseTransport(config.url, { headers: config.headers }) as AnyTransport;
       }
       case 'http': {
         if (!config.url) {
           throw new Error('http MCP server requires url');
         }
-        return new StreamableHTTPClientTransport(new URL(config.url), {
-          requestInit: { headers: config.headers },
-        });
+        // 收敛：与 remote 工具共享 transport-builder，单点构造 Streamable HTTP transport
+        return buildHttpTransport(config.url, { headers: config.headers }) as AnyTransport;
       }
       case 'websocket': {
         if (!config.url) {
