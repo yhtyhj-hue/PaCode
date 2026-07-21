@@ -40,10 +40,12 @@ import {
   parsePostToolUseDecision,
 } from '../hooks/hook-decision.js';
 import { responseContentToBlocks } from './message-serializer.js';
+import { withSystemCache, withToolsCache, withMessagesCache } from './prompt-cache.js';
 import { executeToolCallsInOrder } from './tool-executor.js';
 import { consumeModelStream, ModelStreamEvent, StreamEventLike } from './model-stream.js';
 import { withRetry } from './retry.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
+import { DEFAULT_MODEL, DEFAULT_MAX_TOKENS } from '../pkg/defaults.js';
 import { getLatestUserText, requiresToolExecution, requiresCodeMutation } from './tool-intent.js';
 import {
   getPlanManager,
@@ -977,19 +979,20 @@ export class QueryEngine {
     const { messages } = compileMessagesForApi(context.messages);
 
     const streamParams: Anthropic.Messages.MessageCreateParams = {
-      model: options.model ?? 'claude-sonnet-4-5',
-      max_tokens: Math.min(options.maxTokens ?? 8192, context.maxTokens),
+      model: options.model ?? DEFAULT_MODEL,
+      max_tokens: Math.min(options.maxTokens ?? DEFAULT_MAX_TOKENS, context.maxTokens),
       temperature: options.temperature ?? 0.7,
-      system,
-      messages,
+      system: withSystemCache(system) ?? system,
+      messages: withMessagesCache(messages),
     };
 
     if (tools.length > 0) {
-      streamParams.tools = tools.map((t) => ({
+      const apiTools = tools.map((t) => ({
         name: t.name,
         description: t.description,
         input_schema: t.inputSchema,
       })) as Anthropic.Messages.Tool[];
+      streamParams.tools = withToolsCache(apiTools);
       if (options.toolChoice === 'any') {
         streamParams.tool_choice = { type: 'any' };
       }

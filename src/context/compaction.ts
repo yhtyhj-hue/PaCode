@@ -13,6 +13,7 @@ import {
   formatMessagesForSummary,
 } from './compaction-utils.js';
 import { withRetry } from '../agent/retry.js';
+import { DEFAULT_MODEL } from '../pkg/defaults.js';
 
 const AUTO_COMPACT_PROMPT = `Summarize the conversation below for context continuity.
 Preserve: user goals, decisions, file paths, errors, and unfinished tasks.
@@ -165,7 +166,7 @@ export class CompactionPipeline {
     const response = await withRetry(
       () =>
         client.messages.create({
-          model: this.llmOptions.model ?? 'claude-sonnet-4-5',
+          model: this.llmOptions.model ?? DEFAULT_MODEL,
           max_tokens: 2048,
           messages: [{ role: 'user', content: prompt }],
         }),
