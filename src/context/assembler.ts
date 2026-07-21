@@ -1,5 +1,5 @@
 /**
- * Context Assembler - 9 sources
+ * Context Assembler - 10 sources (含 Recent Results)
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -121,7 +121,13 @@ export class ContextAssembler {
       const loader =
         options.skillsLoader ?? this.defaultSkillsLoader ?? new SkillsLoader(options.skillsDir);
       if (loader.list().length === 0) {
-        await loader.loadAll();
+        // 渐进披露：只索引元数据；全文经 SkillTool 按需加载。
+        // skillsFullCatalog 时需要 workflow 全文，才回退 loadAll。
+        if (options.skillsFullCatalog) {
+          await loader.loadAll();
+        } else {
+          await loader.loadIndex();
+        }
       }
       skills = loader.list();
     }

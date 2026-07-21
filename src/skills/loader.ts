@@ -23,6 +23,10 @@ export interface Skill {
   workflow?: string[];
   content: string;
   source?: string;
+  /** 全文所在路径（渐进披露：loadContent 按需读取）。 */
+  contentPath?: string;
+  /** true 表示 content 仅为元数据摘要，全文尚未加载。 */
+  indexOnly?: boolean;
 }
 
 export interface SlashCommand {
@@ -74,6 +78,79 @@ export class SkillsLoader {
     }
 
     return this.skills;
+  }
+
+  /**
+   * 渐进披露 (progressive disclosure)：只解析每个 SKILL.md 的元数据
+   * (name / description / whenToUse / tools / workflow)，不把全文正文驻留内存。
+   * 全文经 loadContent() 按需读取。对标 Claude Code 的 Skills 索引模型。
+   */
+  async loadIndex(): Promise<Map<string, Skill>> {
+    const basePath = resolve(process.cwd(), this.skillsDir);
+
+    if (!existsSync(basePath)) {
+      this.log.debug(`Skills directory not found: ${basePath}`);
+      return this.skills;
+    }
+
+    try {
+      const entries = readdirSync(basePath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const skillPath = join(basePath, entry.name, 'SKILL.md');
+        if (!existsSync(skillPath)) continue;
+        const skill = this.loadSkillIndex(entry.name, skillPath);
+        if (skill) this.skills.set(entry.name, skill);
+      }
+      this.log.info(`Indexed ${this.skills.size} skills (metadata only)`);
+    } catch (error) {
+      this.log.error('Failed to index skills:', error);
+    }
+
+    return this.skills;
+  }
+
+  /**
+   * 按需读取指定 skill 的完整 SKILL.md 正文，并回填到索引条目缓存。
+   * 返回全文；未知 skill 返回 null。
+   */
+  async loadContent(query: string): Promise<string | null> {
+    const skill = this.resolve(query);
+    if (!skill) return null;
+    if (!skill.indexOnly && skill.content) return skill.content;
+
+    const path = skill.contentPath;
+    if (!path || !existsSync(path)) return skill.content || null;
+
+    try {
+      const content = readFileSync(path, 'utf-8');
+      const id = skill.source ?? skill.name;
+      const full = this.parseSkillMarkdown(id, content);
+      const merged: Skill = { ...full, source: skill.source, contentPath: path, indexOnly: false };
+      this.skills.set(id, merged);
+      return content;
+    } catch (error) {
+      this.log.error(`Failed to load skill content ${query}:`, error);
+      return skill.content || null;
+    }
+  }
+
+  /** 解析 SKILL.md 元数据但丢弃全文正文（渐进披露索引条目）。 */
+  private loadSkillIndex(dirName: string, path: string): Skill | null {
+    try {
+      const content = readFileSync(path, 'utf-8');
+      const parsed = this.parseSkillMarkdown(dirName, content);
+      return {
+        ...parsed,
+        content: '', // 不驻留全文
+        contentPath: path,
+        indexOnly: true,
+        source: dirName,
+      };
+    } catch (error) {
+      this.log.error(`Failed to index skill ${dirName}:`, error);
+      return null;
+    }
   }
 
   /**

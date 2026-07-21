@@ -79,7 +79,7 @@ export function registerSkillTools(
 
       const loader = getLoader();
       if (loader.list().length === 0) {
-        await loader.loadAll();
+        await loader.loadIndex();
       }
 
       if (action === 'list') {
@@ -169,6 +169,10 @@ export function registerSkillTools(
         skill = hits[0]!;
       }
 
+      // 渐进披露：load 时才读取完整 SKILL.md 正文
+      const fullContent = await loader.loadContent(skill.source ?? skill.name);
+      const resolved = loader.resolve(skill.source ?? skill.name) ?? skill;
+
       // 核心：返回完整 SKILL.md，供模型按 workflow 执行
       return {
         content: [
@@ -176,13 +180,13 @@ export function registerSkillTools(
             type: 'text',
             text: JSON.stringify(
               {
-                id: skill.source ?? skill.name,
-                name: skill.name,
-                description: skill.description,
-                whenToUse: skill.whenToUse,
-                tools: skill.tools,
-                workflow: skill.workflow ?? [],
-                content: skill.content,
+                id: resolved.source ?? resolved.name,
+                name: resolved.name,
+                description: resolved.description,
+                whenToUse: resolved.whenToUse,
+                tools: resolved.tools,
+                workflow: resolved.workflow ?? [],
+                content: fullContent ?? resolved.content,
               },
               null,
               2

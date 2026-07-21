@@ -1,5 +1,5 @@
 /**
- * Week 3 Context Assembler tests — 9 sources
+ * Week 3 Context Assembler tests — 10 sources
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -21,7 +21,7 @@ const emptyState = {
   compactionHistory: [],
 };
 
-describe('ContextAssembler — 9 sources', () => {
+describe('ContextAssembler — 10 sources', () => {
   beforeEach(() => {
     resetTodoStore();
   });
