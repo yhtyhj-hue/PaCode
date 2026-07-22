@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PaCode — Claude Code 架构级 AI 编程助手</title>
+    <meta
+      name="description"
+      content="PaCode：独立实现的类 Claude Code Agent CLI。默认 MiniMax、.paude 本地配置、31 核心工具。含与 Claude Code 的实测对比，以及相对 OpenCode 的定位说明。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">跳到正文</a>
+
+    <header class="top">
+      <a class="brand" href="#top" aria-label="PaCode 首页">
+        <span class="brand-mark" aria-hidden="true"></span>
+        PaCode
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#why">优势</a>
+        <a href="#bench">实测</a>
+        <a href="#compare">对比</a>
+        <a href="#install">安装</a>
+      </nav>
+      <a
+        class="btn btn-ghost"
+        href="https://github.com/yhtyhj-hue/PaCode"
+        target="_blank"
+        rel="noopener"
+        >GitHub</a
+      >
+    </header>
+
+    <main id="main">
+      <!-- Hero: brand first, one headline, one sentence, CTAs, full-bleed plane -->
+      <section class="hero" id="top">
+        <div class="hero-plane" aria-hidden="true">
+          <div class="hero-grid"></div>
+          <div class="hero-glow"></div>
+          <pre class="hero-terminal">
+<span class="t-dim">$</span> npm i -g @sallon/pacode
+<span class="t-ok">✓</span> installed
+<span class="t-dim">$</span> pacode -p "fix the flaky test"
+<span class="t-accent">▸</span> Read · Edit · Bash · TodoWrite
+<span class="t-dim">…</span> verify passed</pre>
+        </div>
+        <div class="hero-copy">
+          <p class="eyebrow">Agent CLI · Anthropic-compatible</p>
+          <h1 class="logo-word">PaCode</h1>
+          <p class="lede">
+            按 Claude Code 架构独立实现的终端编程助手：权限、压缩、工具循环与本地记忆一次配齐，默认走 MiniMax，不绑 Claude Code 本机配置。
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#install">立刻安装</a>
+            <a
+              class="btn btn-secondary"
+              href="https://www.npmjs.com/package/@sallon/pacode"
+              target="_blank"
+              rel="noopener"
+              >npm 包页</a
+            >
+          </div>
+          <p class="hero-meta">
+            <span>BUSL-1.1</span>
+            <span>31 核心工具</span>
+            <span>默认 MiniMax-M3</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="strip" aria-label="产品要点">
+        <div class="strip-item">
+          <strong>独立实现</strong>
+          <span>不复制 Claude Code 源码</span>
+        </div>
+        <div class="strip-item">
+          <strong>.paude/</strong>
+          <span>配置与记忆本地文件化</span>
+        </div>
+        <div class="strip-item">
+          <strong>7 级权限</strong>
+          <span>plan → bypass，可测可拒</span>
+        </div>
+        <div class="strip-item">
+          <strong>M5 实测</strong>
+          <span>与 Claude Code 同任务对照</span>
+        </div>
+      </section>
+
+      <section class="section" id="why">
+        <div class="section-head">
+          <p class="eyebrow">Why PaCode</p>
+          <h2>为「要可控 Agent 基建」的人设计</h2>
+          <p class="section-lead">
+            不只是聊天壳。核心是可检查的确定性基础设施：权限、压缩、工具并发与文件记忆。
+          </p>
+        </div>
+        <ul class="feature-list">
+          <li>
+            <h3>默认 MiniMax，账单可控</h3>
+            <p>
+              开箱 <code>MiniMax-M3</code> + Anthropic 兼容网关；也可用
+              <code>cc-switch</code> 切到其他厂商。不强迫 Anthropic 订阅链路。
+            </p>
+          </li>
+          <li>
+            <h3>配置不寄生 Claude Code</h3>
+            <p>
+              设置与记忆落在 <code>~/.paude/</code> /
+              <code>.paude/</code>，不读取 <code>~/.claude/settings.json</code>，环境隔离更干净。
+            </p>
+          </li>
+          <li>
+            <h3>工程级安全门禁</h3>
+            <p>
+              7 级权限 + tool-gate + Bash 静态分析 + 工作区路径边界。非 TTY 默认 deny，适合脚本与 CI。
+            </p>
+          </li>
+          <li>
+            <h3>可验证的质量车道</h3>
+            <p>
+              Gate tests + eval harness（含与 Claude Code 的 head-to-head）。改动带回归证据，不是口号。
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="section section-alt" id="bench">
+        <div class="section-head">
+          <p class="eyebrow">Performance</p>
+          <h2>与 Claude Code 的实测对照</h2>
+          <p class="section-lead">
+            数据来自仓库
+            <code>evals/fixtures/m5*/COMPARE.json</code>（2026-07-17）。双方 passRate 均为
+            100%。墙钟优势部分来自 PaCode 任务并发（默认 3），Claude Code 侧为串行（concurrency=1）——下表如实展示，并标注口径。
+          </p>
+        </div>
+
+        <div class="bench-meta">
+          <p>
+            模型：双方任务用 <strong>claude-sonnet-4-6</strong>（经 cc-switch）· Claude Code
+            <strong>2.1.207</strong> · 指标：墙钟 wall / 校验 verify.mjs once-success
+          </p>
+        </div>
+
+        <h3 class="subhead">Easy suite · 墙钟</h3>
+        <div class="bars" data-animate>
+          <div class="bar-row">
+            <div class="bar-label">PaCode</div>
+            <div class="bar-track">
+              <div class="bar-fill pacode" style="--w: 9.3%"></div>
+            </div>
+            <div class="bar-val">14.5 s</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Claude Code</div>
+            <div class="bar-track">
+              <div class="bar-fill cc" style="--w: 100%"></div>
+            </div>
+            <div class="bar-val">155.6 s</div>
+          </div>
+        </div>
+        <p class="fineprint">
+          wall：PaCode 14 524 ms vs CC 155 572 ms · 单任务耗时总和：30.7 s vs 155.6 s ·
+          任务 fix-bug / add-test / small-refactor 均双方通过
+        </p>
+
+        <h3 class="subhead">Hard suite · 墙钟</h3>
+        <div class="bars" data-animate>
+          <div class="bar-row">
+            <div class="bar-label">PaCode</div>
+            <div class="bar-track">
+              <div class="bar-fill pacode" style="--w: 15.8%"></div>
+            </div>
+            <div class="bar-val">15.5 s</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Claude Code</div>
+            <div class="bar-track">
+              <div class="bar-fill cc" style="--w: 100%"></div>
+            </div>
+            <div class="bar-val">98.0 s</div>
+          </div>
+        </div>
+        <p class="fineprint">
+          wall：PaCode 15 469 ms vs CC 97 985 ms · 双方 passRate=1 ·
+          multi-file-bug / fail-then-fix / cross-module
+        </p>
+
+        <aside class="callout">
+          <strong>怎么读这些数字</strong>
+          <ul>
+            <li>测的是「任务能否一次 verify 通过」+ 墙钟，不是 tok/s，也不是 SWE-bench。</li>
+            <li>PaCode 默认并行跑多任务；Claude Code 对照为串行——墙钟差距会放大并发收益。</li>
+            <li>对照用 sonnet-4-6，与产品默认 MiniMax-M3 不是同一模型；换模型结果会变。</li>
+            <li>与 OpenCode：仓库尚无共享 M5 fixture，官网不编造延迟数字。</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section class="section" id="compare">
+        <div class="section-head">
+          <p class="eyebrow">Compare</p>
+          <h2>PaCode · Claude Code · OpenCode</h2>
+          <p class="section-lead">
+            三条产品路线不同：闭源商业 Agent、MIT 社区多模型 Agent、以及以 CC 架构为蓝本的可审计实现。下表帮你选对场景。
+          </p>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="产品对比表" tabindex="0">
+          <table class="compare">
+            <thead>
+              <tr>
+                <th scope="col">维度</th>
+                <th scope="col">PaCode</th>
+                <th scope="col">Claude Code</th>
+                <th scope="col">OpenCode</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">许可</th>
+                <td>BUSL-1.1（个人可用；组织生产需商业授权）</td>
+                <td>专有（Anthropic 产品）</td>
+                <td>MIT，社区最大</td>
+              </tr>
+              <tr>
+                <th scope="row">模型默认</th>
+                <td>MiniMax-M3（可切 Anthropic 兼容端）</td>
+                <td>Anthropic Claude 家族</td>
+                <td>多提供商 / 本地模型（BYOK）</td>
+              </tr>
+              <tr>
+                <th scope="row">架构取向</th>
+                <td>对齐 CC：权限层、5 层压缩、工具循环、文件记忆</td>
+                <td>原版实现，能力面最全</td>
+                <td>自有 TUI / build·plan 双 Agent，LSP 反馈强</td>
+              </tr>
+              <tr>
+                <th scope="row">配置与隐私</th>
+                <td><code>.paude/</code> 文件化，不依赖 <code>~/.claude</code></td>
+                <td><code>~/.claude</code> 生态</td>
+                <td>本地优先；会话可用 SQLite 等本地存储</td>
+              </tr>
+              <tr>
+                <th scope="row">扩展</th>
+                <td>Hooks / Skills / Plugins / MCP（含 WS）</td>
+                <td>Hooks / Skills / MCP 等一等公民</td>
+                <td>MCP + 多端（终端 / 桌面 / IDE）</td>
+              </tr>
+              <tr>
+                <th scope="row">实测套件</th>
+                <td>自有 gate + M5 vs CC COMPARE</td>
+                <td>官方产品；本仓作对照基线</td>
+                <td>本仓无共享 bench（暂无定性）</td>
+              </tr>
+              <tr>
+                <th scope="row">适合谁</th>
+                <td>要 CC 式基建、可控账单、可审计源码的团队/个人</td>
+                <td>要官方体验与最大能力面、接受 Anthropic 生态</td>
+                <td>要 MIT、多模型、大社区与桌面端的用户</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="tradeoffs">
+          <article>
+            <h3>PaCode 优势</h3>
+            <ul>
+              <li>架构对标 Claude Code，权限与压缩路径清晰可测</li>
+              <li>默认 MiniMax，国内网关友好；配置与 CC 隔离</li>
+              <li>有与 CC 同任务的 passRate / wall 证据链</li>
+              <li>npm 一键装：<code>@sallon/pacode</code></li>
+            </ul>
+          </article>
+          <article>
+            <h3>PaCode 短板</h3>
+            <ul>
+              <li>核心工具约 31，少于 CC 公开引用的 ~43</li>
+              <li>无容器级 Bash 沙箱、无公网 Bridge SaaS（有意 Defer）</li>
+              <li>BUSL 对商业组织有授权门槛（相对 MIT 的 OpenCode）</li>
+              <li>社区体量远小于 OpenCode / 官方 CC</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Claude Code</h3>
+            <ul class="pro">
+              <li>能力面与产品完成度最高</li>
+              <li>官方支持与模型深度整合</li>
+            </ul>
+            <ul class="con">
+              <li>闭源；配置与账号生态绑定 Anthropic</li>
+              <li>对照跑中串行墙钟更长（本仓 M5 设定）</li>
+            </ul>
+          </article>
+          <article>
+            <h3>OpenCode</h3>
+            <ul class="pro">
+              <li>MIT + 超大社区；多模型 / 本地模型自由</li>
+              <li>终端 + 桌面 + IDE，产品形态丰富</li>
+            </ul>
+            <ul class="con">
+              <li>不是「CC 架构复刻」路线，基建细节不同</li>
+              <li>与本仓无统一 verify 套件，速度不可直接对赌</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section-alt" id="install">
+        <div class="section-head">
+          <p class="eyebrow">Get started</p>
+          <h2>两分钟跑起来</h2>
+        </div>
+        <div class="install-block">
+          <pre><code>npm install -g @sallon/pacode
+export ANTHROPIC_API_KEY=your_minimax_key
+# 可选：export ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic
+pacode --version
+pacode -p "hello"</code></pre>
+          <div class="install-links">
+            <a href="https://github.com/yhtyhj-hue/PaCode" target="_blank" rel="noopener"
+              >源码仓库</a
+            >
+            <a href="https://www.npmjs.com/package/@sallon/pacode" target="_blank" rel="noopener"
+              >npm</a
+            >
+            <a
+              href="https://github.com/yhtyhj-hue/PaCode/blob/main/docs/CONFIG.md"
+              target="_blank"
+              rel="noopener"
+              >配置文档</a
+            >
+            <a
+              href="https://gitee.com/sallon/pa-code"
+              target="_blank"
+              rel="noopener"
+              >Gitee 镜像</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div>
+        <strong>PaCode</strong>
+        <span>独立实现的类 Claude Code Agent 框架</span>
+      </div>
+      <p>
+        对比数据以仓库 evals 为准；OpenCode 信息来自其公开文档与社区定位，非联合评测。
+      </p>
+      <p class="copy">© PaCode contributors · BUSL-1.1</p>
+    </footer>
+
+    <script src="./main.js" defer></script>
+  </body>
+</html>

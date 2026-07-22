@@ -6,6 +6,7 @@
 > 类 Claude Code 架构的 AI 编程助手框架 · 默认 MiniMax-M3
 
 - **GitHub:** https://github.com/yhtyhj-hue/PaCode  
+- **官网:** https://yhtyhj-hue.github.io/PaCode/  
 - **Gitee 镜像:** https://gitee.com/sallon/pa-code  
 - **npm:** https://www.npmjs.com/package/@sallon/pacode
 
