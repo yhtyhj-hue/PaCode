@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (main · 计划 0.2.0)
+## 0.2.0
 
 ### 多模型 / Provider
 - 内置 Anthropic Messages 兼容预设：MiniMax、DeepSeek、豆包 Coding、智谱 GLM、腾讯混元、阿里千问、Kimi、Anthropic
@@ -13,8 +13,9 @@
 - 显式导入 CC Switch（`~/.cc-switch/cc-switch.db`）与 `~/.claude/settings.json`（启动不自动拉取）
 - Bearer 鉴权（豆包 / Token Plan / Coding Plan）
 
-### 文档
+### 文档 / 官网
 - `docs/CONFIG.md` 多模型与 Token Plan 说明
+- 官网实测对照栏对齐；`section-alt` 内容柱与全页统一
 
 ## 0.1.4
 
