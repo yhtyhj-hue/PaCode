@@ -11,6 +11,7 @@ import { getCCSwitch, CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { REPL } from './repl.js';
 import { getWorktreeManager, WorktreeManager } from './worktree.js';
 import { DEFAULT_MODEL } from '../pkg/defaults.js';
+import { getPackageVersion } from '../pkg/version.js';
 
 const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
@@ -20,7 +21,7 @@ const CYAN = '\x1b[36m';
 const GRAY = '\x1b[90m';
 
 export function showHelp(): void {
-  console.log(`PaCode CLI - Claude Code-like AI Assistant v0.1.0
+  console.log(`PaCode CLI - Claude Code-like AI Assistant v${getPackageVersion()}
 
 Usage:
   pacode [options] [message]       Run AI agent with a message

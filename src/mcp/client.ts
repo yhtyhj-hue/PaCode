@@ -21,6 +21,7 @@ import {
   PermissionMode,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
+import { getPackageVersion } from '../pkg/version.js';
 
 type AnyTransport =
   | StdioClientTransport
@@ -57,7 +58,7 @@ export class MCPClient {
       const transport = this.createTransport(config);
 
       const client = new Client(
-        { name: 'pacode', version: '0.1.0' },
+        { name: 'pacode', version: getPackageVersion() },
         { capabilities: {} }
       );
 

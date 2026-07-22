@@ -6,6 +6,7 @@
 
 import figlet from 'figlet';
 import { formatBox, getUiWidth, visibleWidth } from './repl-ui.js';
+import { getPackageVersion } from '../pkg/version.js';
 
 const figletAsync = (text: string): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -111,7 +112,7 @@ export class BootAnimation {
     console.log(
       formatBox(
         [
-          `${BOLD}PaCode${RESET} ${DIM}v0.1.0${RESET}`,
+          `${BOLD}PaCode${RESET} ${DIM}v${getPackageVersion()}${RESET}`,
           `${DIM}Claude Code-like AI Programming Assistant${RESET}`,
           `${DIM}Model:${RESET} ${CYAN}${displayModel}${RESET}`,
         ],

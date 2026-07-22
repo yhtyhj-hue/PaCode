@@ -1,6 +1,6 @@
 {
   "name": "@sallon/pacode",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "PaCode — Claude Code-like AI coding agent CLI. Default MiniMax-M3 via Anthropic-compatible API. Install: npm i -g @sallon/pacode. BUSL-1.1 (personal free; org production needs commercial license).",
   "type": "module",
   "bin": {

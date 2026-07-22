@@ -13,6 +13,8 @@ import { SessionResume, resetSessionResume } from '../src/cli/resume.js';
 import { PermissionMode } from '../src/pkg/types.js';
 import { CCSwitchClient } from '../src/pkg/ccswitch/index.js';
 
+const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string };
+
 describe('parseCliArgs', () => {
   it('parses mode and message positionals', () => {
     const { values, positionals } = parseCliArgs(['-m', 'acceptEdits', 'hello', 'world']);
@@ -236,10 +238,12 @@ describe('showHelp', () => {
   it('prints usage text', () => {
     const spy = (vi.spyOn(console, 'log').mockImplementation(() => {})) as unknown as ReturnType<typeof vi.spyOn>;
     showHelp();
-    expect(spy.mock.calls[0]?.[0]).toContain('PaCode CLI');
-    expect(spy.mock.calls[0]?.[0]).toContain('worktree');
-    expect(spy.mock.calls[0]?.[0]).toContain('pacode mcp');
-    expect(spy.mock.calls[0]?.[0]).toContain('pacode init');
+    const text = String(spy.mock.calls[0]?.[0] ?? '');
+    expect(text).toContain('PaCode CLI');
+    expect(text).toContain(`v${pkg.version}`);
+    expect(text).toContain('worktree');
+    expect(text).toContain('pacode mcp');
+    expect(text).toContain('pacode init');
     spy.mockRestore();
   });
 });

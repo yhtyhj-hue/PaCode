@@ -22,6 +22,7 @@ import { loadImageFromFile } from '../services/image-attach/index.js';
 import type { ImageSource } from '../pkg/types.js';
 import { shouldEnableTui, startInkRepl } from './tui/index.js';
 import { runAgent } from '../sdk/run-agent.js';
+import { formatPacodeVersion } from '../pkg/version.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -37,7 +38,7 @@ async function main() {
   }
 
   if (values.version) {
-    console.log('PaCode v0.1.0');
+    console.log(formatPacodeVersion());
     process.exit(0);
   }
 

@@ -12,8 +12,9 @@ import type {
   McpRemoteToolOptions,
   McpSseOptions,
 } from './types.js';
+import { getPackageVersion } from '../../pkg/version.js';
 
-const CLIENT_INFO = Object.freeze({ name: 'pacode-mcp-remote', version: '0.1.0' });
+const CLIENT_INFO = Object.freeze({ name: 'pacode-mcp-remote', version: getPackageVersion() });
 
 const TOOL_INPUT_SCHEMA = Object.freeze({
   type: 'object',
