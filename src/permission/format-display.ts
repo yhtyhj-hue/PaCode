@@ -49,7 +49,7 @@ export function formatPermissionsReport(
     ...formatRuleList('deny', rules?.deny),
     ...formatRuleList('ask', rules?.ask),
     ...formatRuleList('allow', rules?.allow),
-    '  Configure: ~/.claude/settings.json or .claude/settings.json → "permissions"',
+    '  Configure: ~/.paude/settings.json or .paude/settings.json → "permissions"',
     '  Example: { "permissions": { "deny": ["Bash(rm *)"], "ask": ["Bash"], "allow": ["Read"] } }',
     '  ML AUTO: PACODE_CLASSIFIER=ml  optional PACODE_CLASSIFIER_CMD  audit PACODE_CLASSIFIER_AUDIT=1',
   ];

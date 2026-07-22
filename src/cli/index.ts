@@ -72,14 +72,6 @@ async function main() {
   }
 
   const cc = getCCSwitch();
-  if (cc.list().length === 0) {
-    const imported = cc.autoImportFromClaudeCode();
-    if (imported) {
-      console.log(
-        `${DIM}Auto-imported provider from ~/.claude/settings.json: ${imported.name}\x1b[0m\n`
-      );
-    }
-  }
   const appConfig = resolveAppConfig({
     mode: values.mode as string | undefined,
     model: values.model as string | undefined,

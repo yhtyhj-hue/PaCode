@@ -76,7 +76,7 @@ export function registerConfigTool(
   registry.register({
     name: 'ConfigTool',
     description:
-      'Read/write PaCode settings (thin wrapper). Actions: get, set, list. Writes go to .claude/settings*.json layers.',
+      'Read/write PaCode settings (thin wrapper). Actions: get, set, list. Writes go to .paude/settings*.json layers.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -196,7 +196,7 @@ export function registerConfigTool(
         };
       }
 
-      // apiKey 禁止写入可提交的 project 层（.claude/settings.json 默认进 git）
+      // apiKey 禁止写入可提交的 project 层（.paude/settings.json 可能进 git）
       if (key === 'apiKey' && target === 'project') {
         return {
           content: [
@@ -204,7 +204,7 @@ export function registerConfigTool(
               type: 'text',
               text:
                 'apiKey cannot be written to project settings (commit/leak risk). ' +
-                'Use target=user or target=local (.claude/settings.local.json is gitignored).',
+                'Use target=user or target=local (.paude/settings.local.json is gitignored).',
             },
           ],
           isError: true,

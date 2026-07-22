@@ -18,13 +18,18 @@ export default defineConfig({
         '**/*.test.ts',
         '**/*.d.ts',
         'vitest.config.ts',
+        // 纯类型 / 进程入口：无单测价值，计入会扭曲阈值
+        'src/pkg/types.ts',
+        'src/cli/index.ts',
+        'src/cli/tui/index.ts',
+        'src/cli/tui/run.tsx',
       ],
       thresholds: {
         lines: 80,
         statements: 80,
         functions: 79,
-        // PostToolUse stdout 路径新增分支后实测 ~73.9%；门禁 73.9 防回退，目标抬回 74+
-        branches: 73.9,
+        // 目标 ≥74.5%；门禁 74 留缓冲（types/入口已排除）
+        branches: 74,
       },
     },
   },

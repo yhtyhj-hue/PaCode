@@ -1,8 +1,11 @@
 /**
- * App Config — 统一合并 config / settings / cc-switch / CLI flags
+ * App Config — 统一合并 config / settings / providers / CLI flags
+ *
+ * 不读取 Claude Code ~/.claude/settings.json。
  */
 
 import { PermissionMode } from './types.js';
+import { DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_BASE_URL } from './defaults.js';
 import { loadConfig, PaudeConfig, resetConfigCache } from './config/index.js';
 import { getSettingsManager, PaCodeSettings, SettingsManager } from './settings/index.js';
 import { getCCSwitch } from './ccswitch/index.js';
@@ -53,6 +56,19 @@ function resolveMode(value?: string): PermissionMode | undefined {
   return MODE_MAP[value] ?? PermissionMode.DEFAULT;
 }
 
+/** PACODE_* 优先于 CLAUDE_* / ANTHROPIC_* 环境别名 */
+function envModel(): string | undefined {
+  return process.env['PACODE_MODEL'] ?? process.env['CLAUDE_MODEL'];
+}
+
+function envApiKey(): string | undefined {
+  return process.env['PACODE_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
+}
+
+function envBaseUrl(): string | undefined {
+  return process.env['PACODE_BASE_URL'] ?? process.env['ANTHROPIC_BASE_URL'];
+}
+
 /** 合并三层配置，CLI flags 优先级最高 */
 export function resolveAppConfig(
   cli: AppConfigCliOverrides = {},
@@ -76,10 +92,23 @@ export function resolveAppConfig(
   ) as ToolIntent[] | undefined;
 
   return {
-    model: cli.model ?? settings.model ?? paude.model.model ?? creds.model,
-    apiKey: cli.apiKey ?? settings.apiKey ?? paude.model.apiKey ?? creds.apiKey,
-    baseUrl: cli.baseUrl ?? settings.baseUrl ?? paude.model.baseUrl ?? creds.baseUrl,
-    maxTokens: cli.maxTokens ?? settings.maxTokens ?? paude.model.maxTokens,
+    model:
+      cli.model ??
+      settings.model ??
+      paude.model.model ??
+      creds.model ??
+      envModel() ??
+      DEFAULT_MODEL,
+    apiKey:
+      cli.apiKey ?? settings.apiKey ?? paude.model.apiKey ?? creds.apiKey ?? envApiKey(),
+    baseUrl:
+      cli.baseUrl ??
+      settings.baseUrl ??
+      paude.model.baseUrl ??
+      creds.baseUrl ??
+      envBaseUrl() ??
+      DEFAULT_BASE_URL,
+    maxTokens: cli.maxTokens ?? settings.maxTokens ?? paude.model.maxTokens ?? DEFAULT_MAX_TOKENS,
     temperature: cli.temperature ?? settings.temperature ?? paude.model.temperature,
     mode,
     contextMaxTokens: paude.context.maxTokens,
@@ -91,5 +120,8 @@ export function resolveAppConfig(
     },
   };
 }
+
+/** 供文档/测试引用的默认值 */
+export { DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_BASE_URL };
 
 export { resolveMode, MODE_MAP };

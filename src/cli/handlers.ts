@@ -10,6 +10,7 @@ import { getSessionResume, SessionResume } from './resume.js';
 import { getCCSwitch, CCSwitchClient } from '../pkg/ccswitch/index.js';
 import { REPL } from './repl.js';
 import { getWorktreeManager, WorktreeManager } from './worktree.js';
+import { DEFAULT_MODEL } from '../pkg/defaults.js';
 
 const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
@@ -41,7 +42,7 @@ Options:
   --session-id <id>       Resume specific session id
   --api-key <key>         Anthropic API key
   --base-url <url>        Custom API base URL (for proxy)
-  --model <model>         Model name (default: claude-sonnet-4-5)
+  --model <model>         Model name (default: ${DEFAULT_MODEL})
   --tui                   Launch Ink TUI REPL (also PACODE_TUI=1)
   --image <path>          Attach image for vision (repeatable; png/jpeg/gif/webp)
 
@@ -51,7 +52,7 @@ CC-Switch Commands:
   pacode cc-switch use <name>        Switch to a specific provider
   pacode cc-switch add <name>        Add a new provider
   pacode cc-switch remove <name>     Remove a provider
-  pacode cc-switch import            Import from ~/.claude/settings.json
+  pacode cc-switch import            (disabled — use add / ~/.paude/providers.json)
   pacode cc-switch status            Show current active provider
   pacode cc-switch detect            Detect available config sources
 
@@ -68,7 +69,9 @@ MCP Commands:
 Environment:
   ANTHROPIC_API_KEY       Your Anthropic API key
   ANTHROPIC_BASE_URL      Custom base URL
-  CLAUDE_MODEL            Default model
+  CLAUDE_MODEL / PACODE_MODEL  Default model (MiniMax-M3)
+  ANTHROPIC_BASE_URL / PACODE_BASE_URL  MiniMax Anthropic gateway
+  PACODE_API_KEY / ANTHROPIC_API_KEY    MiniMax API key
   PACODE_AUTO_APPROVE     Set to 1 to allow tool prompts in non-TTY environments
   PACODE_HOOK_FAIL_OPEN   Set to 1 to continue when PreToolUse hooks throw (default: deny)
   PACODE_TUI              Set to 1 to launch Ink TUI instead of readline REPL
@@ -304,7 +307,7 @@ export async function handleResume(
     (values.model as string | undefined) ??
     activeProvider?.model ??
     process.env['CLAUDE_MODEL'] ??
-    'claude-sonnet-4-5';
+    DEFAULT_MODEL;
 
   const repl = new REPL({
     apiKey,
@@ -502,9 +505,12 @@ export async function handleCCSwitch(
     }
 
     case 'import': {
-      const count = cc.importFromClaudeCode();
-      console.log(`✓ Imported ${count} provider(s) from ~/.claude/settings.json`);
-      return true;
+      console.error(
+        'CC import disabled. Use: pacode cc-switch add <name> --api-key=<key> --base-url=https://api.minimaxi.com/anthropic --model=MiniMax-M3'
+      );
+      console.error('Or edit ~/.paude/providers.json');
+      exit(1);
+      return false;
     }
 
     case 'status': {
@@ -524,16 +530,11 @@ export async function handleCCSwitch(
     case 'detect': {
       const sources = cc.detectSources();
       const configPath = cc.getConfigPath();
-      console.log('\nCC-Switch detection:');
+      console.log('\nProvider detection:');
       console.log(
-        `  CC-Switch app:     ${sources.ccswitch ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+        `  PaCode providers:  ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
       );
-      console.log(
-        `  Claude Code:       ${sources.claudeCode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
-      );
-      console.log(
-        `  PaCode:            ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
-      );
+      console.log(`  Claude Code import: disabled`);
       console.log(`\n  Config: ${configPath}\n`);
       return true;
     }

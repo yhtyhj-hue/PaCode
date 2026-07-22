@@ -94,9 +94,9 @@ export function formatUserMessage(message: string): string {
   return `${BOLD}>${RESET} ${firstLine}${suffix}`;
 }
 
-/** 输入行提示符：`> ` */
+/** 输入行提示符：亮绿 ❯（CC 风格） */
 export function formatInputPrompt(): string {
-  return `${BOLD}>${RESET} `;
+  return `\x1b[32m❯\x1b[0m `;
 }
 
 /** Claude Code 风格权限模式文案 */
@@ -184,9 +184,15 @@ export function formatInputAreaBlock(
   mode: PermissionMode,
   tokens: number,
   input = '',
-  width = getUiWidth()
+  width = getUiWidth(),
+  options?: { statusOverride?: string; colorizeInput?: (s: string) => string }
 ): string {
-  return `${formatReplBorder(width)}\n${formatInputPrompt()}${input}\n${formatReplBorder(width)}\n${formatStatusBar(mode, tokens, width)}`;
+  const displayInput = options?.colorizeInput ? options.colorizeInput(input) : input;
+  const status =
+    options?.statusOverride !== undefined
+      ? padEndVisible(`${DIM}${options.statusOverride}${RESET}`, width)
+      : formatStatusBar(mode, tokens, width);
+  return `${formatReplBorder(width)}\n${formatInputPrompt()}${displayInput}\n${formatReplBorder(width)}\n${status}`;
 }
 
 /** 输入行上方：上横线 + 状态栏 + 下横线（readline 兼容布局，已弃用） */

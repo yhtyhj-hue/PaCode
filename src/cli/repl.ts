@@ -31,7 +31,7 @@ import {
   formatResumeSuccess,
   loadResumeSession,
 } from './resume-display.js';
-import { PermissionMode, MCPServerConnection, SessionState, HookType } from '../pkg/types.js';
+import { PermissionMode, MCPServerConnection, SessionState, HookType, type ImageSource } from '../pkg/types.js';
 import { Provider } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
@@ -57,6 +57,9 @@ import { isCtrlCKey, resolveCtrlCAction, shouldDedupeCtrlC } from './repl-interr
 import { ToolCall, ToolResult } from '../pkg/types.js';
 import { TranscriptBuffer, isCtrlOKey } from './transcript-buffer.js';
 import { QueryProgressLine } from './query-progress.js';
+import { LiveTaskPanel, todosToPanelItems } from './live-task-panel.js';
+import { ToolRunningLine, isLongRunningTool } from './tool-running-line.js';
+import { getTodoStore } from '../context/todo-store.js';
 import { getAgentPool } from '../services/agent-scheduler/index.js';
 import { getTaskStore } from '../services/task-registry/index.js';
 import { getTeamStore } from '../services/team/index.js';
@@ -242,23 +245,25 @@ export class REPL {
         break;
       }
 
+      const display = this.inputEditor.getLastDisplayText() || input;
+      const images = this.inputEditor.takePendingImages();
       const trimmed = input.trim();
 
       if (trimmed.startsWith('/')) {
-        this.printUserTurn(trimmed);
+        this.printUserTurn(display.trim() || trimmed);
         await this.dispatchSlashCommand(trimmed);
         if (this.exitRequested) break;
         continue;
       }
 
-      if (!trimmed) continue;
+      if (!trimmed && images.length === 0) continue;
 
       if (trimmed === 'exit' || trimmed === 'quit') {
         this.exitRequested = true;
         break;
       }
 
-      this.printUserTurn(trimmed);
+      this.printUserTurn(display.trim() || trimmed || '[Image]');
       // 主轮消息以 ` &` 结尾 → 后台跑（非 Bash &）
       if (/\s&$/.test(trimmed)) {
         const prompt = trimmed.replace(/\s&$/, '').trim();
@@ -267,7 +272,7 @@ export class REPL {
           continue;
         }
       }
-      await this.processMessage(trimmed);
+      await this.processMessage(trimmed || '(image)', images);
       if (this.exitRequested) break;
     }
 
@@ -1109,7 +1114,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     process.stdout.write(`${DIM}── end transcript ──${RESET}\n`);
   }
 
-  private async processMessage(message: string): Promise<void> {
+  private async processMessage(message: string, images: ImageSource[] = []): Promise<void> {
     const session = this.getOrCreateSession();
     // K4: 到期 cron 先注入，再处理当前用户消息
     this.drainCronDue(session);
@@ -1128,6 +1133,8 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
     const transcript = new TranscriptBuffer();
     this.queryTranscript = transcript;
     const progress = new QueryProgressLine();
+    const liveTasks = new LiveTaskPanel();
+    const toolRunning = new ToolRunningLine();
     this.isProcessing = true;
     this.interruptRequested = false;
     this.inputEditor?.pause();
@@ -1143,10 +1150,23 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
       }
     };
 
+    const syncLiveTasks = (): void => {
+      const items = todosToPanelItems(getTodoStore().list(session.sessionId));
+      if (items.length === 0) {
+        liveTasks.clear();
+        return;
+      }
+      stopProgress();
+      progress.suspend();
+      liveTasks.setOutputTokens(turnOutputTokens);
+      liveTasks.sync(items);
+    };
+
     try {
       for await (const event of this.engine.query(
         {
           message,
+          images: images.length > 0 ? images : undefined,
           options: {
             model: this.model,
             maxTokens: effortMaxTokens(session.effort ?? 'medium'),
@@ -1162,6 +1182,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
           case 'skill_loaded':
             if (event.skills && event.skills.length > 0) {
               stopProgress();
+              liveTasks.invalidate();
               renderer.renderSkillLoaded(event.skills);
               for (const name of event.skills) {
                 transcript.add({ kind: 'skill', label: `Skill ${name}` });
@@ -1172,6 +1193,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
             if (event.parallelAgents && event.parallelAgents.length > 0) {
               stopProgress();
               progress.suspend();
+              liveTasks.invalidate();
               agentsBlockPrinted = true;
               renderer.renderParallelAgents(event.parallelAgents, {
                 elapsedSec: progress.elapsedSeconds(),
@@ -1190,6 +1212,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
           case 'agents_complete':
             if (event.parallelAgents && event.parallelAgents.length > 0) {
               progress.suspend();
+              liveTasks.invalidate();
               // 补画 ■ 完成态，避免只留下启动时的空 □
               renderer.renderParallelAgents(event.parallelAgents, {
                 elapsedSec: progress.elapsedSeconds(),
@@ -1217,6 +1240,8 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
           case 'content_block_delta':
             if (event.delta) {
               stopProgress();
+              liveTasks.invalidate();
+              toolRunning.stop();
               const formatted = this.streamWriter.append(event.delta.text);
               if (formatted) process.stdout.write(formatted);
             }
@@ -1224,6 +1249,7 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
           case 'prefetch_complete':
             if (event.prefetchTools && event.prefetchTools.length > 0) {
               stopProgress();
+              liveTasks.invalidate();
               for (const t of event.prefetchTools) {
                 if (!prefetchTools.some((p) => p.id === t.id)) {
                   prefetchTools.push(t);
@@ -1240,22 +1266,51 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
             if (event.tool) {
               progress.setToolPhase(this.formatToolLabel(event.tool));
               stopProgress();
+              toolRunning.stop();
+              liveTasks.invalidate();
               modelToolCount++;
               renderer.renderToolUse(event.tool);
               transcript.add({
                 kind: 'tool_use',
                 label: this.formatToolLabel(event.tool),
               });
+              // Bash / 长工具：显示 Running… 计时行
+              if (isLongRunningTool(event.tool.name) && event.tool.name !== 'TodoWrite') {
+                const timeoutMs =
+                  typeof event.tool.input?.timeout === 'number'
+                    ? event.tool.input.timeout
+                    : 60_000;
+                toolRunning.start({
+                  timeoutMs,
+                  backgroundHint: event.tool.name === 'Bash',
+                });
+              }
             }
             break;
           case 'tool_result':
             if (event.tool && event.result) {
-              renderer.renderToolResult(event.tool, event.result);
-              transcript.add({
-                kind: 'tool_result',
-                label: this.formatToolLabel(event.tool),
-                detail: this.summarizeForTranscript(event.tool, event.result),
-              });
+              toolRunning.stop();
+              liveTasks.invalidate();
+              // TodoWrite：刷新任务树，跳过冗长 ↳（列表已在面板）
+              if (event.tool.name === 'TodoWrite' && !event.result.isError) {
+                syncLiveTasks();
+                transcript.add({
+                  kind: 'tool_result',
+                  label: this.formatToolLabel(event.tool),
+                  detail: 'task list updated',
+                });
+              } else {
+                renderer.renderToolResult(event.tool, event.result);
+                transcript.add({
+                  kind: 'tool_result',
+                  label: this.formatToolLabel(event.tool),
+                  detail: this.summarizeForTranscript(event.tool, event.result),
+                });
+                // 非 TodoWrite 工具后若仍有任务，把面板画在底部
+                if (liveTasks.hasTasks) {
+                  syncLiveTasks();
+                }
+              }
             }
             break;
           case 'message_stop': {
@@ -1265,18 +1320,24 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
               this.tokenUsage.input += event.usage.inputTokens ?? 0;
               this.tokenUsage.output += event.usage.outputTokens ?? 0;
               turnOutputTokens = event.usage.outputTokens ?? 0;
+              progress.setOutputTokens(turnOutputTokens);
+              liveTasks.setOutputTokens(turnOutputTokens);
             }
             break;
           }
           case 'error':
             if (event.error) {
               stopProgress();
+              toolRunning.stop();
+              liveTasks.invalidate();
               console.log(`\n${RED}⏺ Error: ${event.error.message}${RESET}`);
             }
             break;
         }
       }
 
+      toolRunning.stop();
+      liveTasks.stop();
       stopProgress();
 
       const timeline = progress.formatTimelineSummary();
@@ -1302,11 +1363,15 @@ Use risk icons: 🟢 low, 🟡 medium, 🔴 high. Include tool name in _(ToolNam
 
       this.sessionManager.saveSession(session);
     } catch (error) {
+      toolRunning.stop();
+      liveTasks.stop();
       progress.stop();
       console.log(
         `\n${RED}⏺ Error: ${error instanceof Error ? error.message : String(error)}${RESET}\n`
       );
     } finally {
+      toolRunning.stop();
+      liveTasks.stop();
       this.isProcessing = false;
       this.interruptRequested = false;
       this.queryTranscript = null;

@@ -9,6 +9,7 @@ import {
   SessionState,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
+import { DEFAULT_MODEL } from '../pkg/defaults.js';
 
 export interface SessionCompactOptions {
   apiKey?: string;
@@ -93,7 +94,7 @@ export async function compactSession(
     const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
     const client = new Anthropic({ apiKey, baseURL: options.baseUrl });
     const response = await client.messages.create({
-      model: options.model ?? 'claude-sonnet-4-5',
+      model: options.model ?? DEFAULT_MODEL,
       max_tokens: 2048,
       messages: [{ role: 'user', content: userPrompt }],
     });

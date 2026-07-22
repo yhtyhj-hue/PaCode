@@ -1,11 +1,9 @@
 /**
- * REPL 行编辑器 — 底部固定输入框，对话内容在上方滚动
- *
- * 输入 `/` 时在输入框上方显示 Claude Code 风格 slash 命令菜单。
+ * REPL 行编辑器 — 底部固定输入框 + CC 风格粘贴芯片
  */
 
 import readline from 'node:readline';
-import { PermissionMode } from '../pkg/types.js';
+import { PermissionMode, type ImageSource } from '../pkg/types.js';
 import { formatInputAreaBlock, formatInputPrompt, visibleWidth } from './repl-ui.js';
 import {
   filterSlashCommands,
@@ -13,13 +11,26 @@ import {
   completeSlashCommand,
   SlashMenuEntry,
 } from './slash-menu.js';
+import { InputHistory } from './input-history.js';
+import {
+  PastedContent,
+  colorizePasteChips,
+  expandPastedTextRefs,
+  extractImagesAndStripRefs,
+  formatImageRef,
+  formatPastedTextRef,
+  getPastedTextRefNumLines,
+  hasCollapsedTextPaste,
+  shouldCollapsePaste,
+} from './paste-chips.js';
+import { tryLoadImageFromPastedPath, tryReadClipboardImage } from './clipboard-image.js';
 
 export interface ReplLineOptions {
   mode: PermissionMode;
   tokens: number;
   isFirst?: boolean;
   slashCommands?: SlashMenuEntry[];
-  /** 覆盖默认 `> ` 提示符（如 y/N 确认） */
+  /** 覆盖默认提示符（如 y/N 确认） */
   prompt?: string;
   /** Shift+Tab：循环权限模式，返回新 mode */
   onModeCycle?: () => PermissionMode;
@@ -36,6 +47,11 @@ export const INPUT_LINE_TO_STATUS_BAR = 2;
 /** 从输入行移到块末行（状态栏下一行）需下移的行数 */
 const INPUT_LINE_TO_BLOCK_END = 3;
 
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+const ENABLE_BRACKETED_PASTE = '\x1b[?2004h';
+const DISABLE_BRACKETED_PASTE = '\x1b[?2004l';
+
 /** 向下清除 totalClear 行后，回到 zone 首行需上移的行数（供测试） */
 export function zoneClearCursorUp(totalClear: number): number {
   return totalClear > 1 ? totalClear - 1 : 0;
@@ -50,11 +66,20 @@ export class ReplLineEditor {
   private paused = false;
   private currentOptions: ReplLineOptions | null = null;
   private menuVisibleLines = 0;
-  /** 输入区已绘制时才向上清除，避免首次绘制误删上方内容 */
   private zoneDrawn = false;
-  /** /vim 启用后：Esc → normal；i/a → insert */
   private vimEnabled = false;
   private vimMode: VimEditorMode = 'insert';
+
+  /** 粘贴芯片存储 */
+  private pasted = new Map<number, PastedContent>();
+  private nextPasteId = 1;
+  private bracketedBuf: string | null = null;
+  private pendingImages: ImageSource[] = [];
+  private lastDisplayText = '';
+
+  /** 输入历史（↑↓）；slash 菜单选中下标 */
+  private history = new InputHistory();
+  private slashSelectedIndex = 0;
 
   constructor() {
     if (process.stdin.isTTY) {
@@ -75,10 +100,25 @@ export class ReplLineEditor {
     return this.vimMode;
   }
 
+  /** 提交后取出图片附件 */
+  takePendingImages(): ImageSource[] {
+    const imgs = this.pendingImages;
+    this.pendingImages = [];
+    return imgs;
+  }
+
+  /** 提交前输入区展示文案（含芯片，供 printUserTurn） */
+  getLastDisplayText(): string {
+    return this.lastDisplayText;
+  }
+
   pause(): void {
     this.paused = true;
     this.detachKeys();
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    if (process.stdin.isTTY) {
+      process.stdout.write(DISABLE_BRACKETED_PASTE);
+      process.stdin.setRawMode(false);
+    }
   }
 
   resume(): void {
@@ -86,6 +126,7 @@ export class ReplLineEditor {
     this.paused = false;
     if (this.active) {
       process.stdin.setRawMode(true);
+      process.stdout.write(ENABLE_BRACKETED_PASTE);
       if (this.currentOptions) {
         this.fullRedraw();
         this.attachKeys();
@@ -96,7 +137,10 @@ export class ReplLineEditor {
   close(): void {
     this.detachKeys();
     this.active = false;
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    if (process.stdin.isTTY) {
+      process.stdout.write(DISABLE_BRACKETED_PASTE);
+      process.stdin.setRawMode(false);
+    }
   }
 
   async readLine(options: ReplLineOptions): Promise<string | null> {
@@ -109,10 +153,18 @@ export class ReplLineEditor {
     this.vimMode = 'insert';
     this.menuVisibleLines = 0;
     this.zoneDrawn = false;
+    this.pasted.clear();
+    this.nextPasteId = 1;
+    this.bracketedBuf = null;
+    this.pendingImages = [];
+    this.lastDisplayText = '';
+    this.slashSelectedIndex = 0;
+    this.history.resetBrowse();
     this.active = true;
     this.currentOptions = options;
     process.stdin.setRawMode(true);
     process.stdin.resume();
+    process.stdout.write(ENABLE_BRACKETED_PASTE);
 
     this.fullRedraw();
 
@@ -132,7 +184,6 @@ export class ReplLineEditor {
     });
   }
 
-  /** 清除菜单 + 输入块，并重绘 */
   private fullRedraw(): void {
     if (!this.currentOptions) return;
 
@@ -142,18 +193,35 @@ export class ReplLineEditor {
       process.stdout.write('\n');
     }
 
-    const menuLines = this.buffer.startsWith('/')
-      ? formatSlashMenu(
-          filterSlashCommands(this.buffer, this.currentOptions.slashCommands ?? [])
-        )
+    const slashEntries = this.buffer.startsWith('/')
+      ? filterSlashCommands(this.buffer, this.currentOptions.slashCommands ?? [])
       : [];
+    const menuLines = formatSlashMenu(
+      slashEntries,
+      24,
+      undefined,
+      slashEntries.length > 0 ? this.slashSelectedIndex : -1
+    );
 
     for (const line of menuLines) {
       process.stdout.write(`${line}\n`);
     }
 
+    const statusOverride = hasCollapsedTextPaste(this.buffer, this.pasted)
+      ? 'paste again to expand'
+      : undefined;
+
     process.stdout.write(
-      `${formatInputAreaBlock(this.currentOptions.mode, this.currentOptions.tokens, this.buffer)}\n`
+      `${formatInputAreaBlock(
+        this.currentOptions.mode,
+        this.currentOptions.tokens,
+        this.buffer,
+        undefined,
+        {
+          statusOverride,
+          colorizeInput: colorizePasteChips,
+        }
+      )}\n`
     );
     this.menuVisibleLines = menuLines.length;
     this.zoneDrawn = true;
@@ -169,9 +237,6 @@ export class ReplLineEditor {
     );
   }
 
-  /**
-   * 从输入行清除菜单 + 输入块（用 readline API，避免手写 CSI 漏出 `[`）
-   */
   private clearInputZone(): void {
     const totalClear = INPUT_BLOCK_LINES + this.menuVisibleLines;
     if (totalClear === 0) return;
@@ -200,16 +265,15 @@ export class ReplLineEditor {
     this.zoneDrawn = false;
   }
 
-  /** 取消等待中的输入（Ctrl+C 退出） */
   cancelReadLine(): void {
     if (this.active) this.finishSubmit(null);
   }
 
-  /** 第二次 Ctrl+C：静默收起输入区并结束 readLine */
   cancelForExit(): void {
     if (!this.active) return;
     this.detachKeys();
     if (process.stdin.isTTY) {
+      process.stdout.write(DISABLE_BRACKETED_PASTE);
       process.stdin.setRawMode(false);
       this.dismissInputBlock();
     }
@@ -220,7 +284,6 @@ export class ReplLineEditor {
     done?.(null);
   }
 
-  /** 第一次 Ctrl+C：在状态栏行显示弱提示，不重绘整块输入区 */
   showExitHint(hintLine: string): void {
     if (!this.active || !this.currentOptions || !process.stdout.isTTY) return;
 
@@ -247,21 +310,15 @@ export class ReplLineEditor {
     if (this.active) this.fullRedraw();
   }
 
-  /** 注入文本到当前输入（Voice STT）；返回是否写入成功 */
   injectText(text: string): boolean {
     if (!this.active || this.paused) return false;
     const t = text.trim();
     if (!t) return false;
-    const before = this.buffer.slice(0, this.cursor);
-    const after = this.buffer.slice(this.cursor);
-    const sep = before.length > 0 && !before.endsWith(' ') ? ' ' : '';
-    this.buffer = before + sep + t + after;
-    this.cursor = (before + sep + t).length;
+    this.insertRawAtCursor(t);
     this.fullRedraw();
     return true;
   }
 
-  /** Ctrl+C 输出 ^C 提示后重绘底部输入区 */
   redrawAfterInterrupt(): void {
     if (this.active && this.currentOptions) {
       this.fullRedraw();
@@ -276,13 +333,167 @@ export class ReplLineEditor {
     this.zoneDrawn = false;
   }
 
+  /** 当前 slash 过滤列表（供 ↑↓ / Enter） */
+  private currentSlashEntries(): SlashMenuEntry[] {
+    if (!this.buffer.startsWith('/') || !this.currentOptions) return [];
+    return filterSlashCommands(this.buffer, this.currentOptions.slashCommands ?? []);
+  }
+
+  private clampSlashSelection(): void {
+    const entries = this.currentSlashEntries();
+    if (entries.length === 0) {
+      this.slashSelectedIndex = 0;
+      return;
+    }
+    if (this.slashSelectedIndex < 0) this.slashSelectedIndex = 0;
+    if (this.slashSelectedIndex >= entries.length) {
+      this.slashSelectedIndex = entries.length - 1;
+    }
+  }
+
+  /** 缓冲变更后：重置/钳制菜单选中 */
+  private afterBufferEdit(): void {
+    this.clampSlashSelection();
+    this.fullRedraw();
+  }
+
+  private navigateSlash(delta: number): boolean {
+    const entries = this.currentSlashEntries();
+    if (entries.length === 0) return false;
+    const n = entries.length;
+    this.slashSelectedIndex = (this.slashSelectedIndex + delta + n) % n;
+    this.fullRedraw();
+    return true;
+  }
+
+  private navigateHistory(dir: 'up' | 'down'): void {
+    const next =
+      dir === 'up' ? this.history.up(this.buffer) : this.history.down(this.buffer);
+    this.buffer = next;
+    this.cursor = this.buffer.length;
+    this.slashSelectedIndex = 0;
+    this.clampSlashSelection();
+    this.fullRedraw();
+  }
+
+  /** Enter：若 slash 菜单打开则采用高亮项再提交 */
+  private submitFromEnter(): void {
+    if (this.buffer.trim().length === 0) return;
+    const entries = this.currentSlashEntries();
+    if (entries.length > 0 && this.buffer.startsWith('/')) {
+      const selected = entries[this.slashSelectedIndex];
+      if (selected) {
+        const parts = this.buffer.split(/\s+/);
+        const rest = parts.length > 1 ? this.buffer.slice(parts[0]!.length) : '';
+        this.buffer = selected.command + rest;
+        this.cursor = this.buffer.length;
+      }
+    }
+    this.finishSubmit(this.buffer);
+  }
+
+  private insertRawAtCursor(text: string): void {
+    this.buffer = this.buffer.slice(0, this.cursor) + text + this.buffer.slice(this.cursor);
+    this.cursor += text.length;
+  }
+
+  private insertTextChip(text: string): void {
+    const id = this.nextPasteId++;
+    const lines = getPastedTextRefNumLines(text);
+    const chip = formatPastedTextRef(id, lines);
+    this.pasted.set(id, { id, type: 'text', content: text });
+    this.insertRawAtCursor(chip);
+  }
+
+  private insertImageChip(img: { mediaType: string; data: string }): void {
+    const id = this.nextPasteId++;
+    const chip = formatImageRef(id);
+    this.pasted.set(id, {
+      id,
+      type: 'image',
+      content: img.data,
+      mediaType: img.mediaType,
+    });
+    this.insertRawAtCursor(chip);
+  }
+
+  /** 处理粘贴块（bracketed 或大块输入） */
+  handlePaste(raw: string): void {
+    // 再粘贴一次 → 展开已有文本芯片
+    if (hasCollapsedTextPaste(this.buffer, this.pasted)) {
+      this.buffer = expandPastedTextRefs(this.buffer, this.pasted);
+      this.cursor = this.buffer.length;
+      this.fullRedraw();
+      return;
+    }
+
+    const text = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    if (!text.trim()) {
+      const img = tryReadClipboardImage();
+      if (img) this.insertImageChip(img);
+      this.fullRedraw();
+      return;
+    }
+
+    const fromPath = tryLoadImageFromPastedPath(text);
+    if (fromPath) {
+      this.insertImageChip(fromPath);
+      this.fullRedraw();
+      return;
+    }
+
+    if (shouldCollapsePaste(text)) {
+      this.insertTextChip(text);
+    } else {
+      this.insertRawAtCursor(text);
+    }
+    this.fullRedraw();
+  }
+
+  private feedInputChunk(str: string): void {
+    // Bracketed paste 状态机
+    if (this.bracketedBuf !== null) {
+      this.bracketedBuf += str;
+      const end = this.bracketedBuf.indexOf(PASTE_END);
+      if (end >= 0) {
+        const body = this.bracketedBuf.slice(0, end);
+        this.bracketedBuf = null;
+        this.handlePaste(body);
+      }
+      return;
+    }
+
+    if (str.includes(PASTE_START)) {
+      const start = str.indexOf(PASTE_START);
+      const after = str.slice(start + PASTE_START.length);
+      const end = after.indexOf(PASTE_END);
+      if (end >= 0) {
+        this.handlePaste(after.slice(0, end));
+        const rest = after.slice(end + PASTE_END.length);
+        if (rest) this.feedInputChunk(rest);
+      } else {
+        this.bracketedBuf = after;
+      }
+      return;
+    }
+
+    // 非 bracketed：多字符且应折叠 → 当粘贴
+    if (str.length > 1 && shouldCollapsePaste(str)) {
+      this.handlePaste(str);
+      return;
+    }
+
+    this.insertRawAtCursor(str);
+    this.slashSelectedIndex = 0;
+    this.afterBufferEdit();
+  }
+
   private attachKeys(): void {
     if (this.keyHandler) return;
 
     this.keyHandler = (str, key) => {
       if (this.paused || !key) return;
-
-      // Ctrl+C 由 REPL 全局 listener 处理
 
       if (key.ctrl && key.name === 'd') {
         if (this.buffer.length === 0) this.finishSubmit(null);
@@ -309,7 +520,6 @@ export class ReplLineEditor {
         return;
       }
 
-      // Vim：Esc 进 normal；normal 下 i/a/A/hjkl/x/dd
       if (this.vimEnabled && key.name === 'escape') {
         this.vimMode = 'normal';
         this.fullRedraw();
@@ -362,30 +572,55 @@ export class ReplLineEditor {
           return;
         }
         if (str === 'd') {
-          // 简化：dd 清行（连按 d 不追踪；单 d 也清行以满足最小可用）
           this.buffer = '';
           this.cursor = 0;
           this.fullRedraw();
           return;
         }
         if (key.name === 'return') {
-          if (this.buffer.trim().length === 0) return;
-          this.finishSubmit(this.buffer);
+          this.submitFromEnter();
         }
         return;
       }
 
       if (key.name === 'return') {
-        if (this.buffer.trim().length === 0) return;
-        this.finishSubmit(this.buffer);
+        this.submitFromEnter();
+        return;
+      }
+
+      if (key.name === 'up') {
+        // 历史浏览中优先 ↑↓ 历史；否则有 slash 菜单则选菜单
+        if (this.history.isBrowsing()) {
+          this.navigateHistory('up');
+        } else if (!this.navigateSlash(-1)) {
+          this.navigateHistory('up');
+        }
+        return;
+      }
+      if (key.name === 'down') {
+        if (this.history.isBrowsing()) {
+          this.navigateHistory('down');
+        } else if (!this.navigateSlash(1)) {
+          this.navigateHistory('down');
+        }
         return;
       }
 
       if (key.name === 'backspace') {
         if (this.cursor > 0) {
-          this.buffer = this.buffer.slice(0, this.cursor - 1) + this.buffer.slice(this.cursor);
-          this.cursor -= 1;
-          this.fullRedraw();
+          // 芯片整块删除：若光标落在 ] 后，尝试删整个 [...]
+          const before = this.buffer.slice(0, this.cursor);
+          const chip = before.match(/\[(?:Pasted text|Image) #[^\]]+\]$/);
+          if (chip) {
+            const start = this.cursor - chip[0].length;
+            this.buffer = this.buffer.slice(0, start) + this.buffer.slice(this.cursor);
+            this.cursor = start;
+          } else {
+            this.buffer = this.buffer.slice(0, this.cursor - 1) + this.buffer.slice(this.cursor);
+            this.cursor -= 1;
+          }
+          this.slashSelectedIndex = 0;
+          this.afterBufferEdit();
         }
         return;
       }
@@ -402,9 +637,7 @@ export class ReplLineEditor {
       }
 
       if (str && !key.ctrl && !key.meta) {
-        this.buffer = this.buffer.slice(0, this.cursor) + str + this.buffer.slice(this.cursor);
-        this.cursor += str.length;
-        this.fullRedraw();
+        this.feedInputChunk(str);
       }
     };
 
@@ -420,13 +653,24 @@ export class ReplLineEditor {
   private finishSubmit(value: string | null): void {
     this.detachKeys();
     if (process.stdin.isTTY) {
+      process.stdout.write(DISABLE_BRACKETED_PASTE);
       process.stdin.setRawMode(false);
       this.removeInputBlock();
     }
     this.active = false;
     this.currentOptions = null;
+
+    let out: string | null = value;
+    if (value !== null) {
+      this.lastDisplayText = value;
+      const stripped = extractImagesAndStripRefs(value, this.pasted);
+      this.pendingImages = stripped.images;
+      out = expandPastedTextRefs(stripped.text, this.pasted);
+      if (out.trim()) this.history.push(out);
+    }
+
     const done = this.resolve;
     this.resolve = null;
-    done?.(value);
+    done?.(out);
   }
 }

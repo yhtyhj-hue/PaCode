@@ -1,10 +1,10 @@
 {
-  "name": "pacode",
-  "version": "0.1.0",
-  "description": "Claude Code-like AI programming assistant framework. Source-available under BUSL-1.1 — personal/non-production use free; production use by any organization (including employee use) requires a commercial license. See LICENSE.",
+  "name": "@sallon/pacode",
+  "version": "0.1.1",
+  "description": "PaCode — Claude Code-like AI coding agent CLI. Default MiniMax-M3 via Anthropic-compatible API. Install: npm i -g @sallon/pacode. BUSL-1.1 (personal free; org production needs commercial license).",
   "type": "module",
   "bin": {
-    "pacode": "./dist/cli/index.js"
+    "pacode": "bin/pacode.js"
   },
   "main": "./dist/sdk/index.js",
   "types": "./dist/sdk/index.d.ts",
@@ -15,11 +15,18 @@
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').chmodSync('bin/pacode.js',0o755)\"",
     "watch": "tsc --watch",
     "start": "node dist/cli/index.js",
     "dev": "node dist/cli/index.js",
+    "prepublishOnly": "npm run build",
     "test": "vitest run --exclude 'evals/periodic/**'",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --exclude 'evals/periodic/**'",
@@ -34,10 +41,23 @@
     "ai",
     "agent",
     "programming",
-    "assistant"
+    "assistant",
+    "minimax",
+    "cli"
   ],
-  "author": "",
+  "author": "sallon",
   "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitee.com/sallon/pa-code.git"
+  },
+  "homepage": "https://gitee.com/sallon/pa-code",
+  "bugs": {
+    "url": "https://gitee.com/sallon/pa-code/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@modelcontextprotocol/sdk": "^1.29.0",

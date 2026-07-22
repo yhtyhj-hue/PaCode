@@ -15,7 +15,7 @@ echo "Explain this repo" | pacode -p   # stdin when no positional message
 ## Programmatic
 
 ```ts
-import { runAgent } from 'pacode';
+import { runAgent } from '@sallon/pacode';
 
 const { text, hadError } = await runAgent({
   message: 'Read README and summarize',

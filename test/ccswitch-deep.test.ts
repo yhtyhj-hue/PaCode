@@ -96,11 +96,16 @@ describe('CCSwitchClient - Deep', () => {
     expect(c2.list()).toEqual([]);
   });
 
-  it('detects sources', () => {
+  it('detects sources without Claude Code', () => {
     const s = c.detectSources();
-    expect(s).toHaveProperty('ccswitch');
-    expect(s).toHaveProperty('claudeCode');
+    expect(s.claudeCode).toBe(false);
+    expect(s.ccswitch).toBe(false);
     expect(s).toHaveProperty('pacode');
+  });
+
+  it('CC import methods are no-ops', () => {
+    expect(c.importFromClaudeCode()).toBe(0);
+    expect(c.autoImportFromClaudeCode()).toBeNull();
   });
 
   it('exposes config path', () => {

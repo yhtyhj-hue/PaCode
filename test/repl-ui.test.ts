@@ -45,7 +45,7 @@ describe('repl-ui', () => {
   });
 
   it('uses simple > prompt', () => {
-    expect(formatInputPrompt()).toContain('>');
+    expect(formatInputPrompt()).toContain('❯');
   });
 
   it('formats user turn without input box borders', () => {
@@ -59,7 +59,7 @@ describe('repl-ui', () => {
     const block = formatInputAreaBlock(PermissionMode.DEFAULT, 0);
     const lines = block.split('\n');
     expect(lines).toHaveLength(4);
-    expect(lines[1]).toContain('>');
+    expect(lines[1]).toContain('❯');
     expect(lines[3]).toContain('0 tokens');
   });
 

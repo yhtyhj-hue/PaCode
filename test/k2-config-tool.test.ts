@@ -52,7 +52,7 @@ describe('K2 ConfigTool', () => {
     expect(setBody.target).toBe('local');
 
     const disk = JSON.parse(
-      readFileSync(join(dir, '.claude', 'settings.local.json'), 'utf-8')
+      readFileSync(join(dir, '.paude', 'settings.local.json'), 'utf-8')
     );
     expect(disk.model).toBe('claude-test');
 

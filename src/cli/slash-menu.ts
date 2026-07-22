@@ -7,6 +7,8 @@ import { getUiWidth, visibleWidth } from './repl-ui.js';
 const RESET = '\x1b[0m';
 const CYAN = '\x1b[36m';
 const DIM = '\x1b[2m';
+const GREEN = '\x1b[32m';
+const INVERSE = '\x1b[7m';
 
 export interface SlashMenuEntry {
   command: string;
@@ -70,11 +72,12 @@ export function filterSlashCommands(
   return unique.filter((entry) => entry.command.toLowerCase().startsWith(query));
 }
 
-/** 双列菜单行（命令 + 描述） */
+/** 双列菜单行（命令 + 描述）；selectedIndex ≥ 0 时高亮该行 */
 export function formatSlashMenu(
   entries: SlashMenuEntry[],
   maxRows = 24,
-  width = getUiWidth()
+  width = getUiWidth(),
+  selectedIndex = -1
 ): string[] {
   if (entries.length === 0) return [];
 
@@ -84,12 +87,17 @@ export function formatSlashMenu(
     Math.max(14, ...shown.map((e) => visibleWidth(e.command))) + 2
   );
 
-  const lines = shown.map((entry) => {
+  const lines = shown.map((entry, i) => {
     const descMax = Math.max(10, width - cmdWidth - 2);
     let desc = entry.description;
     if (desc.length > descMax) desc = `${desc.slice(0, descMax - 3)}...`;
-    const cmdCol = `${CYAN}${entry.command.padEnd(cmdWidth)}${RESET}`;
-    return `${cmdCol}${DIM}${desc}${RESET}`;
+    const selected = i === selectedIndex;
+    const marker = selected ? `${GREEN}❯${RESET} ` : '  ';
+    const cmdCol = selected
+      ? `${INVERSE}${GREEN}${entry.command.padEnd(cmdWidth)}${RESET}`
+      : `${CYAN}${entry.command.padEnd(cmdWidth)}${RESET}`;
+    const descCol = selected ? `${GREEN}${desc}${RESET}` : `${DIM}${desc}${RESET}`;
+    return `${marker}${cmdCol}${descCol}`;
   });
 
   if (entries.length > maxRows) {

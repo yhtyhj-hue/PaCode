@@ -10,6 +10,8 @@ import { resolveAppConfig } from '../src/pkg/app-config.js';
 import { resetConfigCache } from '../src/pkg/config/index.js';
 import { SettingsManager } from '../src/pkg/settings/index.js';
 import { PermissionMode } from '../src/pkg/types.js';
+import { resetCCSwitch } from '../src/pkg/ccswitch/index.js';
+import { mkdtempSync } from 'node:fs';
 
 describe('resolveAppConfig', () => {
   let projectDir: string;
@@ -64,5 +66,41 @@ describe('resolveAppConfig', () => {
     expect(cfg.model).toBe('file-model');
     expect(cfg.maxTokens).toBe(12000);
     expect(cfg.compactionThreshold).toBe(0.77);
+  });
+
+  it('falls back to MiniMax defaults when empty', () => {
+    const prevHome = process.env['HOME'];
+    const prevModel = process.env['CLAUDE_MODEL'];
+    const prevPacode = process.env['PACODE_MODEL'];
+    const prevBase = process.env['ANTHROPIC_BASE_URL'];
+    const prevPacodeBase = process.env['PACODE_BASE_URL'];
+    const prevKey = process.env['ANTHROPIC_API_KEY'];
+    const prevPacodeKey = process.env['PACODE_API_KEY'];
+
+    const fakeHome = mkdtempSync(join(tmpdir(), 'pacode-home-'));
+    process.env['HOME'] = fakeHome;
+    delete process.env['CLAUDE_MODEL'];
+    delete process.env['PACODE_MODEL'];
+    delete process.env['ANTHROPIC_BASE_URL'];
+    delete process.env['PACODE_BASE_URL'];
+    delete process.env['ANTHROPIC_API_KEY'];
+    delete process.env['PACODE_API_KEY'];
+    resetCCSwitch();
+
+    writeFileSync(configPath, JSON.stringify({}));
+    const cfg = resolveAppConfig({}, { configPath, settingsManager: new SettingsManager(projectDir) });
+    expect(cfg.model).toBe('MiniMax-M3');
+    expect(cfg.baseUrl).toBe('https://api.minimaxi.com/anthropic');
+
+    if (prevHome !== undefined) process.env['HOME'] = prevHome;
+    else delete process.env['HOME'];
+    if (prevModel !== undefined) process.env['CLAUDE_MODEL'] = prevModel;
+    if (prevPacode !== undefined) process.env['PACODE_MODEL'] = prevPacode;
+    if (prevBase !== undefined) process.env['ANTHROPIC_BASE_URL'] = prevBase;
+    if (prevPacodeBase !== undefined) process.env['PACODE_BASE_URL'] = prevPacodeBase;
+    if (prevKey !== undefined) process.env['ANTHROPIC_API_KEY'] = prevKey;
+    if (prevPacodeKey !== undefined) process.env['PACODE_API_KEY'] = prevPacodeKey;
+    resetCCSwitch();
+    if (existsSync(fakeHome)) rmSync(fakeHome, { recursive: true, force: true });
   });
 });

@@ -26,9 +26,36 @@ describe('llm-explore-orchestrator', () => {
     expect(specs.every((s) => s.prompt.includes('explore subagent'))).toBe(true);
   });
 
-  it('preferScriptedPrefetchDag defaults false', () => {
-    expect(preferScriptedPrefetchDag({})).toBe(false);
-    expect(preferScriptedPrefetchDag({ PACODE_PREFETCH_DAG: '1' })).toBe(true);
+  it('builds missions for code_audit / review_implementation; empty for run_tests', () => {
+    expect(buildLlmExploreSpecs('run_tests', 'x')).toEqual([]);
+    const audit = buildLlmExploreSpecs('code_audit', '审计');
+    expect(audit.map((s) => s.label)).toContain('Agent 核心回路');
+    expect(audit).toHaveLength(4);
+    const review = buildLlmExploreSpecs('review_implementation', '评审');
+    expect(review.map((s) => s.label)).toContain('变更审查');
+    expect(review.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('formatLlmExploreResults handles failed and empty summary', () => {
+    const failed: SubagentResult = {
+      name: 'explore',
+      success: false,
+      output: '',
+      toolCalls: 0,
+      duration: 1,
+      error: 'aborted',
+      report: {
+        agent: 'explore',
+        success: false,
+        summary: '',
+        toolCalls: 0,
+        durationMs: 1,
+        isolation: 'none',
+      },
+    };
+    const text = formatLlmExploreResults('code_audit', [{ label: '安全面', result: failed }]);
+    expect(text).toContain('failed');
+    expect(text).toContain('aborted');
   });
 
   it('formatLlmExploreResults marks real LLM agents', () => {

@@ -51,6 +51,60 @@ describe('EnhancedRenderer CC style', () => {
     expect(out).toContain('ctrl+o to expand');
   });
 
+  it('renderToolResult summarizes Read/Bash/Grep/Glob and errors', () => {
+    r.renderToolResult(
+      { id: '1', name: 'Read', input: { path: 'a.ts' } },
+      { content: [{ type: 'text', text: 'l1\nl2\nl3' }] }
+    );
+    r.renderToolResult(
+      { id: '2', name: 'Glob', input: { pattern: '*.ts' } },
+      { content: [{ type: 'text', text: 'a.ts\nb.ts' }] }
+    );
+    r.renderToolResult(
+      { id: '3', name: 'Grep', input: { pattern: 'x' } },
+      { content: [{ type: 'text', text: 'm1\nm2' }] }
+    );
+    r.renderToolResult(
+      { id: '4', name: 'Bash', input: { command: 'echo' } },
+      { content: [{ type: 'text', text: 'ok\nmore' }] }
+    );
+    r.renderToolResult(
+      { id: '5', name: 'Bash', input: { command: 'x' } },
+      {
+        content: [
+          {
+            type: 'text',
+            text: 'a'.repeat(100),
+          },
+        ],
+      }
+    );
+    r.renderToolResult(
+      { id: '6', name: 'Write', input: { path: 'a' } },
+      { content: [{ type: 'text', text: 'saved' }], isError: true }
+    );
+    r.renderToolResult(
+      { id: '7', name: 'Write', input: { path: 'a' } },
+      { content: [{ type: 'text', text: '' }] }
+    );
+    r.renderToolUse({
+      id: '8',
+      name: 'Bash',
+      input: { command: 'x'.repeat(80) },
+    });
+    const out = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(out).toContain('lines');
+    expect(out).toContain('paths');
+    expect(out).toContain('matches');
+    expect(out).toContain('...');
+  });
+
+  it('renderMarkdown applies CC list bullets', () => {
+    const md = r.renderMarkdown('**bold** *i* `code`\n- item');
+    expect(md).toContain('●');
+    expect(md).toContain('bold');
+  });
+
   it('renderAccomplishingBlock shows task tree', () => {
     r.renderAccomplishingBlock(
       [
@@ -60,11 +114,31 @@ describe('EnhancedRenderer CC style', () => {
       { elapsedSec: 3, outputTokens: 120 }
     );
     const out = writeSpy.mock.calls.map((c) => String(c[0])).join('');
-    expect(out).toContain('Accomplishing');
+    expect(out).toContain('Git变更分析');
     expect(out).toContain('3s');
     expect(out).toContain('120 tokens');
-    expect(out).toContain('Git变更分析');
     expect(out).toContain('└');
+    expect(out).toContain('□');
+  });
+
+  it('renderAccomplishingBlock doneHeader and error status', () => {
+    r.renderAccomplishingBlock(
+      [
+        { label: 'ok', status: 'done' },
+        { label: 'bad', status: 'error' },
+        { label: 'p1', status: 'pending' },
+        { label: 'p2', status: 'pending' },
+        { label: 'p3', status: 'pending' },
+        { label: 'p4', status: 'pending' },
+      ],
+      { elapsedSec: 2, outputTokens: 10, doneHeader: true, maxVisible: 5 }
+    );
+    r.renderAgentsStarting([]);
+    r.renderAgentsStarting([{ label: 'a' }, { label: 'b' }], { elapsedSec: 2 });
+    const out = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(out).toContain('Explore complete');
+    expect(out).toContain('… +1 pending');
+    expect(out).toContain('Running 2 explore subagents');
   });
 
   it('renderParallelAgents starts with one-line status, completes with filled boxes', () => {

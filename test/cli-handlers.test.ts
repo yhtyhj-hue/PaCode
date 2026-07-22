@@ -294,6 +294,18 @@ describe('handleCCSwitch', () => {
   it('detect prints sources', async () => {
     const cc = new CCSwitchClient(configPath);
     await handleCCSwitch(['detect'], {}, { cc });
-    expect(logSpy.mock.calls.some((c) => String(c[0]).includes('CC-Switch detection'))).toBe(true);
+    expect(logSpy.mock.calls.some((c) => String(c[0]).includes('Provider detection'))).toBe(true);
+    expect(logSpy.mock.calls.some((c) => String(c[0]).includes('Claude Code import: disabled'))).toBe(
+      true
+    );
+  });
+
+  it('import is disabled', async () => {
+    const cc = new CCSwitchClient(configPath);
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await handleCCSwitch(['import'], {}, { cc, exit: () => {} });
+    expect(result).toBe(false);
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('CC import disabled'))).toBe(true);
+    errSpy.mockRestore();
   });
 });

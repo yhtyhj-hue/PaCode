@@ -6,6 +6,7 @@
 
 import { ToolCall, ToolResult } from '../pkg/types.js';
 import { formatCompactToolSummary } from './tool-summary.js';
+import { formatTaskPanelBlock } from './live-task-panel.js';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -76,41 +77,50 @@ export class EnhancedRenderer {
   }
 
   /**
-   * 完成后的任务树（全部 ■ / 错误态）
+   * 任务树（■ done/in_progress · □ pending）— 与 LiveTaskPanel 同格式
    */
   renderAccomplishingBlock(
     tasks: Array<{ label: string; status: string }>,
-    options: { elapsedSec?: number; outputTokens?: number; maxVisible?: number; doneHeader?: boolean } = {}
+    options: {
+      elapsedSec?: number;
+      outputTokens?: number;
+      maxVisible?: number;
+      doneHeader?: boolean;
+      title?: string;
+    } = {}
   ): void {
     if (!tasks.length) return;
 
-    const elapsed = Math.max(1, options.elapsedSec ?? 1);
-    const tokens = options.outputTokens ?? 0;
-    const tokenPart = tokens > 0 ? ` · ↓ ${tokens} tokens` : '';
-    const header = options.doneHeader
-      ? `${GREEN}*${RESET} ${GREEN}Explore complete${RESET}${DIM} (${elapsed}s${tokenPart})${RESET}`
-      : `${ORANGE}*${RESET} ${ORANGE}Accomplishing…${RESET}${DIM} (${elapsed}s${tokenPart})${RESET}`;
-
-    process.stdout.write(`\n${header}\n`);
-
-    const max = options.maxVisible ?? 5;
-    const visible = tasks.slice(0, max);
-    for (const task of visible) {
-      const box =
-        task.status === 'done'
-          ? `${GREEN}■${RESET}`
-          : task.status === 'error'
-            ? `${RED}■${RESET}`
-            : `${GREEN}□${RESET}`;
-      const labelStyle =
-        task.status === 'done' ? DIM : task.status === 'error' ? RED : GREEN;
-      process.stdout.write(`  ${DIM}└${RESET} ${box} ${labelStyle}${task.label}${RESET}\n`);
+    if (options.doneHeader) {
+      const elapsed = Math.max(1, options.elapsedSec ?? 1);
+      const tokens = options.outputTokens ?? 0;
+      const tokenPart = tokens > 0 ? ` · ↓ ${tokens} tokens` : '';
+      process.stdout.write(
+        `\n${GREEN}*${RESET} ${GREEN}Explore complete${RESET}${DIM} (${elapsed}s${tokenPart})${RESET}\n`
+      );
+      const max = options.maxVisible ?? 5;
+      for (const task of tasks.slice(0, max)) {
+        const box =
+          task.status === 'error' ? `${RED}■${RESET}` : `${GREEN}■${RESET}`;
+        const labelStyle = task.status === 'error' ? RED : DIM;
+        process.stdout.write(`  ${DIM}└${RESET} ${box} ${labelStyle}${task.label}${RESET}\n`);
+      }
+      const pending = tasks.length - max;
+      if (pending > 0) {
+        process.stdout.write(`${DIM}  … +${pending} pending${RESET}\n`);
+      }
+      return;
     }
 
-    const pending = tasks.length - max;
-    if (pending > 0) {
-      process.stdout.write(`${DIM}  … +${pending} pending${RESET}\n`);
-    }
+    process.stdout.write(
+      '\n' +
+        formatTaskPanelBlock(tasks, {
+          elapsedSec: options.elapsedSec,
+          outputTokens: options.outputTokens,
+          maxVisible: options.maxVisible,
+          title: options.title,
+        }).replace(/^\n/, '')
+    );
   }
 
   /** 并行预取 worker — 完成时画 ■ 树；进行中用 renderAgentsStarting */

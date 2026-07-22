@@ -199,7 +199,7 @@ export async function runM5LiveAgent(
   const resolved = resolveM5LiveCredentials();
   const apiKey = options.apiKey ?? resolved.apiKey;
   const baseUrl = options.baseUrl ?? resolved.baseUrl;
-  const model = options.model ?? resolved.model ?? 'claude-sonnet-4-5';
+  const model = options.model ?? resolved.model ?? 'MiniMax-M3';
   if (!apiKey) {
     throw new Error('API key required for live M5 (ANTHROPIC_API_KEY or cc-switch active provider)');
   }

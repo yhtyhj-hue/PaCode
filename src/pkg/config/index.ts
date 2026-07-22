@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { PermissionMode } from '../types.js';
+import { DEFAULT_MODEL, DEFAULT_MAX_TOKENS } from '../defaults.js';
 
 // ============================================================================
 // Config Schemas
@@ -41,8 +42,8 @@ export const PaudeConfigSchema = z.object({
   // Model settings
   model: z.object({
     provider: z.enum(['anthropic', 'openai', 'local']).default('anthropic'),
-    model: z.string().default('claude-sonnet-4-5'),
-    maxTokens: z.number().default(8192),
+    model: z.string().default(DEFAULT_MODEL),
+    maxTokens: z.number().default(DEFAULT_MAX_TOKENS),
     temperature: z.number().default(0.7),
     apiKey: z.string().optional(),
     baseUrl: z.string().optional(),

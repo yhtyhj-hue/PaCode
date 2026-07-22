@@ -2,25 +2,29 @@
 
 > 基于 Claude Code v2.1.88 源码分析验证的 AI 编程助手框架
 
-**版本:** 1.4.0
-**日期:** 2026-07-17
-**状态:** Phase H–K 主线完成；超越 CC：Bridge local / LSP / Voice STT / ML AUTO；31 核心工具；`npm test`=unit+gate
+**版本:** 1.4.1
+**日期:** 2026-07-22
+**状态:** Phase H–K 主线完成；npm 包 `@sallon/pacode`；Bridge local / LSP / Voice STT / AUTO classifier；31 核心工具；`npm test`=unit+gate
 
 ### 实施状态快照
 
-| 模块 | 完成度 | 说明 |
-|------|--------|------|
-| Query Engine | ~94% | 全循环；PermissionRequest；5xx 重试；Subagent + 预取证据门闩 |
-| Context Assembly | ~85% | 10 源组装（含 Recent Results）；Skills lazy index 默认 |
-| Compaction | ~92% | L1–L5；L4 路径/工具/错误信号；L5 withRetry |
-| Tool Registry | ~96% | **31 核心工具**（Diagnostics/LSP=真 client + tsc 回退）+ Plugin |
-| Permission System | ~95% | 7 modes + G6 ml/deterministic classifier + session memory |
-| Memory | ~85% | 用户 `.paude/memory/` + 项目 hash + auto-memory |
-| Hooks / Skills / Plugins / MCP | ~92% | MCP stdio/sse/http/**websocket**；Bridge **v1-local** 中继 |
-| CLI / REPL | ~96% | readline + Ink；`-p`/SDK；`/btw`；statusline 钩子；`/effort` `/vim` `/voice`；`pacode bridge serve`（本机） |
-| 模型/Retry | ✅ | 429/500/502/503/529 + 网络错误 |
-| 测试 | coverage 四维 | lines/statements ≥80；functions ≥79；branches ≥73.9；CI 跑 `test:coverage` |
-| Eval harness | ✅ | M5 simulated；live+vs CC COMPARE + speed assert |
+> **如何读「完成度」：** 百分比是相对 **Claude Code 全量能力 / 本仓库 Defer 清单** 的差距估计，**不是**「模块半残、不可用」。
+> PaCode **已声明范围内的主线均已落地并可跑**；未到 100% 的原因是有意不做或尚未做的差距（见下方 Defer），不是缺入口。
+> ✅ = 本仓库声明范围已完成。百分比保留一位估计，避免误读成精确 KPI。
+
+| 模块 | 相对 CC/Defer | PaCode 范围 | 说明 |
+|------|---------------|-------------|------|
+| Query Engine | ~94% | ✅ 已交付 | 全循环；PermissionRequest；5xx 重试；Subagent + 预取证据门闩。剩余：无 Go agent core（Defer） |
+| Context Assembly | ~85% | ✅ 已交付 | **10 源**组装（含 Recent Results + 工具目录）；Skills lazy index。剩余：源深度/裁剪策略相对 CC 仍粗 |
+| Compaction | ~92% | ✅ 已交付 | L1–L5；L4 路径/工具/错误信号；L5 withRetry。剩余：L1 仅降 `max_tokens`；手动 `/compact` 无重试 |
+| Tool Registry | **31/≈43** | ✅ 已交付 | **31 核心工具**（Diagnostics/LSP=真 client + tsc 回退）+ Plugin + MCP。非「96% 等于 CC 43 工具」 |
+| Permission System | ~90% | ✅ 已交付 | 7 modes + tool-gate + session memory；`ml`=**特征启发式**（非神经网络，可选 `PACODE_CLASSIFIER_CMD`）。剩余：无容器级 Bash 沙箱（Defer） |
+| Memory | ~85% | ✅ 已交付 | 用户 `.paude/memory/` + 项目 hash + auto-memory。剩余：自动抽取规则窄；无 SQLite（Defer） |
+| Hooks / Skills / Plugins / MCP | ~92% | ✅ 已交付 | MCP stdio/sse/http/**websocket**；Bridge **v1-local**。剩余：无公网 Bridge SaaS（Defer） |
+| CLI / REPL | ~96% | ✅ 已交付 | readline + Ink；`-p`/SDK；paste chips / live task / ↑↓ history；`/btw` `/effort` `/vim` `/voice`；`pacode bridge serve`。剩余：vim 仅经典 REPL；Voice=外部 STT |
+| 模型/Retry | — | ✅ | 429/500/502/503/529 + 网络错误 |
+| 测试 | — | ✅ | lines/statements ≥80；functions ≥79；branches ≥**74**；CI 跑 `test:coverage` |
+| Eval harness | — | ✅ | M5 simulated；live+vs CC COMPARE + speed assert（live 需 API Key） |
 
 ### 8 项安全修复（commit bdd7555）
 
@@ -254,13 +258,13 @@ User Input
 | 模块 | Claude Code 对应 | 职责 | PaCode 状态 |
 |------|-----------------|------|-------------|
 | **Query Engine** | `query.ts` AsyncGenerator | Agent 循环核心 | ✅ `src/agent/engine.ts` |
-| **Context Assembly** | `assemble()` | 9个上下文源组合 | ✅ `src/context/assembler.ts` |
-| **Tool Registry** | `tools/` 43 modules | 工具注册、分发、并发控制 | ✅ 8 核心 + Plugin + MCP |
-| **Permission System** | 7 modes + Classifier | 7层权限 + tool-gate + 非TTY deny | ✅ Layer 4 `tool-gate.ts` |
+| **Context Assembly** | `assemble()` | **10** 个上下文源组合 | ✅ `src/context/assembler.ts` |
+| **Tool Registry** | `tools/` ~43 modules | 工具注册、分发、并发控制 | ✅ **31** 核心 + Plugin + MCP |
+| **Permission System** | 7 modes + Classifier | 7 模式 + tool-gate + 非 TTY deny；AUTO=启发式/可选外部 cmd | ✅ Layer 4 `tool-gate.ts` |
 | **Memory/Compaction** | 5-layer pipeline | 上下文压缩 + 文件记忆 | ✅ L1–L5 + project memory |
 | **Session Store** | Append-oriented | 会话持久化 | ✅ `src/session/manager.ts` |
-| **Hooks/Skills/Plugins/MCP** | 4 extensibility | 扩展机制 | ✅ 大部分完成 |
-| **CLI/TUI** | Ink/React | 用户界面 | ✅ REPL + Ink `--tui` |
+| **Hooks/Skills/Plugins/MCP** | 4 extensibility | 扩展机制 | ✅ Hooks/Skills/Plugins/MCP + bridge v1-local |
+| **CLI/TUI** | Ink/React | 用户界面 | ✅ REPL + Ink `--tui` + paste/live-task/history |
 
 ### 4.2 核心接口定义
 

@@ -1,5 +1,5 @@
 /**
- * Settings Manager
+ * Settings Manager — PaCode 自有路径（不读 ~/.claude）
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -29,9 +29,10 @@ export class SettingsManager {
 
   constructor(projectDir?: string) {
     this.log = new Logger({ prefix: 'Settings' });
-    this.userPath = join(homedir(), '.claude', 'settings.json');
-    this.projectPath = join(projectDir ?? process.cwd(), '.claude', 'settings.json');
-    this.localPath = join(projectDir ?? process.cwd(), '.claude', 'settings.local.json');
+    const root = projectDir ?? process.cwd();
+    this.userPath = join(homedir(), '.paude', 'settings.json');
+    this.projectPath = join(root, '.paude', 'settings.json');
+    this.localPath = join(root, '.paude', 'settings.local.json');
   }
 
   load(): PaCodeSettings {
@@ -87,4 +88,8 @@ let instance: SettingsManager | null = null;
 export function getSettingsManager(): SettingsManager {
   if (!instance) instance = new SettingsManager();
   return instance;
+}
+
+export function resetSettingsManager(): void {
+  instance = null;
 }

@@ -42,7 +42,7 @@ describe('loadConfig', () => {
   it('applies schema defaults for empty config file', () => {
     writeFileSync(configPath, '{}');
     const cfg = loadConfig(configPath);
-    expect(cfg.model.model).toBe('claude-sonnet-4-5');
+    expect(cfg.model.model).toBe('MiniMax-M3');
     expect(cfg.context.compactionThreshold).toBe(0.83);
   });
 });

@@ -1,10 +1,18 @@
 /**
- * Query 进度行 — CC 风格 * Accomplishing… (Ns)
+ * Query 进度行 — CC 风格 * Accomplishing… (Ns · ↓ tokens)
  */
 
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 const ORANGE = '\x1b[38;5;208m';
+
+function formatTokenCount(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return k >= 10 ? `${Math.round(k)}k` : `${k.toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(n);
+}
 
 export class QueryProgressLine {
   private startedAt = Date.now();
@@ -12,6 +20,7 @@ export class QueryProgressLine {
   private phase: 'thinking' | 'prefetch' | 'tool' | 'idle' = 'thinking';
   private prefetchLabel = '';
   private toolLabel = '';
+  private outputTokens = 0;
   /** 本轮工具时间线（供 message_stop 后摘要） */
   private timeline: string[] = [];
   /** 多行 agent 块已输出后禁止 \\r 刷新，避免覆盖上方内容 */
@@ -22,9 +31,16 @@ export class QueryProgressLine {
     this.phase = 'thinking';
     this.prefetchLabel = '';
     this.toolLabel = '';
+    this.outputTokens = 0;
     this.timeline = [];
     this.suspended = false;
     this.startTimer();
+  }
+
+  /** 流式累计输出 token，进度行显示 ↓ N tokens */
+  setOutputTokens(n: number): void {
+    this.outputTokens = n;
+    if (!this.suspended) this.render();
   }
 
   /** agent 块等多行 UI 渲染后调用，停止单行进度覆盖 */
@@ -97,6 +113,10 @@ export class QueryProgressLine {
     } else if (this.phase === 'tool' && this.toolLabel) {
       label = this.toolLabel;
     }
-    process.stdout.write(`\r${ORANGE}*${RESET} ${ORANGE}${label}${RESET}${DIM} (${secs}s)${RESET}  `);
+    const tokenPart =
+      this.outputTokens > 0 ? ` · ↓ ${formatTokenCount(this.outputTokens)} tokens` : '';
+    process.stdout.write(
+      `\r${ORANGE}*${RESET} ${ORANGE}${label}${RESET}${DIM} (${secs}s${tokenPart})${RESET}  `
+    );
   }
 }

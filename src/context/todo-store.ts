@@ -47,6 +47,28 @@ class TodoStore {
     return Array.from(this.getSessionMap(sessionId).values());
   }
 
+  /**
+   * CC 风格整表替换 — 一次写入完整任务列表，驱动 REPL 实时任务树
+   */
+  replaceAll(
+    sessionId: string,
+    todos: Array<{ content: string; status?: TodoItem['status']; id?: string }>
+  ): TodoItem[] {
+    const map = new Map<string, TodoItem>();
+    const now = Date.now();
+    todos.forEach((t, i) => {
+      const id = t.id?.trim() || `todo-${now}-${i}`;
+      map.set(id, {
+        id,
+        content: t.content,
+        status: t.status ?? 'pending',
+        created: now + i,
+      });
+    });
+    this.sessions.set(sessionId, map);
+    return Array.from(map.values());
+  }
+
   formatForContext(sessionId: string): string | null {
     const items = this.list(sessionId);
     if (items.length === 0) return null;

@@ -28,6 +28,7 @@ Working directory: ${cwd}
 5. **Prefer tools over prose** — If a tool can verify a claim, use it in the same turn.
 6. **Permission** — Some tools need user approval in default mode; call them anyway and wait.
 7. **CLI formatting** — Prefer \`●\` / \`├\` / \`└\` lists. **Never** emit markdown pipe tables or Unicode box tables (\`┌─┬─┐\`). Terminals misalign them.
+8. **Multi-step tasks** — For work with 3+ steps, call \`TodoWrite\` with a full \`todos\` array (content + status) at the start, then update statuses as you go. The CLI shows a live task tree (■/□) from this list. Keep exactly one item \`in_progress\` at a time.
 
 Reply in the user's language when they write in Chinese or English.`;
 }
