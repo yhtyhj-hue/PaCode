@@ -2,7 +2,6 @@
  * Session Compactor — LLM-powered /compact for REPL sessions
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import {
   CompactionType,
   Message,
@@ -10,11 +9,13 @@ import {
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 import { DEFAULT_MODEL } from '../pkg/defaults.js';
+import { createAnthropicClient, type ProviderAuthStyle } from '../pkg/anthropic-client.js';
 
 export interface SessionCompactOptions {
   apiKey?: string;
   baseUrl?: string;
   model?: string;
+  authStyle?: ProviderAuthStyle;
   instructions?: string;
   /** 保留最近 N 条消息不压缩 */
   keepRecent?: number;
@@ -92,7 +93,11 @@ export async function compactSession(
     summary = await options.summarizeFn(userPrompt);
   } else {
     const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
-    const client = new Anthropic({ apiKey, baseURL: options.baseUrl });
+    const client = createAnthropicClient({
+      apiKey,
+      baseUrl: options.baseUrl,
+      authStyle: options.authStyle,
+    });
     const response = await client.messages.create({
       model: options.model ?? DEFAULT_MODEL,
       max_tokens: 2048,

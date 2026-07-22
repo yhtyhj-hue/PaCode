@@ -42,7 +42,7 @@ pacode -p "hello"
 
 命令行名仍是 `pacode`（包名为作用域 `@sallon/pacode`）。**不要用 `sudo`**（会搞乱权限；改用 nvm / 修 npm 全局前缀即可）。
 
-配置 MiniMax（默认）见 [docs/CONFIG.md](docs/CONFIG.md)；需设置 `ANTHROPIC_API_KEY`（或 `PACODE_API_KEY`）。
+配置见 [docs/CONFIG.md](docs/CONFIG.md)：默认 MiniMax；DeepSeek / 豆包 / GLM / 混元 / 千问 / **Token Plan** 用 `pacode cc-switch`；可从 **CC Switch** 导入。需设置 API Key（或 `ANTHROPIC_AUTH_TOKEN`）。
 
 ### 从源码安装（跟仓库最新提交）
 
@@ -84,7 +84,7 @@ npm start
 | `pacode init` | 初始化项目 `.paude/` 目录 |
 | `pacode resume [id]` | 恢复 REPL 会话 |
 | `pacode worktree list\|create\|remove` | 管理 git worktree |
-| `pacode cc-switch list\|use\|add\|…` | 切换 API provider |
+| `pacode cc-switch list\|presets\|use\|add\|import\|…` | 多模型 / Token Plan；可从 CC Switch 导入 |
 
 REPL slash 命令：`/plan`、`/compact`、`/mode`、`/help` 及 plugin 注册命令。
 

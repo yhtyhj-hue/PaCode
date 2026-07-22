@@ -280,6 +280,39 @@ describe('handleCCSwitch', () => {
     expect(cc.list().some((p) => p.name === 'new')).toBe(true);
   });
 
+  it('adds provider from deepseek preset', async () => {
+    const cc = new CCSwitchClient(configPath);
+    await handleCCSwitch(
+      ['add', 'ds'],
+      { 'api-key': 'sk-ds', preset: 'deepseek' },
+      { cc }
+    );
+    const p = cc.list().find((x) => x.name === 'ds');
+    expect(p?.baseUrl).toContain('deepseek.com');
+    expect(p?.model).toMatch(/deepseek/i);
+    expect(p?.authStyle).toBe('api-key');
+  });
+
+  it('adds doubao preset with bearer auth', async () => {
+    const cc = new CCSwitchClient(configPath);
+    await handleCCSwitch(
+      ['add'],
+      { 'api-key': 'ark-key', preset: 'doubao' },
+      { cc }
+    );
+    const p = cc.list().find((x) => x.name === 'doubao');
+    expect(p?.authStyle).toBe('bearer');
+    expect(p?.baseUrl).toContain('volces.com');
+  });
+
+  it('lists presets', async () => {
+    const cc = new CCSwitchClient(configPath);
+    await handleCCSwitch(['presets'], {}, { cc });
+    const joined = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(joined).toMatch(/deepseek/i);
+    expect(joined).toMatch(/doubao/i);
+  });
+
   it('shows status for active provider', async () => {
     const cc = new CCSwitchClient(configPath);
     cc.addProvider({ name: 'active', apiKey: '1234567890abcdef', active: true });
@@ -299,17 +332,46 @@ describe('handleCCSwitch', () => {
     const cc = new CCSwitchClient(configPath);
     await handleCCSwitch(['detect'], {}, { cc });
     expect(logSpy.mock.calls.some((c) => String(c[0]).includes('Provider detection'))).toBe(true);
-    expect(logSpy.mock.calls.some((c) => String(c[0]).includes('Claude Code import: disabled'))).toBe(
-      true
-    );
+    expect(logSpy.mock.calls.some((c) => String(c[0]).includes('CC Switch'))).toBe(true);
   });
 
-  it('import is disabled', async () => {
+  it('adds tencent token plan via --plan', async () => {
     const cc = new CCSwitchClient(configPath);
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const result = await handleCCSwitch(['import'], {}, { cc, exit: () => {} });
-    expect(result).toBe(false);
-    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('CC import disabled'))).toBe(true);
-    errSpy.mockRestore();
+    await handleCCSwitch(
+      ['add', 'tp'],
+      { 'api-key': 'plan-key', plan: 'token-plan' },
+      { cc }
+    );
+    const p = cc.list().find((x) => x.name === 'tp');
+    expect(p?.planMode).toBe('token-plan');
+    expect(p?.baseUrl).toContain('lkeap.cloud.tencent.com/plan');
+    expect(p?.authStyle).toBe('bearer');
+  });
+
+  it('imports from Claude settings fixture', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pacode-imp-'));
+    const settings = join(dir, 'settings.json');
+    writeFileSync(
+      settings,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic',
+          ANTHROPIC_AUTH_TOKEN: 'sk-import-test',
+          ANTHROPIC_MODEL: 'deepseek-v4-pro',
+        },
+      })
+    );
+    const { parseClaudeSettingsProviders } = await import(
+      '../src/pkg/ccswitch/import-sources.js'
+    );
+    const list = parseClaudeSettingsProviders(settings);
+    expect(list[0]?.baseUrl).toContain('deepseek');
+    expect(list[0]?.authStyle).toBe('bearer');
+    expect(list[0]?.apiKey).toBe('sk-import-test');
+
+    const cc = new CCSwitchClient(join(dir, 'providers.json'));
+    for (const p of list) cc.addProvider(p);
+    expect(cc.list().length).toBe(1);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

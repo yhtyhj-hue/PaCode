@@ -7,7 +7,15 @@ import { join } from 'node:path';
 import { loadMcpConfig, saveMcpConfig, getMcpConfigPath } from '../mcp/config.js';
 import { validateMcpServerEntry } from '../mcp/validate.js';
 import { getSessionResume, SessionResume } from './resume.js';
-import { getCCSwitch, CCSwitchClient } from '../pkg/ccswitch/index.js';
+import { getCCSwitch, CCSwitchClient, formatPresetTable, getProviderPreset, normalizePlanMode, normalizeApiProtocol, inferPlanModeFromBaseUrl, inferApiProtocolFromBaseUrl } from '../pkg/ccswitch/index.js';
+import type { ImportSourceId } from '../pkg/ccswitch/import-sources.js';
+import {
+  fetchModelsDevCatalog,
+  formatModelsDevTable,
+  getModelsDevProvider,
+  listModelsDevProviders,
+  modelsDevToProviderDraft,
+} from '../pkg/models-dev/catalog.js';
 import { REPL } from './repl.js';
 import { getWorktreeManager, WorktreeManager } from './worktree.js';
 import { DEFAULT_MODEL } from '../pkg/defaults.js';
@@ -44,18 +52,21 @@ Options:
   --api-key <key>         Anthropic API key
   --base-url <url>        Custom API base URL (for proxy)
   --model <model>         Model name (default: ${DEFAULT_MODEL})
+  --preset <id>           One-shot provider preset (deepseek|doubao|minimax|…)
   --tui                   Launch Ink TUI REPL (also PACODE_TUI=1)
   --image <path>          Attach image for vision (repeatable; png/jpeg/gif/webp)
 
 CC-Switch Commands:
   pacode cc-switch list              List all configured providers
+  pacode cc-switch presets [--plan=] List presets (api|token-plan|coding-plan)
   pacode cc-switch use               Interactive provider switcher
   pacode cc-switch use <name>        Switch to a specific provider
-  pacode cc-switch add <name>        Add a new provider
+  pacode cc-switch add <name>        Add (--preset=… --plan=token-plan|coding-plan)
   pacode cc-switch remove <name>     Remove a provider
-  pacode cc-switch import            (disabled — use add / ~/.paude/providers.json)
+  pacode cc-switch import [--from=]  Import from CC Switch DB / Claude settings
+  pacode cc-switch models-dev        Browse Models.dev (OpenAI/Anthropic compatible)
   pacode cc-switch status            Show current active provider
-  pacode cc-switch detect            Detect available config sources
+  pacode cc-switch detect            Detect CC Switch / Claude / PaCode sources
 
 Worktree Commands:
   pacode worktree list               List all git worktrees
@@ -88,8 +99,18 @@ Examples:
   pacode --tui
   pacode -m acceptEdits "Add error handling to index.ts"
   pacode --image shot.png "Describe this screenshot"
-  pacode cc-switch add anthropic --api-key sk-xxx
-  pacode cc-switch use
+  pacode cc-switch add deepseek --preset=deepseek --api-key sk-xxx
+  pacode cc-switch add doubao --preset=doubao --api-key ark-xxx
+  pacode cc-switch add glm --preset=glm --api-key xxx
+  pacode cc-switch add hunyuan --preset=hunyuan --api-key xxx
+  pacode cc-switch add qwen --preset=qwen --api-key sk-xxx
+  pacode cc-switch add ollama --preset=ollama
+  pacode cc-switch add openai --preset=openai --api-key sk-xxx
+  pacode cc-switch models-dev --q=groq
+  pacode cc-switch models-dev add openrouter --api-key=sk-xxx
+  pacode cc-switch import
+  pacode cc-switch import --from=cc-switch
+  pacode cc-switch use deepseek
 `);
 }
 
@@ -433,7 +454,9 @@ export async function handleCCSwitch(
     case 'list': {
       const providers = cc.list();
       if (providers.length === 0) {
-        console.log('No providers configured. Use: pacode cc-switch add <name> --api-key=<key>');
+        console.log('No providers configured.');
+        console.log('  pacode cc-switch presets');
+        console.log('  pacode cc-switch add deepseek --preset=deepseek --api-key=<key>');
         return true;
       }
       const active = cc.getActive();
@@ -442,9 +465,26 @@ export async function handleCCSwitch(
         const marker = active?.name === p.name ? '●' : '○';
         const model = p.model ? ` (${p.model})` : '';
         const url = p.baseUrl ? ` → ${p.baseUrl}` : '';
-        console.log(`  ${marker} ${p.name}${model}${url}`);
+        const auth = p.authStyle === 'bearer' ? ' [bearer]' : '';
+        const plan =
+          p.planMode && p.planMode !== 'api' ? ` [${p.planMode}]` : '';
+        console.log(`  ${marker} ${p.name}${model}${auth}${plan}${url}`);
       });
       console.log('');
+      return true;
+    }
+
+    case 'presets': {
+      const planFilter = normalizePlanMode(options.plan as string | undefined);
+      console.log(`\n${formatPresetTable(planFilter ? { planMode: planFilter } : undefined)}\n`);
+      console.log('Add one:');
+      console.log(
+        `  pacode cc-switch add <name> --preset=<id> --api-key=<key> [--model=<override>]`
+      );
+      console.log(
+        `  pacode cc-switch presets --plan=token-plan|coding-plan|api`
+      );
+      console.log(`  pacode cc-switch import --from=cc-switch\n`);
       return true;
     }
 
@@ -456,6 +496,10 @@ export async function handleCCSwitch(
         const p = cc.switchTo(name);
         if (p) {
           console.log(`✓ Switched to: ${p.name}`);
+          if (p.model) console.log(`  Model: ${p.model}`);
+          if (p.baseUrl) console.log(`  Base URL: ${p.baseUrl}`);
+          if (p.planMode) console.log(`  Plan: ${p.planMode}`);
+          if (p.authStyle) console.log(`  Auth: ${p.authStyle}`);
         } else {
           console.error(`Provider not found: ${name}`);
           exit(1);
@@ -465,26 +509,75 @@ export async function handleCCSwitch(
     }
 
     case 'add': {
-      const name = (args[0] as string) || (options.name as string);
+      const planOpt = normalizePlanMode(options.plan as string | undefined);
+      const protoOpt = normalizeApiProtocol(options.protocol as string | undefined);
+      // --plan=token-plan 且未指定 preset 时默认腾讯 Token Plan
+      const presetId =
+        (options.preset as string | undefined) ||
+        (planOpt === 'token-plan' ? 'tencent-token-plan' : undefined) ||
+        (planOpt === 'coding-plan' ? 'glm-coding-plan' : undefined);
+      const preset = presetId ? getProviderPreset(presetId) : undefined;
+      if (presetId && !preset) {
+        console.error(`Unknown preset: ${presetId}`);
+        console.error('Run: pacode cc-switch presets');
+        exit(1);
+        return false;
+      }
+
+      const name =
+        (args[0] as string) || (options.name as string) || preset?.id;
       if (!name) {
         console.error(
-          'Usage: pacode cc-switch add <name> --api-key=<key> [--base-url=<url>] [--model=<model>]'
+          'Usage: pacode cc-switch add <name> --api-key=<key> [--preset=<id>] [--protocol=openai|anthropic] [--plan=…]'
         );
         exit(1);
         return false;
       }
-      const apiKey = (options['api-key'] as string) || process.env['ANTHROPIC_API_KEY'];
-      const baseUrl = (options['base-url'] as string) || process.env['ANTHROPIC_BASE_URL'];
-      const model = (options.model as string) || process.env['CLAUDE_MODEL'];
+      const baseUrl =
+        (options['base-url'] as string) ||
+        preset?.baseUrl ||
+        process.env['ANTHROPIC_BASE_URL'] ||
+        process.env['OPENAI_BASE_URL'];
+      const model =
+        (options.model as string) ||
+        preset?.model ||
+        process.env['CLAUDE_MODEL'] ||
+        process.env['OPENAI_MODEL'];
+      const authStyle = preset?.authStyle;
+      const planMode =
+        planOpt ?? preset?.planMode ?? inferPlanModeFromBaseUrl(baseUrl);
+      const apiProtocol =
+        protoOpt ??
+        preset?.apiProtocol ??
+        inferApiProtocolFromBaseUrl(baseUrl);
+
+      let apiKey =
+        (options['api-key'] as string) ||
+        process.env['ANTHROPIC_API_KEY'] ||
+        process.env['OPENAI_API_KEY'] ||
+        process.env['ANTHROPIC_AUTH_TOKEN'];
+      // 本地 Ollama / LM Studio 允许占位 key
+      if (!apiKey && apiProtocol === 'openai' && (preset?.id === 'ollama' || preset?.id === 'lmstudio' || baseUrl?.includes('127.0.0.1'))) {
+        apiKey = 'ollama';
+      }
 
       if (!apiKey) {
-        console.error('--api-key is required');
+        console.error('--api-key is required (local ollama/lmstudio may omit)');
         exit(1);
         return false;
       }
 
-      cc.addProvider({ name, apiKey, baseUrl, model });
+      cc.addProvider({ name, apiKey, baseUrl, model, authStyle, planMode, apiProtocol });
       console.log(`✓ Added provider: ${name}`);
+      if (preset) {
+        console.log(`  Preset: ${preset.id} (${preset.label})`);
+      }
+      console.log(`  Model: ${model}`);
+      console.log(`  Base URL: ${baseUrl}`);
+      console.log(`  Protocol: ${apiProtocol}`);
+      console.log(`  Auth: ${authStyle ?? 'api-key'}`);
+      console.log(`  Plan: ${planMode}`);
+      console.log(`  Next: pacode cc-switch use ${name}`);
       return true;
     }
 
@@ -505,13 +598,108 @@ export async function handleCCSwitch(
       return true;
     }
 
+    case 'models-dev': {
+      const sub = (args[0] as string | undefined)?.toLowerCase();
+      const q = options.q as string | undefined;
+      const protocolFilter = normalizeApiProtocol(options.protocol as string | undefined);
+      try {
+        const catalog = await fetchModelsDevCatalog({
+          force: Boolean(options.force),
+        });
+        if (sub === 'add') {
+          const id = (args[1] as string) || (options.name as string);
+          if (!id) {
+            console.error('Usage: pacode cc-switch models-dev add <provider-id> --api-key=<key> [--model=…]');
+            exit(1);
+            return false;
+          }
+          const p = getModelsDevProvider(catalog, id);
+          if (!p || !p.protocol) {
+            console.error(`Unknown or unsupported models.dev provider: ${id}`);
+            console.error('Run: pacode cc-switch models-dev --q=…');
+            exit(1);
+            return false;
+          }
+          const draft = modelsDevToProviderDraft(p, {
+            model: options.model as string | undefined,
+            apiKey:
+              (options['api-key'] as string) ||
+              process.env['OPENAI_API_KEY'] ||
+              process.env['ANTHROPIC_API_KEY'] ||
+              '',
+          });
+          if (!draft.apiKey && draft.apiProtocol === 'openai' && draft.baseUrl?.includes('127.0.0.1')) {
+            draft.apiKey = 'ollama';
+          }
+          if (!draft.apiKey) {
+            console.error('--api-key is required for this provider');
+            exit(1);
+            return false;
+          }
+          cc.addProvider(draft);
+          console.log(`✓ Added from models.dev: ${draft.name}`);
+          console.log(`  Protocol: ${draft.apiProtocol}`);
+          console.log(`  Model: ${draft.model}`);
+          console.log(`  Base URL: ${draft.baseUrl}`);
+          console.log(`  Next: pacode cc-switch use ${draft.name}`);
+          return true;
+        }
+
+        const list = listModelsDevProviders(catalog, {
+          protocol: protocolFilter,
+          q,
+        });
+        console.log(`\n${formatModelsDevTable(list)}\n`);
+        console.log('Add one:');
+        console.log('  pacode cc-switch models-dev add <id> --api-key=<key> [--model=<id>]');
+        console.log('  pacode cc-switch models-dev --q=groq --protocol=openai');
+        console.log(`  Cache: ~/.paude/cache/models-dev.json (use --force to refresh)\n`);
+        return true;
+      } catch (e) {
+        console.error(e instanceof Error ? e.message : String(e));
+        exit(1);
+        return false;
+      }
+    }
+
     case 'import': {
-      console.error(
-        'CC import disabled. Use: pacode cc-switch add <name> --api-key=<key> --base-url=https://api.minimaxi.com/anthropic --model=MiniMax-M3'
-      );
-      console.error('Or edit ~/.paude/providers.json');
-      exit(1);
-      return false;
+      const fromRaw = (options.from as string | undefined)?.toLowerCase() ?? 'all';
+      const from =
+        fromRaw === 'claude' || fromRaw === 'cc-switch' || fromRaw === 'cc-switch-cli'
+          ? (fromRaw as ImportSourceId)
+          : 'all';
+      if (
+        fromRaw !== 'all' &&
+        fromRaw !== 'claude' &&
+        fromRaw !== 'cc-switch' &&
+        fromRaw !== 'cc-switch-cli'
+      ) {
+        console.error('Usage: pacode cc-switch import [--from=all|cc-switch|claude|cc-switch-cli]');
+        exit(1);
+        return false;
+      }
+
+      const sources = cc.detectSources();
+      if (!sources.ccSwitch && !sources.claudeCode && !sources.ccSwitchCli) {
+        console.error('No import sources found.');
+        console.error('  Expected ~/.cc-switch/cc-switch.db and/or ~/.claude/settings.json');
+        exit(1);
+        return false;
+      }
+
+      const n = cc.importFromExternal({ from, activateCurrent: true });
+      if (n === 0) {
+        console.error('Nothing imported (empty or unreadable source).');
+        exit(1);
+        return false;
+      }
+      console.log(`✓ Imported ${n} provider(s) into ${cc.getConfigPath()}`);
+      const active = cc.getActive();
+      if (active) {
+        console.log(`  Active: ${active.name}${active.planMode ? ` [${active.planMode}]` : ''}`);
+      }
+      console.log('  Next: pacode cc-switch list');
+      return true;
     }
 
     case 'status': {
@@ -520,7 +708,10 @@ export async function handleCCSwitch(
         console.log(`\nActive provider: ${active.name}`);
         if (active.model) console.log(`  Model: ${active.model}`);
         if (active.baseUrl) console.log(`  Base URL: ${active.baseUrl}`);
-        console.log(`  API Key: ${'*'.repeat(12)} (configured)`);
+        if (active.planMode) console.log(`  Plan: ${active.planMode}`);
+        if (active.authStyle) console.log(`  Auth: ${active.authStyle}`);
+        if (active.source) console.log(`  Source: ${active.source}`);
+        console.log(`  API Key: ${active.apiKey ? `${'*'.repeat(12)} (configured)` : '(missing)'}`);
       } else {
         console.log('\nNo active provider. Use: pacode cc-switch use <name>');
       }
@@ -535,8 +726,19 @@ export async function handleCCSwitch(
       console.log(
         `  PaCode providers:  ${sources.pacode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
       );
-      console.log(`  Claude Code import: disabled`);
-      console.log(`\n  Config: ${configPath}\n`);
+      console.log(
+        `  CC Switch:         ${sources.ccSwitch ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+      );
+      console.log(
+        `  CC Switch CLI:     ${sources.ccSwitchCli ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+      );
+      console.log(
+        `  Claude settings:   ${sources.claudeCode ? `${GREEN}✓ found${RESET}` : `${GRAY}○ not found${RESET}`}`
+      );
+      if (sources.paths.ccSwitchDb) console.log(`    db: ${sources.paths.ccSwitchDb}`);
+      if (sources.paths.claudeSettings) console.log(`    settings: ${sources.paths.claudeSettings}`);
+      console.log(`\n  PaCode config: ${configPath}`);
+      console.log(`  Import: pacode cc-switch import [--from=cc-switch|claude]\n`);
       return true;
     }
 

@@ -96,19 +96,36 @@ describe('CCSwitchClient - Deep', () => {
     expect(c2.list()).toEqual([]);
   });
 
-  it('detects sources without Claude Code', () => {
+  it('detects sources without inventing files', () => {
     const s = c.detectSources();
-    expect(s.claudeCode).toBe(false);
-    expect(s.ccswitch).toBe(false);
     expect(s).toHaveProperty('pacode');
+    expect(s).toHaveProperty('ccSwitch');
+    expect(s).toHaveProperty('claudeCode');
+    expect(s.paths).toBeTruthy();
   });
 
-  it('CC import methods are no-ops', () => {
-    expect(c.importFromClaudeCode()).toBe(0);
+  it('CC import methods: auto stays off', () => {
     expect(c.autoImportFromClaudeCode()).toBeNull();
   });
 
   it('exposes config path', () => {
     expect(c.getConfigPath()).toBe(path);
+  });
+
+  it('persists authStyle and switchTo sets bearer env', () => {
+    c.addProvider({
+      name: 'doubao',
+      apiKey: 'ark-xxx',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/coding',
+      model: 'ark-code-latest',
+      authStyle: 'bearer',
+    });
+    c.switchTo('doubao');
+    expect(c.getActive()?.authStyle).toBe('bearer');
+    expect(process.env['PACODE_AUTH_STYLE']).toBe('bearer');
+    expect(c.getCredentials().authStyle).toBe('bearer');
+
+    const c2 = new CCSwitchClient(path);
+    expect(c2.getActive()?.authStyle).toBe('bearer');
   });
 });

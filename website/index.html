@@ -6,7 +6,7 @@
     <title>PaCode — Claude Code 架构级 AI 编程助手</title>
     <meta
       name="description"
-      content="PaCode：独立实现的类 Claude Code Agent CLI。默认 MiniMax、.paude 本地配置、31 核心工具。含与 Claude Code 的实测对比，以及相对 OpenCode 的定位说明。"
+      content="PaCode：类 Claude Code Agent CLI。默认 MiniMax；支持 DeepSeek/豆包/GLM/混元/千问与 Token Plan；含版本更新与相对 OpenCode 的模型对照。"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -26,8 +26,10 @@
       </a>
       <nav class="nav" aria-label="主导航">
         <a href="#why">优势</a>
+        <a href="#models">模型</a>
         <a href="#bench">实测</a>
         <a href="#compare">对比</a>
+        <a href="#changelog">更新</a>
         <a href="#install">安装</a>
       </nav>
       <a
@@ -72,6 +74,7 @@
             <span>BUSL-1.1</span>
             <span>31 核心工具</span>
             <span>默认 MiniMax-M3</span>
+            <span>npm 0.1.4 · main 多模型</span>
           </p>
         </div>
       </section>
@@ -82,8 +85,8 @@
           <span>不复制 Claude Code 源码</span>
         </div>
         <div class="strip-item">
-          <strong>.paude/</strong>
-          <span>配置与记忆本地文件化</span>
+          <strong>多模型</strong>
+          <span>国产网关 + Token Plan</span>
         </div>
         <div class="strip-item">
           <strong>7 级权限</strong>
@@ -105,17 +108,17 @@
         </div>
         <ul class="feature-list">
           <li>
-            <h3>默认 MiniMax，账单可控</h3>
+            <h3>默认 MiniMax，国产网关一等公民</h3>
             <p>
-              开箱 <code>MiniMax-M3</code> + Anthropic 兼容网关；也可用
-              <code>cc-switch</code> 切到其他厂商。不强迫 Anthropic 订阅链路。
+              开箱 <code>MiniMax-M3</code>；内置 DeepSeek / 豆包 / GLM / 混元 / 千问 / Kimi
+              与 Token Plan、Coding Plan 预设。也可用 <code>cc-switch import</code> 从 CC Switch 导入。
             </p>
           </li>
           <li>
-            <h3>配置不寄生 Claude Code</h3>
+            <h3>配置以 .paude 为准</h3>
             <p>
-              设置与记忆落在 <code>~/.paude/</code> /
-              <code>.paude/</code>，不读取 <code>~/.claude/settings.json</code>，环境隔离更干净。
+              运行时以 <code>~/.paude/</code> 为源；启动不自动吃 Claude Code 配置。需要时显式
+              <code>pacode cc-switch import</code> 从 CC Switch / settings 合并进来。
             </p>
           </li>
           <li>
@@ -133,7 +136,129 @@
         </ul>
       </section>
 
-      <section class="section section-alt" id="bench">
+      <section class="section section-alt" id="models">
+        <div class="section-head">
+          <p class="eyebrow">Models</p>
+          <h2>与 OpenCode 的模型支持对照</h2>
+          <p class="section-lead">
+            OpenCode 通过 Models.dev + AI SDK 覆盖 75+ 提供商（含 OpenAI 协议与本地模型）。PaCode
+            刻意只走 <strong>Anthropic Messages</strong> 兼容网关：国产 Coding / Token Plan 一等公民，但不假装对齐「全宇宙模型」。
+          </p>
+        </div>
+
+        <div class="table-wrap" role="region" aria-label="模型支持对照" tabindex="0">
+          <table class="compare">
+            <thead>
+              <tr>
+                <th scope="col">能力</th>
+                <th scope="col">PaCode</th>
+                <th scope="col">OpenCode</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">协议</th>
+                <td>仅 Anthropic Messages（x-api-key / Bearer）</td>
+                <td>OpenAI + Anthropic + 兼容包；Models.dev 目录</td>
+              </tr>
+              <tr>
+                <th scope="row">默认</th>
+                <td>MiniMax-M3（国内网关）</td>
+                <td>BYOK / 多提供商；另有 OpenCode Go 订阅目录</td>
+              </tr>
+              <tr>
+                <th scope="row">DeepSeek</th>
+                <td class="ok-cell">✓ 预设 <code>deepseek</code></td>
+                <td class="ok-cell">✓ 内置</td>
+              </tr>
+              <tr>
+                <th scope="row">MiniMax</th>
+                <td class="ok-cell">✓ 默认 + Coding Plan</td>
+                <td class="ok-cell">✓ 内置</td>
+              </tr>
+              <tr>
+                <th scope="row">Kimi / Moonshot</th>
+                <td class="ok-cell">✓ API + Coding 预设</td>
+                <td class="ok-cell">✓ 内置</td>
+              </tr>
+              <tr>
+                <th scope="row">智谱 GLM</th>
+                <td class="ok-cell">✓ 国内 API + Z.ai Coding Plan</td>
+                <td>内置目录为主；Coding Plan 多靠自定义 / Go</td>
+              </tr>
+              <tr>
+                <th scope="row">通义千问</th>
+                <td class="ok-cell">✓ 百炼 DashScope Anthropic 端</td>
+                <td>可配；Go 订阅含 Qwen3.x</td>
+              </tr>
+              <tr>
+                <th scope="row">豆包 Coding</th>
+                <td class="ok-cell">✓ 方舟 Coding + Bearer</td>
+                <td>需自定义兼容端</td>
+              </tr>
+              <tr>
+                <th scope="row">腾讯混元 / Token Plan</th>
+                <td class="ok-cell">✓ 混元 API + TokenHub Token Plan</td>
+                <td>无一等 Token Plan；自定义 baseURL</td>
+              </tr>
+              <tr>
+                <th scope="row">Anthropic 官方</th>
+                <td class="ok-cell">✓ 预设</td>
+                <td class="ok-cell">✓ 内置</td>
+              </tr>
+              <tr>
+                <th scope="row">OpenAI / GPT 原生</th>
+                <td class="ok-cell">✓ Chat Completions（<code>openai</code> 预设）</td>
+                <td class="ok-cell">✓</td>
+              </tr>
+              <tr>
+                <th scope="row">本地 Ollama / LM Studio</th>
+                <td class="ok-cell">✓ <code>ollama</code> / <code>lmstudio</code> 预设</td>
+                <td class="ok-cell">✓</td>
+              </tr>
+              <tr>
+                <th scope="row">Models.dev 目录</th>
+                <td class="ok-cell">✓ <code>cc-switch models-dev</code>（openai/anthropic 可映射）</td>
+                <td class="ok-cell">✓ 75+ 全量 + AI SDK 包</td>
+              </tr>
+              <tr>
+                <th scope="row">CC Switch 导入</th>
+                <td class="ok-cell">✓ <code>cc-switch import</code></td>
+                <td>自有 <code>/connect</code> 体系</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <aside class="callout">
+              <strong>对齐结论（更新）</strong>
+          <ul>
+            <li>
+              <strong>国产 Anthropic + Token/Coding Plan</strong> 与 <strong>OpenAI / Ollama / Models.dev</strong> 均已接入；双协议：Messages + Chat Completions。
+            </li>
+            <li>
+              Models.dev：PaCode 收录可映射到 anthropic/openai 的厂商（百级）；不加载专用 SDK 包（如纯 Bedrock/Vertex 包）——与 OpenCode「75+ 全量 AI SDK」仍有广度差。
+            </li>
+            <li>
+              OpenCode Go 是订阅聚合；PaCode 是 BYOK + 本地 + 目录导入。
+            </li>
+          </ul>
+        </aside>
+
+        <div class="preset-grid" aria-label="内置预设速览">
+          <div class="preset-chip"><code>minimax</code> 默认</div>
+          <div class="preset-chip"><code>deepseek</code></div>
+          <div class="preset-chip"><code>openai</code> / <code>ollama</code></div>
+          <div class="preset-chip"><code>doubao</code> coding</div>
+          <div class="preset-chip"><code>glm</code> / <code>glm-coding-plan</code></div>
+          <div class="preset-chip"><code>hunyuan</code></div>
+          <div class="preset-chip"><code>tencent-token-plan</code></div>
+          <div class="preset-chip"><code>qwen</code> / <code>kimi</code></div>
+          <div class="preset-chip"><code>models-dev</code> 目录</div>
+        </div>
+      </section>
+
+      <section class="section" id="bench">
         <div class="section-head">
           <p class="eyebrow">Performance</p>
           <h2>与 Claude Code 的实测对照</h2>
@@ -144,66 +269,74 @@
           </p>
         </div>
 
-        <div class="bench-meta">
-          <p>
-            模型：双方任务用 <strong>claude-sonnet-4-6</strong>（经 cc-switch）· Claude Code
-            <strong>2.1.207</strong> · 指标：墙钟 wall / 校验 verify.mjs once-success
-          </p>
-        </div>
+        <div class="bench-stack">
+          <div class="bench-charts">
+            <div class="bench-meta">
+              <p>
+                模型：双方任务用 <strong>claude-sonnet-4-6</strong>（经 cc-switch）· Claude Code
+                <strong>2.1.207</strong> · 指标：墙钟 wall / 校验 verify.mjs once-success
+              </p>
+            </div>
 
-        <h3 class="subhead">Easy suite · 墙钟</h3>
-        <div class="bars" data-animate>
-          <div class="bar-row">
-            <div class="bar-label">PaCode</div>
-            <div class="bar-track">
-              <div class="bar-fill pacode" style="--w: 9.3%"></div>
+            <div class="bench-suite">
+              <h3 class="subhead">Easy suite · 墙钟</h3>
+              <div class="bars" data-animate>
+                <div class="bar-row">
+                  <div class="bar-label">PaCode</div>
+                  <div class="bar-track">
+                    <div class="bar-fill pacode" style="--w: 9.3%"></div>
+                  </div>
+                  <div class="bar-val">14.5 s</div>
+                </div>
+                <div class="bar-row">
+                  <div class="bar-label">Claude Code</div>
+                  <div class="bar-track">
+                    <div class="bar-fill cc" style="--w: 100%"></div>
+                  </div>
+                  <div class="bar-val">155.6 s</div>
+                </div>
+              </div>
+              <p class="fineprint">
+                wall：PaCode 14 524 ms vs CC 155 572 ms · 单任务耗时总和：30.7 s vs 155.6 s ·
+                任务 fix-bug / add-test / small-refactor 均双方通过
+              </p>
             </div>
-            <div class="bar-val">14.5 s</div>
-          </div>
-          <div class="bar-row">
-            <div class="bar-label">Claude Code</div>
-            <div class="bar-track">
-              <div class="bar-fill cc" style="--w: 100%"></div>
-            </div>
-            <div class="bar-val">155.6 s</div>
-          </div>
-        </div>
-        <p class="fineprint">
-          wall：PaCode 14 524 ms vs CC 155 572 ms · 单任务耗时总和：30.7 s vs 155.6 s ·
-          任务 fix-bug / add-test / small-refactor 均双方通过
-        </p>
 
-        <h3 class="subhead">Hard suite · 墙钟</h3>
-        <div class="bars" data-animate>
-          <div class="bar-row">
-            <div class="bar-label">PaCode</div>
-            <div class="bar-track">
-              <div class="bar-fill pacode" style="--w: 15.8%"></div>
+            <div class="bench-suite">
+              <h3 class="subhead">Hard suite · 墙钟</h3>
+              <div class="bars" data-animate>
+                <div class="bar-row">
+                  <div class="bar-label">PaCode</div>
+                  <div class="bar-track">
+                    <div class="bar-fill pacode" style="--w: 15.8%"></div>
+                  </div>
+                  <div class="bar-val">15.5 s</div>
+                </div>
+                <div class="bar-row">
+                  <div class="bar-label">Claude Code</div>
+                  <div class="bar-track">
+                    <div class="bar-fill cc" style="--w: 100%"></div>
+                  </div>
+                  <div class="bar-val">98.0 s</div>
+                </div>
+              </div>
+              <p class="fineprint">
+                wall：PaCode 15 469 ms vs CC 97 985 ms · 双方 passRate=1 ·
+                multi-file-bug / fail-then-fix / cross-module
+              </p>
             </div>
-            <div class="bar-val">15.5 s</div>
           </div>
-          <div class="bar-row">
-            <div class="bar-label">Claude Code</div>
-            <div class="bar-track">
-              <div class="bar-fill cc" style="--w: 100%"></div>
-            </div>
-            <div class="bar-val">98.0 s</div>
-          </div>
-        </div>
-        <p class="fineprint">
-          wall：PaCode 15 469 ms vs CC 97 985 ms · 双方 passRate=1 ·
-          multi-file-bug / fail-then-fix / cross-module
-        </p>
 
-        <aside class="callout">
-          <strong>怎么读这些数字</strong>
-          <ul>
-            <li>测的是「任务能否一次 verify 通过」+ 墙钟，不是 tok/s，也不是 SWE-bench。</li>
-            <li>PaCode 默认并行跑多任务；Claude Code 对照为串行——墙钟差距会放大并发收益。</li>
-            <li>对照用 sonnet-4-6，与产品默认 MiniMax-M3 不是同一模型；换模型结果会变。</li>
-            <li>与 OpenCode：仓库尚无共享 M5 fixture，官网不编造延迟数字。</li>
-          </ul>
-        </aside>
+          <aside class="callout">
+            <strong>怎么读这些数字</strong>
+            <ul>
+              <li>测的是「任务能否一次 verify 通过」+ 墙钟，不是 tok/s，也不是 SWE-bench。</li>
+              <li>PaCode 默认并行跑多任务；Claude Code 对照为串行——墙钟差距会放大并发收益。</li>
+              <li>对照用 sonnet-4-6，与产品默认 MiniMax-M3 不是同一模型；换模型结果会变。</li>
+              <li>与 OpenCode：仓库尚无共享 M5 fixture，官网不编造延迟数字。</li>
+            </ul>
+          </aside>
+        </div>
       </section>
 
       <section class="section" id="compare">
@@ -234,9 +367,9 @@
               </tr>
               <tr>
                 <th scope="row">模型默认</th>
-                <td>MiniMax-M3（可切 Anthropic 兼容端）</td>
+                <td>MiniMax-M3；国产 Anthropic 兼容 + Token/Coding Plan 预设</td>
                 <td>Anthropic Claude 家族</td>
-                <td>多提供商 / 本地模型（BYOK）</td>
+                <td>75+ Models.dev；OpenAI/Anthropic/本地；另有 Go 订阅</td>
               </tr>
               <tr>
                 <th scope="row">架构取向</th>
@@ -246,7 +379,7 @@
               </tr>
               <tr>
                 <th scope="row">配置与隐私</th>
-                <td><code>.paude/</code> 文件化，不依赖 <code>~/.claude</code></td>
+                <td><code>.paude/</code> 为准；可显式从 CC Switch 导入</td>
                 <td><code>~/.claude</code> 生态</td>
                 <td>本地优先；会话可用 SQLite 等本地存储</td>
               </tr>
@@ -277,7 +410,7 @@
             <h3>PaCode 优势</h3>
             <ul>
               <li>架构对标 Claude Code，权限与压缩路径清晰可测</li>
-              <li>默认 MiniMax，国内网关友好；配置与 CC 隔离</li>
+              <li>默认 MiniMax；国产网关 / Token Plan 预设完整</li>
               <li>有与 CC 同任务的 passRate / wall 证据链</li>
               <li>npm 一键装：<code>@sallon/pacode</code></li>
             </ul>
@@ -285,6 +418,7 @@
           <article>
             <h3>PaCode 短板</h3>
             <ul>
+              <li>Models.dev 不加载专用 SDK 包（Bedrock/Vertex 等），广度仍略逊 OpenCode</li>
               <li>核心工具约 31，少于 CC 公开引用的 ~43</li>
               <li>无容器级 Bash 沙箱、无公网 Bridge SaaS（有意 Defer）</li>
               <li>BUSL 对商业组织有授权门槛（相对 MIT 的 OpenCode）</li>
@@ -316,7 +450,54 @@
         </div>
       </section>
 
-      <section class="section section-alt" id="install">
+      <section class="section section-alt" id="changelog">
+        <div class="section-head">
+          <p class="eyebrow">Changelog</p>
+          <h2>版本更新说明</h2>
+          <p class="section-lead">
+            npm 当前为 <strong>0.1.4</strong>。多模型 / Token Plan / CC Switch 导入已在
+            <code>main</code>，随下一版发布。完整条目见仓库
+            <a href="https://github.com/yhtyhj-hue/PaCode/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md</a>。
+          </p>
+        </div>
+
+        <ol class="changelog">
+          <li>
+            <div class="cl-meta">
+              <span class="cl-ver">Unreleased</span>
+              <span class="cl-tag">main → 0.2.0</span>
+            </div>
+            <ul>
+              <li>多模型：DeepSeek / 豆包 / GLM / 混元 / 千问 / Kimi + OpenAI / Ollama / LM Studio</li>
+              <li>Models.dev 目录浏览与一键 add；双协议 anthropic + openai</li>
+              <li>Token Plan / Coding Plan；CC Switch / Claude settings 导入</li>
+              <li>Bearer 鉴权；REPL <code>/providers use</code></li>
+            </ul>
+          </li>
+          <li>
+            <div class="cl-meta">
+              <span class="cl-ver">0.1.4</span>
+              <span class="cl-tag">npm</span>
+            </div>
+            <ul>
+              <li>版本号从 <code>package.json</code> 读取，CLI / MCP / banner 一致</li>
+              <li>产品官网（本页）上线：优势、M5 实测、OpenCode 定位</li>
+            </ul>
+          </li>
+          <li>
+            <div class="cl-meta">
+              <span class="cl-ver">0.1.1 – 0.1.3</span>
+              <span class="cl-tag">npm</span>
+            </div>
+            <ul>
+              <li>发布 <code>@sallon/pacode</code>，默认 MiniMax-M3</li>
+              <li>bin shim、scoped 包名；GitHub 主托管 + Gitee 镜像</li>
+            </ul>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section" id="install">
         <div class="section-head">
           <p class="eyebrow">Get started</p>
           <h2>两分钟跑起来</h2>
@@ -324,9 +505,13 @@
         <div class="install-block">
           <pre><code>npm install -g @sallon/pacode
 export ANTHROPIC_API_KEY=your_minimax_key
-# 可选：export ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic
 pacode --version
-pacode -p "hello"</code></pre>
+pacode cc-switch presets
+pacode -p "hello"
+
+# Token Plan / 从 CC Switch 导入（main 已支持）
+# pacode cc-switch add tp --plan=token-plan --api-key=xxx
+# pacode cc-switch import --from=cc-switch</code></pre>
           <div class="install-links">
             <a href="https://github.com/yhtyhj-hue/PaCode" target="_blank" rel="noopener"
               >源码仓库</a
@@ -357,7 +542,7 @@ pacode -p "hello"</code></pre>
         <span>独立实现的类 Claude Code Agent 框架</span>
       </div>
       <p>
-        对比数据以仓库 evals 为准；OpenCode 信息来自其公开文档与社区定位，非联合评测。
+        对比数据以仓库 evals 为准；模型对照依据 OpenCode 公开 Providers / Go 文档与 PaCode 内置 preset（非联合评测）。
       </p>
       <p class="copy">© PaCode contributors · BUSL-1.1</p>
     </footer>

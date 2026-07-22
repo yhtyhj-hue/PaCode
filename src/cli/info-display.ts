@@ -43,12 +43,18 @@ export function formatProvidersLines(
   const list = providers ?? cc!.list();
   const active = activeName ?? cc?.getActive()?.name;
   if (list.length === 0) {
-    return ['API Providers', '  No providers configured'];
+    return [
+      'API Providers',
+      '  No providers configured',
+      '  Hint: pacode cc-switch presets',
+    ];
   }
   const lines = ['API Providers'];
   for (const p of list) {
     const marker = active === p.name ? '●' : '○';
-    lines.push(`  ${marker} ${p.name}${p.model ? ` (${p.model})` : ''}`);
+    const auth = p.authStyle === 'bearer' ? ' [bearer]' : '';
+    const plan = p.planMode && p.planMode !== 'api' ? ` [${p.planMode}]` : '';
+    lines.push(`  ${marker} ${p.name}${p.model ? ` (${p.model})` : ''}${auth}${plan}`);
   }
   return lines;
 }

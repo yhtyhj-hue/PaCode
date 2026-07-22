@@ -21,6 +21,8 @@ export interface RunAgentOptions {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
+  authStyle?: import('../pkg/anthropic-client.js').ProviderAuthStyle;
+  apiProtocol?: import('../pkg/ccswitch/presets.js').ProviderApiProtocol;
   maxTokens?: number;
   temperature?: number;
   images?: ImageSource[];
@@ -47,10 +49,14 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
     model: options.model,
     apiKey: options.apiKey,
     baseUrl: options.baseUrl,
+    authStyle: options.authStyle,
+    apiProtocol: options.apiProtocol,
   });
   const apiKey = options.apiKey ?? appConfig.apiKey;
   const baseUrl = options.baseUrl ?? appConfig.baseUrl;
   const model = options.model ?? appConfig.model;
+  const authStyle = options.authStyle ?? appConfig.authStyle;
+  const apiProtocol = options.apiProtocol ?? appConfig.apiProtocol;
 
   const { registry, hookRegistry } = await setupToolRegistry({
     apiKey,
@@ -76,6 +82,8 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
   const engine = new QueryEngine({
     apiKey,
     baseUrl,
+    authStyle,
+    apiProtocol,
     anthropicClient: options.anthropicClient,
     toolRegistry: registry,
     sessionManager,

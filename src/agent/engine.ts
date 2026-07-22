@@ -17,6 +17,12 @@ import {
   ImageSource,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
+import { createAnthropicClient, type ProviderAuthStyle } from '../pkg/anthropic-client.js';
+import { createOpenAIClient } from '../pkg/openai-client.js';
+import type { ProviderApiProtocol } from '../pkg/ccswitch/presets.js';
+import type OpenAI from 'openai';
+import { toOpenAIChatMessages, toOpenAITools } from './openai-messages.js';
+import { consumeOpenAIChatStream } from './openai-stream.js';
 import { ContextAssembler } from '../context/assembler.js';
 import { CompactionPipeline } from '../context/compaction.js';
 import {
@@ -95,6 +101,8 @@ export const MAX_OUTPUT_TOKEN_RECOVERY = 3;
 
 export class QueryEngine {
   private client: Anthropic;
+  private openaiClient?: OpenAI;
+  private apiProtocol: ProviderApiProtocol;
   private contextAssembler: ContextAssembler;
   private compactionPipeline: CompactionPipeline;
   private toolRegistry: ToolRegistry;
@@ -110,15 +118,34 @@ export class QueryEngine {
   private disableReflection: boolean;
   private apiKey?: string;
   private baseUrl?: string;
+  private authStyle?: ProviderAuthStyle;
   private defaultModel?: string;
   private log: Logger;
 
   constructor(options: QueryEngineOptions = {}) {
-    const apiKey = options.apiKey ?? process.env['ANTHROPIC_API_KEY'];
-    const baseURL = options.baseUrl ?? process.env['ANTHROPIC_BASE_URL'];
+    const apiKey =
+      options.apiKey ??
+      process.env['ANTHROPIC_API_KEY'] ??
+      process.env['OPENAI_API_KEY'] ??
+      process.env['PACODE_API_KEY'];
+    const baseURL =
+      options.baseUrl ?? process.env['ANTHROPIC_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
+    const authStyle =
+      options.authStyle ??
+      (process.env['PACODE_AUTH_STYLE'] === 'bearer' ? 'bearer' : undefined);
+    const apiProtocol: ProviderApiProtocol =
+      options.apiProtocol ??
+      (process.env['PACODE_API_PROTOCOL'] === 'openai' ? 'openai' : 'anthropic');
     this.apiKey = apiKey;
     this.baseUrl = baseURL;
-    this.client = options.anthropicClient ?? new Anthropic({ apiKey, baseURL });
+    this.authStyle = authStyle;
+    this.apiProtocol = apiProtocol;
+    this.client =
+      options.anthropicClient ??
+      createAnthropicClient({ apiKey, baseUrl: baseURL, authStyle });
+    this.openaiClient =
+      options.openaiClient ??
+      (apiProtocol === 'openai' ? createOpenAIClient({ apiKey, baseUrl: baseURL }) : undefined);
     const appConfig = resolveAppConfig();
     this.contextMaxTokens = appConfig.contextMaxTokens;
     this.defaultModel = appConfig.model;
@@ -142,7 +169,7 @@ export class QueryEngine {
     this.hookRegistry = options.hookRegistry ?? new HookRegistry();
     this.permissionPrompt = options.permissionPrompt ?? this.defaultPermissionPrompt.bind(this);
     this.log = new Logger({ prefix: 'QueryEngine' });
-    this.log.info('QueryEngine initialized');
+    this.log.info(`QueryEngine initialized (${apiProtocol})`);
   }
 
   getHookRegistry(): HookRegistry {
@@ -151,6 +178,28 @@ export class QueryEngine {
 
   getToolRegistry(): ToolRegistry {
     return this.toolRegistry;
+  }
+
+  /** REPL /providers use 后热切换凭证，重建客户端 */
+  setCredentials(opts: {
+    apiKey?: string;
+    baseUrl?: string;
+    authStyle?: ProviderAuthStyle;
+    apiProtocol?: ProviderApiProtocol;
+  }): void {
+    if (opts.apiKey !== undefined) this.apiKey = opts.apiKey;
+    if (opts.baseUrl !== undefined) this.baseUrl = opts.baseUrl;
+    if (opts.authStyle !== undefined) this.authStyle = opts.authStyle;
+    if (opts.apiProtocol !== undefined) this.apiProtocol = opts.apiProtocol;
+    this.client = createAnthropicClient({
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+      authStyle: this.authStyle,
+    });
+    this.openaiClient =
+      this.apiProtocol === 'openai'
+        ? createOpenAIClient({ apiKey: this.apiKey, baseUrl: this.baseUrl })
+        : undefined;
   }
 
   /** 工具执行管线（含 Hook），供集成测试使用 */
@@ -978,6 +1027,52 @@ export class QueryEngine {
     const system = context.systemPrompt;
     const { messages } = compileMessagesForApi(context.messages);
 
+    if (this.apiProtocol === 'openai') {
+      const client = this.openaiClient ?? createOpenAIClient({
+        apiKey: this.apiKey,
+        baseUrl: this.baseUrl,
+      });
+      this.openaiClient = client;
+      const systemText =
+        typeof system === 'string'
+          ? system
+          : Array.isArray(system as unknown[])
+            ? (system as Array<{ type?: string; text?: string }>)
+                .map((b) => (b?.type === 'text' ? String(b.text ?? '') : ''))
+                .filter(Boolean)
+                .join('\n')
+            : undefined;
+      const openaiMessages = toOpenAIChatMessages(systemText, messages);
+      const body: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+        model: options.model ?? this.defaultModel ?? DEFAULT_MODEL,
+        max_tokens: Math.min(options.maxTokens ?? DEFAULT_MAX_TOKENS, context.maxTokens),
+        temperature: options.temperature ?? 0.7,
+        messages: openaiMessages,
+        stream: true,
+        stream_options: { include_usage: true },
+      };
+      if (tools.length > 0) {
+        body.tools = toOpenAITools(
+          tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.inputSchema,
+          }))
+        );
+        if (options.toolChoice === 'any') {
+          body.tool_choice = 'required';
+        }
+      }
+      const stream = await withRetry(
+        () => client.chat.completions.create(body),
+        { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 8000 }
+      );
+      for await (const event of consumeOpenAIChatStream(stream)) {
+        yield event;
+      }
+      return;
+    }
+
     const streamParams: Anthropic.Messages.MessageCreateParams = {
       model: options.model ?? DEFAULT_MODEL,
       max_tokens: Math.min(options.maxTokens ?? DEFAULT_MAX_TOKENS, context.maxTokens),
@@ -999,8 +1094,8 @@ export class QueryEngine {
     }
 
     // Anthropic SDK 的 messages.stream() 在返回前会先发起 HTTP 请求；429/529/网络错误在
-// 这个阶段或首次迭代时抛错。我们用 withRetry 包装：首次抛错会退避重试整个请求。
-const stream = await withRetry(
+    // 这个阶段或首次迭代时抛错。我们用 withRetry 包装：首次抛错会退避重试整个请求。
+    const stream = await withRetry(
       () => Promise.resolve().then(() => this.client.messages.stream(streamParams)),
       { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 8000 }
     );
@@ -1252,7 +1347,10 @@ const stream = await withRetry(
 export interface QueryEngineOptions {
   apiKey?: string;
   baseUrl?: string;
+  authStyle?: ProviderAuthStyle;
+  apiProtocol?: ProviderApiProtocol;
   anthropicClient?: Anthropic;
+  openaiClient?: OpenAI;
   toolRegistry?: ToolRegistry;
   hookRegistry?: HookRegistry;
   permissionSystem?: PermissionSystem;

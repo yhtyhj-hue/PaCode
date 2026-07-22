@@ -38,11 +38,10 @@ describe('eval:gate:defaults-model', () => {
     );
   });
 
-  it('never auto-imports Claude Code settings', () => {
+  it('never auto-imports Claude Code settings on construct', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pacode-cc-'));
     const client = new CCSwitchClient(join(dir, 'providers.json'));
     expect(client.autoImportFromClaudeCode()).toBeNull();
-    expect(client.importFromClaudeCode()).toBe(0);
-    expect(client.detectSources().claudeCode).toBe(false);
+    expect(client.list()).toEqual([]);
   });
 });

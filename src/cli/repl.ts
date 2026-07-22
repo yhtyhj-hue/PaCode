@@ -32,7 +32,7 @@ import {
   loadResumeSession,
 } from './resume-display.js';
 import { PermissionMode, MCPServerConnection, SessionState, HookType, type ImageSource } from '../pkg/types.js';
-import { Provider } from '../pkg/ccswitch/index.js';
+import { Provider, getCCSwitch, formatPresetTable } from '../pkg/ccswitch/index.js';
 import { SkillsLoader } from '../skills/loader.js';
 import { getSubagentManager } from '../agent/subagent.js';
 import {
@@ -162,6 +162,8 @@ export class REPL {
       new QueryEngine({
         apiKey: this.apiKey,
         baseUrl: this.baseUrl,
+        authStyle: options.authStyle ?? options.provider.authStyle,
+        apiProtocol: options.apiProtocol ?? options.provider.apiProtocol,
         toolRegistry: this.toolRegistry,
         sessionManager: this.sessionManager,
         hookRegistry: this.hookRegistry,
@@ -516,7 +518,7 @@ export class REPL {
         await this.handlePlan(arg);
         break;
       case '/providers':
-        this.showProviders();
+        this.handleProviders(args);
         break;
       case '/style':
         this.handleStyle(args);
@@ -603,7 +605,7 @@ export class REPL {
         ['/memory', 'Show memory file locations'],
         ['/mcp', 'Show MCP server connections'],
         ['/permissions', 'Show permission rules'],
-        ['/providers', 'List API providers'],
+        ['/providers', 'List providers · use <name> · presets'],
         ['/brief', 'Project brief (CLAUDE.md / package.json / README)'],
         ['/agents', 'List subagents, tasks, teams, coordinator assignments'],
         ['/btw <prompt>', 'Run an agent turn in background (also: message &)'],
@@ -833,13 +835,47 @@ export class REPL {
     console.log(`${GREEN}✓${RESET} Mode: ${this.mode}`);
   }
 
-  private showProviders(): void {
+  private handleProviders(args: string[]): void {
+    const sub = args[0]?.toLowerCase();
+    if (sub === 'presets') {
+      console.log(`\n${formatPresetTable()}\n`);
+      return;
+    }
+    if (sub === 'use') {
+      const name = args.slice(1).join(' ').trim();
+      if (!name) {
+        console.log(`${DIM}Usage: /providers use <name>${RESET}`);
+        return;
+      }
+      const p = getCCSwitch().switchTo(name);
+      if (!p) {
+        console.log(`${RED}Provider not found: ${name}${RESET}`);
+        return;
+      }
+      this.apiKey = p.apiKey;
+      this.baseUrl = p.baseUrl;
+      if (p.model) this.model = p.model;
+      this.engine.setCredentials({
+        apiKey: p.apiKey,
+        baseUrl: p.baseUrl,
+        authStyle: p.authStyle,
+        apiProtocol: p.apiProtocol,
+      });
+      console.log(
+        `${GREEN}✓${RESET} Provider: ${p.name}` +
+          (p.model ? ` · model ${p.model}` : '') +
+          (p.authStyle === 'bearer' ? ' · bearer' : '')
+      );
+      return;
+    }
+
     console.log('');
     const lines = formatProvidersLines();
     console.log(`${CYAN}${BOLD}${lines[0]}${RESET}`);
     for (const line of lines.slice(1)) {
       console.log(`${DIM}${line}${RESET}`);
     }
+    console.log(`${DIM}  /providers use <name> · /providers presets${RESET}`);
     console.log('');
   }
 
@@ -1649,6 +1685,8 @@ export interface REPLOptions {
   model: string;
   mode: PermissionMode;
   provider: Provider;
+  authStyle?: import('../pkg/anthropic-client.js').ProviderAuthStyle;
+  apiProtocol?: import('../pkg/ccswitch/presets.js').ProviderApiProtocol;
   sessionManager?: SessionManager;
   toolRegistry?: ToolRegistry;
   hookRegistry?: HookRegistry;

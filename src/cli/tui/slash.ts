@@ -49,6 +49,7 @@ import {
   formatEffortStatus,
   parseEffortLevel,
 } from '../effort.js';
+import { getCCSwitch, formatPresetTable, type Provider } from '../../pkg/ccswitch/index.js';
 import type { TuiController } from './app.js';
 
 export const TUI_SLASH_HELP =
@@ -78,6 +79,8 @@ export interface TuiSlashContext {
   /** 测试注入 MCP connections */
   mcpConnections?: MCPServerConnection[];
   setModel?: (model: string) => void;
+  /** 热切换 provider（更新 engine 凭证） */
+  applyProvider?: (provider: Provider) => void;
   providerName?: string;
 }
 
@@ -200,9 +203,38 @@ export async function handleTuiSlash(
         'Vim mode applies to the classic REPL line editor (/vim on|off). TUI uses Ink input.'
       );
       return true;
-    case 'providers':
+    case 'providers': {
+      const sub = args[0]?.toLowerCase();
+      if (sub === 'presets') {
+        for (const line of formatPresetTable().split('\n')) {
+          ctl.appendSystem(line || ' ');
+        }
+        return true;
+      }
+      if (sub === 'use') {
+        const name = args.slice(1).join(' ').trim();
+        if (!name) {
+          ctl.appendSystem('Usage: /providers use <name>');
+          return true;
+        }
+        const p = getCCSwitch().switchTo(name);
+        if (!p) {
+          ctl.appendError(`Provider not found: ${name}`);
+          return true;
+        }
+        ctx.applyProvider?.(p);
+        if (p.model) ctx.setModel?.(p.model);
+        ctl.appendSystem(
+          `Provider: ${p.name}` +
+            (p.model ? ` · model ${p.model}` : '') +
+            (p.authStyle === 'bearer' ? ' · bearer' : '')
+        );
+        return true;
+      }
       for (const line of formatProvidersLines()) ctl.appendSystem(line);
+      ctl.appendSystem('  /providers use <name> · /providers presets');
       return true;
+    }
     case 'cron': {
       for (const line of formatCronLines(args)) {
         for (const part of line.split('\n')) ctl.appendSystem(part || ' ');

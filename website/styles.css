@@ -373,16 +373,7 @@ a:hover {
   max-width: var(--max);
   margin-inline: auto;
   padding-inline: clamp(1rem, 4vw, 2rem);
-}
-
-.section-alt > .section-head,
-.section-alt > .bench-meta,
-.section-alt > .subhead,
-.section-alt > .bars,
-.section-alt > .fineprint,
-.section-alt > .callout,
-.section-alt > .install-block {
-  padding-inline: clamp(1rem, 4vw, 2rem);
+  box-sizing: border-box;
 }
 
 .section-head {
@@ -446,13 +437,55 @@ a:hover {
 }
 
 .bench-meta {
-  margin: -1rem 0 2rem;
+  margin: 0 0 1.5rem;
   font-size: 0.92rem;
   color: var(--ink-soft);
 }
 
+.bench-meta p {
+  margin: 0;
+}
+
+.bench-stack {
+  width: 100%;
+  max-width: 100%;
+}
+
+/*
+ * Easy/Hard 共用父级三列轨（subgrid），
+ * 避免「155.6 s」把 Easy 第三列撑宽而 Hard 仍窄。
+ */
+.bench-charts {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr) 5.75rem;
+  column-gap: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.bench-meta,
+.bench-suite {
+  grid-column: 1 / -1;
+}
+
+.bench-suite {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: 0;
+  margin: 0 0 1.75rem;
+}
+
+.bench-suite:last-child {
+  margin-bottom: 0;
+}
+
+.bench-suite > .subhead,
+.bench-suite > .fineprint {
+  grid-column: 1 / -1;
+}
+
 .subhead {
-  margin: 2rem 0 1rem;
+  margin: 0 0 0.85rem;
   font-size: 1rem;
   font-family: var(--mono);
   font-weight: 500;
@@ -461,30 +494,62 @@ a:hover {
 
 .bars {
   display: grid;
-  gap: 0.85rem;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  row-gap: 0.75rem;
+  min-width: 0;
 }
 
 .bar-row {
   display: grid;
-  grid-template-columns: 7.5rem 1fr 4.5rem;
-  gap: 0.75rem;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
+  min-width: 0;
+}
+
+/* 无 subgrid 时退回固定列宽，两组仍同宽 */
+@supports not (grid-template-columns: subgrid) {
+  .bench-charts {
+    display: block;
+  }
+  .bars {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr) 5.75rem;
+    column-gap: 0.85rem;
+  }
 }
 
 @media (max-width: 560px) {
+  .bench-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .bar-row {
+    display: grid;
     grid-template-columns: 1fr;
     gap: 0.35rem;
+  }
+  .bar-val {
+    text-align: left;
   }
 }
 
 .bar-label {
   font-weight: 600;
   font-size: 0.92rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bar-track {
   height: 0.85rem;
+  min-width: 0;
   background: color-mix(in srgb, var(--ink) 8%, transparent);
   border-radius: 999px;
   overflow: hidden;
@@ -512,14 +577,26 @@ a:hover {
 .bar-val {
   font-family: var(--mono);
   font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
   text-align: right;
+  white-space: nowrap;
   color: var(--ink-soft);
+  min-width: 0;
 }
 
 .fineprint {
-  margin: 0.85rem 0 0;
+  margin: 0.75rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
+  max-width: 100%;
+}
+
+.bench-stack > .callout {
+  margin-top: 2rem;
+  margin-inline: 0;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 
 .callout {
@@ -586,6 +663,92 @@ a:hover {
 
 .compare code {
   font-size: 0.84em;
+}
+
+.ok-cell {
+  color: var(--ok);
+}
+
+.miss-cell {
+  color: var(--muted);
+}
+
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 2rem;
+}
+
+.preset-chip {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+}
+
+.preset-chip code {
+  font-size: inherit;
+  color: var(--ink);
+  background: none;
+  padding: 0;
+}
+
+.changelog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+
+.changelog > li {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(0.6rem);
+  transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
+}
+
+.changelog > li.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.cl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.cl-ver {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.cl-tag {
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  padding: 0.15rem 0.45rem;
+}
+
+.changelog ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--ink-soft);
+}
+
+.changelog li li + li {
+  margin-top: 0.35rem;
 }
 
 .tradeoffs {
@@ -679,7 +842,10 @@ a:hover {
     animation: none !important;
     transition: none !important;
   }
-  .bars .bar-fill {
-    width: var(--w);
+  .changelog > li {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1;
+    transform: none;
   }
 }

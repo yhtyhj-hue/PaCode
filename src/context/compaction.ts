@@ -4,7 +4,6 @@
 
 import { ModelContext, Message } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
-import Anthropic from '@anthropic-ai/sdk';
 import {
   countContextTokens,
   snipMessages,
@@ -14,6 +13,7 @@ import {
 } from './compaction-utils.js';
 import { withRetry } from '../agent/retry.js';
 import { DEFAULT_MODEL } from '../pkg/defaults.js';
+import { createAnthropicClient, type ProviderAuthStyle } from '../pkg/anthropic-client.js';
 
 const AUTO_COMPACT_PROMPT = `Summarize the conversation below for context continuity.
 Preserve: user goals, decisions, file paths, errors, and unfinished tasks.
@@ -24,6 +24,7 @@ export interface CompactionPipelineOptions {
   apiKey?: string;
   baseUrl?: string;
   model?: string;
+  authStyle?: ProviderAuthStyle;
   /** 测试注入，跳过 LLM */
   summarizeFn?: (prompt: string) => Promise<string>;
 }
@@ -32,7 +33,12 @@ export class CompactionPipeline {
   private log: Logger;
   private readonly threshold: number;
   private summarizeFn?: (prompt: string) => Promise<string>;
-  private llmOptions: { apiKey?: string; baseUrl?: string; model?: string };
+  private llmOptions: {
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+    authStyle?: ProviderAuthStyle;
+  };
 
   constructor(options: CompactionPipelineOptions = {}) {
     this.log = new Logger({ prefix: 'CompactionPipeline' });
@@ -42,6 +48,7 @@ export class CompactionPipeline {
       apiKey: options.apiKey,
       baseUrl: options.baseUrl,
       model: options.model,
+      authStyle: options.authStyle,
     };
   }
 
@@ -161,7 +168,11 @@ export class CompactionPipeline {
     if (this.summarizeFn) return this.summarizeFn(prompt);
 
     const apiKey = this.llmOptions.apiKey ?? process.env['ANTHROPIC_API_KEY'];
-    const client = new Anthropic({ apiKey, baseURL: this.llmOptions.baseUrl });
+    const client = createAnthropicClient({
+      apiKey,
+      baseUrl: this.llmOptions.baseUrl,
+      authStyle: this.llmOptions.authStyle,
+    });
     // L5：瞬时 5xx/429 重试后再降级占位摘要
     const response = await withRetry(
       () =>

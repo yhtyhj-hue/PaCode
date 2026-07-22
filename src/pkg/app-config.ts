@@ -25,6 +25,8 @@ export interface AppConfigCliOverrides {
   temperature?: number;
   /** CLI: --no-prefetch */
   prefetchEnabled?: boolean;
+  authStyle?: import('./ccswitch/presets.js').ProviderAuthStyle;
+  apiProtocol?: import('./ccswitch/presets.js').ProviderApiProtocol;
 }
 
 export interface ResolvedAppConfig {
@@ -38,6 +40,8 @@ export interface ResolvedAppConfig {
   compactionThreshold: number;
   permissions?: PermissionRules;
   prefetch: PrefetchRuntimeConfig;
+  authStyle?: import('./ccswitch/presets.js').ProviderAuthStyle;
+  apiProtocol?: import('./ccswitch/presets.js').ProviderApiProtocol;
 }
 
 const MODE_MAP: Record<string, PermissionMode> = {
@@ -62,11 +66,19 @@ function envModel(): string | undefined {
 }
 
 function envApiKey(): string | undefined {
-  return process.env['PACODE_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
+  return (
+    process.env['PACODE_API_KEY'] ??
+    process.env['ANTHROPIC_API_KEY'] ??
+    process.env['OPENAI_API_KEY']
+  );
 }
 
 function envBaseUrl(): string | undefined {
-  return process.env['PACODE_BASE_URL'] ?? process.env['ANTHROPIC_BASE_URL'];
+  return (
+    process.env['PACODE_BASE_URL'] ??
+    process.env['ANTHROPIC_BASE_URL'] ??
+    process.env['OPENAI_BASE_URL']
+  );
 }
 
 /** 合并三层配置，CLI flags 优先级最高 */
@@ -108,6 +120,8 @@ export function resolveAppConfig(
       creds.baseUrl ??
       envBaseUrl() ??
       DEFAULT_BASE_URL,
+    authStyle: cli.authStyle ?? creds.authStyle,
+    apiProtocol: cli.apiProtocol ?? creds.apiProtocol,
     maxTokens: cli.maxTokens ?? settings.maxTokens ?? paude.model.maxTokens ?? DEFAULT_MAX_TOKENS,
     temperature: cli.temperature ?? settings.temperature ?? paude.model.temperature,
     mode,

@@ -37,7 +37,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashMenuEntry[] = [
   { command: '/memory', description: 'Show memory file locations' },
   { command: '/mcp', description: 'Show MCP server connections' },
   { command: '/permissions', description: 'Show permission rules' },
-  { command: '/providers', description: 'List API providers' },
+  { command: '/providers', description: 'Providers: list · use <name> · presets' },
   { command: '/mode', description: 'Change permission mode' },
   { command: '/model', description: 'Show or change model' },
   { command: '/style', description: 'Switch output style (default/cost/full/minimal)' },

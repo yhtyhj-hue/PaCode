@@ -5,7 +5,7 @@
 
 import { Logger } from '../pkg/logger/index.js';
 import { bootAnimation } from './animation.js';
-import { getCCSwitch } from '../pkg/ccswitch/index.js';
+import { getCCSwitch, getProviderPreset } from '../pkg/ccswitch/index.js';
 import { REPL } from './repl.js';
 import { resolveAppConfig } from '../pkg/app-config.js';
 import {
@@ -73,11 +73,22 @@ async function main() {
   }
 
   const cc = getCCSwitch();
+  const presetId = values.preset as string | undefined;
+  const preset = presetId ? getProviderPreset(presetId) : undefined;
+  if (presetId && !preset) {
+    log.error(`Unknown preset: ${presetId}`);
+    console.log('Run: pacode cc-switch presets');
+    process.exit(1);
+  }
+
+  // --preset 仅补全未显式传入的 model/baseUrl/authStyle（不写入 providers.json）
   const appConfig = resolveAppConfig({
     mode: values.mode as string | undefined,
-    model: values.model as string | undefined,
+    model: (values.model as string | undefined) ?? preset?.model,
     apiKey: values['api-key'] as string | undefined,
-    baseUrl: values['base-url'] as string | undefined,
+    baseUrl: (values['base-url'] as string | undefined) ?? preset?.baseUrl,
+    authStyle: preset?.authStyle,
+    apiProtocol: preset?.apiProtocol,
   });
 
   const model = appConfig.model;
@@ -109,16 +120,16 @@ async function main() {
   if (!apiKey) {
     log.error('ANTHROPIC_API_KEY not set');
     console.log(`
-Please set your Anthropic API key:
+Please set an API key (MiniMax by default, or DeepSeek / 豆包 / …):
 
-  export ANTHROPIC_API_KEY=sk-ant-xxx
+  export ANTHROPIC_API_KEY=your_key
+  # or: PACODE_API_KEY
 
-Or use CC-Switch to manage providers:
+Or add a provider preset:
 
-  pacode cc-switch add anthropic --api-key sk-ant-xxx
-  pacode cc-switch use anthropic
-
-Get a key at: https://console.anthropic.com/
+  pacode cc-switch presets
+  pacode cc-switch add deepseek --preset=deepseek --api-key=sk-xxx
+  pacode cc-switch use deepseek
 `);
     process.exit(1);
   }
@@ -151,7 +162,14 @@ Get a key at: https://console.anthropic.com/
         baseUrl,
         model,
         mode,
-        provider: activeProvider ?? { name: 'default', apiKey },
+        authStyle: appConfig.authStyle,
+        apiProtocol: appConfig.apiProtocol,
+        provider: activeProvider ?? {
+          name: 'default',
+          apiKey,
+          authStyle: appConfig.authStyle,
+          apiProtocol: appConfig.apiProtocol,
+        },
       });
       return;
     }
@@ -160,7 +178,14 @@ Get a key at: https://console.anthropic.com/
       baseUrl,
       model,
       mode,
-      provider: activeProvider ?? { name: 'default', apiKey },
+      authStyle: appConfig.authStyle,
+      apiProtocol: appConfig.apiProtocol,
+      provider: activeProvider ?? {
+        name: 'default',
+        apiKey,
+        authStyle: appConfig.authStyle,
+        apiProtocol: appConfig.apiProtocol,
+      },
     });
     await repl.start();
     return;
@@ -188,6 +213,8 @@ Get a key at: https://console.anthropic.com/
     model,
     apiKey,
     baseUrl,
+    authStyle: appConfig.authStyle,
+    apiProtocol: appConfig.apiProtocol,
     maxTokens: appConfig.maxTokens,
     temperature: appConfig.temperature,
     images: images.length > 0 ? images : undefined,

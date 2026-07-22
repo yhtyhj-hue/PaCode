@@ -25,6 +25,8 @@ export interface InkReplOptions {
   model: string;
   mode: PermissionMode;
   provider: Provider;
+  authStyle?: import('../../pkg/anthropic-client.js').ProviderAuthStyle;
+  apiProtocol?: import('../../pkg/ccswitch/presets.js').ProviderApiProtocol;
 }
 
 function summarizeTool(tool: ToolCall): string {
@@ -64,6 +66,8 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
   const engine = new QueryEngine({
     apiKey: options.apiKey,
     baseUrl: options.baseUrl,
+    authStyle: options.authStyle ?? options.provider.authStyle,
+    apiProtocol: options.apiProtocol ?? options.provider.apiProtocol,
     toolRegistry,
     sessionManager,
     hookRegistry,
@@ -96,6 +100,15 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
         baseUrl: options.baseUrl,
         setModel: (m) => {
           model = m;
+        },
+        applyProvider: (p) => {
+          model = p.model ?? model;
+          engine.setCredentials({
+            apiKey: p.apiKey,
+            baseUrl: p.baseUrl,
+            authStyle: p.authStyle,
+            apiProtocol: p.apiProtocol,
+          });
         },
         providerName: options.provider.name,
         tokenUsage,
