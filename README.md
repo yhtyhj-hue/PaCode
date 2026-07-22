@@ -5,6 +5,10 @@
 
 > 类 Claude Code 架构的 AI 编程助手框架 · 默认 MiniMax-M3
 
+- **GitHub:** https://github.com/yhtyhj-hue/PaCode  
+- **Gitee 镜像:** https://gitee.com/sallon/pa-code  
+- **npm:** https://www.npmjs.com/package/@sallon/pacode
+
 ## 项目概述
 
 PaCode 是一个参考 Claude Code 架构理念设计的 AI 编程助手，完全独立实现，不使用任何 Claude Code 源代码。配置与记忆使用 `~/.paude/` / `.paude/`，不依赖 Claude Code 本地配置。
@@ -39,20 +43,27 @@ pacode -p "hello"
 
 配置 MiniMax（默认）见 [docs/CONFIG.md](docs/CONFIG.md)；需设置 `ANTHROPIC_API_KEY`（或 `PACODE_API_KEY`）。
 
-### 从 Gitee 源码安装（跟仓库最新提交）
+### 从源码安装（跟仓库最新提交）
 
-裸写 `https://gitee.com/...git` 会被 npm 当成 **tarball URL**，Gitee 返回的是网页 HTML，于是出现 `TAR_BAD_ARCHIVE` / `invalid base256 encoding`。必须用 `git+`，或先 clone 再装：
+优先用 **GitHub**（npm 对 GitHub 的 `git+https` 支持更稳）。不要裸写仓库 URL（会被当成 tarball，易出现 `TAR_BAD_ARCHIVE`）：
 
 ```bash
-# 方式 A：强制走 git clone（注意：远程需已含可构建源码）
-npm install -g "git+https://gitee.com/sallon/pa-code.git#main"
+# 方式 A：git+https
+npm install -g "git+https://github.com/yhtyhj-hue/PaCode.git#main"
 
-# 方式 B（更稳）：本地 clone → build → 全局链接
-git clone https://gitee.com/sallon/pa-code.git
-cd pa-code
+# 方式 B（更稳）：clone → build → link
+git clone https://github.com/yhtyhj-hue/PaCode.git
+cd PaCode
 npm install
 npm run build
 npm link
+```
+
+Gitee 镜像：
+
+```bash
+git clone https://gitee.com/sallon/pa-code.git
+cd pa-code && npm install && npm run build && npm link
 ```
 
 ### 从源码开发

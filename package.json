@@ -50,11 +50,11 @@
   "license": "BUSL-1.1",
   "repository": {
     "type": "git",
-    "url": "git+https://gitee.com/sallon/pa-code.git"
+    "url": "git+https://github.com/yhtyhj-hue/PaCode.git"
   },
-  "homepage": "https://gitee.com/sallon/pa-code",
+  "homepage": "https://github.com/yhtyhj-hue/PaCode",
   "bugs": {
-    "url": "https://gitee.com/sallon/pa-code/issues"
+    "url": "https://github.com/yhtyhj-hue/PaCode/issues"
   },
   "publishConfig": {
     "access": "public"

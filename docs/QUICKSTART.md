@@ -3,9 +3,11 @@
 ## 安装
 
 ```bash
-# 克隆项目
-git clone https://gitee.com/sallon/pa-code.git
-cd pa-code
+# 克隆项目（GitHub 主仓）
+git clone https://github.com/yhtyhj-hue/PaCode.git
+cd PaCode
+
+# 或 Gitee 镜像：git clone https://gitee.com/sallon/pa-code.git && cd pa-code
 
 # 安装依赖
 npm install
