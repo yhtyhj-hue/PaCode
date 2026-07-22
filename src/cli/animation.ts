@@ -7,6 +7,7 @@
 import figlet from 'figlet';
 import { formatBox, getUiWidth, visibleWidth } from './repl-ui.js';
 import { getPackageVersion } from '../pkg/version.js';
+import { formatSetupGuide } from './setup-guide.js';
 
 const figletAsync = (text: string): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -50,17 +51,19 @@ export function buildBootChecks(input: BootStatusInput): BootCheck[] {
     {
       label: 'API credentials',
       ok: hasKey,
-      detail: hasKey ? 'configured' : 'missing',
+      detail: hasKey ? 'configured' : 'missing — see setup below',
     },
     {
       label: 'Provider registry',
-      ok: providerCount > 0,
+      ok: providerCount > 0 || hasKey,
       detail:
         providerCount > 0
           ? `${providerCount} provider${providerCount === 1 ? '' : 's'}${
               input.activeProvider ? ` · active ${input.activeProvider}` : ''
             }`
-          : 'none configured',
+          : hasKey
+            ? 'using env key (no saved provider)'
+            : 'none — set env key or cc-switch',
     },
     {
       label: 'Model',
@@ -83,7 +86,12 @@ export class BootAnimation {
     await this.delay(200);
     this.printStatus(status);
     await this.delay(200);
-    this.printReady();
+    // 缺 Key 时不谎称 Ready，直接给分步配置（与 -p 路径共用文案）
+    if (status.apiKeyConfigured) {
+      this.printReady();
+    } else {
+      this.printSetupRequired();
+    }
   }
 
   private clearScreen(): void {
@@ -154,6 +162,15 @@ export class BootAnimation {
         { width }
       )
     );
+    console.log('');
+  }
+
+  private printSetupRequired(): void {
+    console.log('');
+    console.log(
+      `${YELLOW}${BOLD}✗ Not ready${RESET} ${DIM}— API Key 未配置，请先完成下面步骤${RESET}`
+    );
+    console.log(formatSetupGuide());
     console.log('');
   }
 

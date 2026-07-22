@@ -60,6 +60,53 @@ describe('BootAnimation', () => {
     expect(checks.find((c) => c.label === 'Provider registry')?.ok).toBe(false);
     expect(checks.find((c) => c.label === 'Model')?.ok).toBe(true);
   });
+
+  it('treats env key as enough when no saved providers', async () => {
+    const { buildBootChecks } = await import('../src/cli/animation.js');
+    const checks = buildBootChecks({ model: 'x', apiKeyConfigured: true, providerCount: 0 });
+    expect(checks.find((c) => c.label === 'API credentials')?.ok).toBe(true);
+    expect(checks.find((c) => c.label === 'Provider registry')?.ok).toBe(true);
+    expect(checks.find((c) => c.label === 'Provider registry')?.detail).toMatch(/env key/);
+  });
+
+  it('does not claim Ready when API key missing; prints setup guide', async () => {
+    const logs: string[] = [];
+    vi.mocked(console.log).mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '));
+    });
+    const { BootAnimation } = await import('../src/cli/animation.js');
+    const anim = new BootAnimation();
+    await anim.show({
+      model: 'MiniMax-M3',
+      apiKeyConfigured: false,
+      providerCount: 0,
+    });
+    const joined = logs.join('\n');
+    expect(joined).toMatch(/Not ready/);
+    expect(joined).not.toMatch(/✓ Ready/);
+    expect(joined).toMatch(/路径 A/);
+    expect(joined).toMatch(/路径 B/);
+    expect(joined).toMatch(/ANTHROPIC_API_KEY/);
+    expect(joined).toMatch(/cc-switch presets/);
+  });
+
+  it('claims Ready when API key configured', async () => {
+    const logs: string[] = [];
+    vi.mocked(console.log).mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '));
+    });
+    const { BootAnimation } = await import('../src/cli/animation.js');
+    const anim = new BootAnimation();
+    await anim.show({
+      model: 'MiniMax-M3',
+      apiKeyConfigured: true,
+      providerCount: 1,
+      activeProvider: 'minimax',
+    });
+    const joined = logs.join('\n');
+    expect(joined).toMatch(/✓ Ready/);
+    expect(joined).not.toMatch(/Not ready/);
+  });
 });
 
 describe('formatBox', () => {

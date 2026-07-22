@@ -23,6 +23,7 @@ import type { ImageSource } from '../pkg/types.js';
 import { shouldEnableTui, startInkRepl } from './tui/index.js';
 import { runAgent } from '../sdk/run-agent.js';
 import { formatPacodeVersion } from '../pkg/version.js';
+import { formatSetupGuide } from './setup-guide.js';
 
 const log = new Logger({ prefix: 'CLI' });
 
@@ -118,19 +119,11 @@ async function main() {
   const baseUrl = appConfig.baseUrl;
 
   if (!apiKey) {
-    log.error('ANTHROPIC_API_KEY not set');
-    console.log(`
-Please set an API key (MiniMax by default, or DeepSeek / 豆包 / …):
-
-  export ANTHROPIC_API_KEY=your_key
-  # or: PACODE_API_KEY
-
-Or add a provider preset:
-
-  pacode cc-switch presets
-  pacode cc-switch add deepseek --preset=deepseek --api-key=sk-xxx
-  pacode cc-switch use deepseek
-`);
+    log.error('API key missing (ANTHROPIC_API_KEY / PACODE_API_KEY / cc-switch provider)');
+    // 交互模式：启动动画已打印完整引导；-p 无动画，此处补打
+    if (printMode) {
+      console.log(formatSetupGuide());
+    }
     process.exit(1);
   }
 
