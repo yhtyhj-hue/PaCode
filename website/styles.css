@@ -838,6 +838,43 @@ a:hover {
   margin-right: 0.5rem;
 }
 
+.footer-qr {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem 3rem;
+  margin-top: 2rem;
+  align-items: flex-start;
+}
+
+.footer-qr figure {
+  margin: 0;
+  max-width: 200px;
+}
+
+.footer-qr img {
+  display: block;
+  width: 200px;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.footer-qr figcaption {
+  margin-top: 0.65rem;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.footer-qr figcaption span {
+  display: inline-block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
 .footer .copy {
   margin-top: 1.25rem;
   font-family: var(--mono);

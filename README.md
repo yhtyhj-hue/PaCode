@@ -171,3 +171,10 @@ PaCode/
 **Change Date**：2030-07-20 — 此后自动转为 Apache License 2.0。
 
 商用授权联系：见 `LICENSE` 顶部 Licensor。
+
+### 交流与支持
+
+| 微信交流群 | 打赏支持 |
+|:---:|:---:|
+| <img src="./docs/assets/wechat-group.jpg" alt="PACODE 微信交流群" width="220" /> | <img src="./docs/assets/wechat-tip.jpg" alt="SALLON 赞赏码" width="220" /> |
+| 扫码加入 PACODE 交流群（群码会过期，失效后请联系维护者更新） | 扫码打赏（自愿） |
