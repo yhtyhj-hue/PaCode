@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- README / npm 包附带微信交流群与打赏二维码（`docs/assets`）
+
 ## 0.2.1
 
 - 缺 API Key 启动引导：不再显示虚假「Ready」；分路径 A（MiniMax 环境变量）/ B（cc-switch）说明配置步骤

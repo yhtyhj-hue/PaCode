@@ -1,6 +1,6 @@
 {
   "name": "@sallon/pacode",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "PaCode — Claude Code-like AI coding agent CLI. Default MiniMax-M3 via Anthropic-compatible API. Install: npm i -g @sallon/pacode. BUSL-1.1 (personal free; org production needs commercial license).",
   "type": "module",
   "bin": {
@@ -19,7 +19,8 @@
     "bin",
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/assets"
   ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('bin/pacode.js',0o755)\"",
