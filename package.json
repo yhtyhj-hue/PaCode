@@ -20,7 +20,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "docs/assets"
+    "docs/assets/wechat-group.jpg",
+    "docs/assets/wechat-tip.jpg"
   ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('bin/pacode.js',0o755)\"",
