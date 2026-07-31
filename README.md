@@ -1,7 +1,11 @@
 # PaCode
 
+[![npm](https://img.shields.io/npm/v/@sallon/pacode.svg?logo=npm)](https://www.npmjs.com/package/@sallon/pacode)
+[![npm downloads](https://img.shields.io/npm/dm/@sallon/pacode.svg)](https://www.npmjs.com/package/@sallon/pacode)
+[![CI](https://github.com/yhtyhj-hue/PaCode/actions/workflows/ci.yml/badge.svg)](https://github.com/yhtyhj-hue/PaCode/actions/workflows/ci.yml)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen?logo=node.js)](https://nodejs.org/)
 [![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue.svg)](./LICENSE)
-[![npm](https://img.shields.io/npm/v/@sallon/pacode.svg)](https://www.npmjs.com/package/@sallon/pacode)
+[![GitHub stars](https://img.shields.io/github/stars/yhtyhj-hue/PaCode?style=social)](https://github.com/yhtyhj-hue/PaCode)
 
 > 类 Claude Code 架构的 AI 编程助手框架 · 默认 MiniMax-M3
 
@@ -9,6 +13,20 @@
 - **官网:** https://yhtyhj-hue.github.io/PaCode/  
 - **Gitee 镜像:** https://gitee.com/sallon/pa-code  
 - **npm:** https://www.npmjs.com/package/@sallon/pacode
+
+## 界面预览
+
+<p align="center">
+  <img src="./docs/assets/screenshot-cli-ready.jpg" alt="PaCode CLI 启动就绪" width="820" />
+</p>
+
+<p align="center">
+  <img src="./docs/assets/screenshot-cli-session.jpg" alt="PaCode Agent 会话：Read / Edit / Bash" width="820" />
+</p>
+
+<p align="center">
+  <img src="./docs/assets/screenshot-website.jpg" alt="PaCode 官网落地页" width="820" />
+</p>
 
 ## 项目概述
 

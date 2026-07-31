@@ -314,6 +314,56 @@ a:hover {
   margin: 0;
 }
 
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+  align-items: center;
+}
+
+.hero-badges a {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.hero-badges img {
+  height: 20px;
+  width: auto;
+}
+
+.shot-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .shot-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .shot-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.shot {
+  margin: 0;
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  background: #0f1216;
+}
+
+.shot figcaption {
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .strip {
   display: grid;
   grid-template-columns: 1fr;
