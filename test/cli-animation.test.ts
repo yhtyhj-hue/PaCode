@@ -42,14 +42,16 @@ describe('BootAnimation', () => {
     const anim = new BootAnimation();
     await anim.show({ model: 'm', apiKeyConfigured: true, providerCount: 1 });
 
-    const boxBlocks = logs.filter((l) => l.includes('+') && l.includes('|'));
+    const boxBlocks = logs.filter((l) => l.includes('╭') && l.includes('│'));
     expect(boxBlocks.length).toBeGreaterThanOrEqual(1);
 
     for (const block of boxBlocks) {
-      const lines = block.split('\n').filter((l) => l.includes('+') || l.includes('|'));
+      const lines = block.split('\n').filter((l) => /[╭╮╰╯│]/.test(l));
       const widths = lines.map((l) => visibleWidth(l));
       expect(new Set(widths).size).toBe(1);
-      expect(widths[0]).toBe(100);
+      // 启动信息框有意限制 ≤72，避免超宽终端显得空
+      expect(widths[0]).toBeLessThanOrEqual(100);
+      expect(widths[0]).toBeGreaterThanOrEqual(40);
     }
   });
 
@@ -115,9 +117,10 @@ describe('formatBox', () => {
     const lines = box.split('\n');
     const widths = lines.map((l) => visibleWidth(l));
     expect(widths.every((w) => w === 40)).toBe(true);
-    expect(lines[0]).toMatch(/^\+-+\+$/);
-    expect(lines[1]?.startsWith('|')).toBe(true);
-    expect(lines[1]?.endsWith('|')).toBe(true);
+    const plain = (s: string) => s.replace(/\u001b\[[0-9;]*m/g, '');
+    expect(plain(lines[0]!)).toMatch(/^╭─+╮$/);
+    expect(plain(lines[1]!)).toMatch(/^│.*│$/);
+    expect(plain(lines[lines.length - 1]!)).toMatch(/^╰─+╯$/);
   });
 
   it('padEndVisible matches target visible width', () => {

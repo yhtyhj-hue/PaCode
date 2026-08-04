@@ -24,11 +24,9 @@ import { shouldEnableTui, startInkRepl } from './tui/index.js';
 import { runAgent } from '../sdk/run-agent.js';
 import { formatPacodeVersion } from '../pkg/version.js';
 import { formatSetupGuide } from './setup-guide.js';
+import { DIM, RESET, TEAL, BOLD } from './repl-ui.js';
 
 const log = new Logger({ prefix: 'CLI' });
-
-const RESET = '\x1b[0m';
-const DIM = '\x1b[2m';
 
 async function main() {
   const { values, positionals } = parseCliArgs();
@@ -131,7 +129,7 @@ async function main() {
 
   if (activeProvider && !printMode) {
     console.log(
-      `\n${DIM}Active: ${activeProvider.name} (${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
+      `\n${DIM}Active:${RESET} ${TEAL}${BOLD}${activeProvider.name}${RESET} ${DIM}(${model})${baseUrl ? ` → ${baseUrl}` : ''}${RESET}`
     );
   }
 

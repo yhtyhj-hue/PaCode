@@ -187,9 +187,9 @@ describe('QueryProgressLine CC style', () => {
 });
 
 describe('repl-ui status bar', () => {
-  it('uses >> prefix like Claude Code', () => {
+  it('uses ›› prefix with teal accent', () => {
     const bar = formatStatusBarLeft(PermissionMode.ACCEPT_EDITS);
-    expect(bar).toContain('>>');
+    expect(bar).toContain('››');
     expect(bar).toContain('accept edits on');
   });
 });

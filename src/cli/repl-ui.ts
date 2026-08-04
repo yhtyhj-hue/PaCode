@@ -1,5 +1,5 @@
 /**
- * REPL 输入区 UI — Claude Code 风格边框、提示符、状态栏
+ * REPL 输入区 UI — PaCode 风格：圆角框、青绿强调色、自适应宽度
  *
  * 所有宽度按终端可见列计算（CJK/emoji = 2），框线与状态栏跟终端自适应。
  */
@@ -8,11 +8,17 @@ import stringWidth from 'string-width';
 import { PermissionMode } from '../pkg/types.js';
 import { runStatuslineHook, type StatuslineContext } from './statusline.js';
 
-const RESET = '\x1b[0m';
-const BOLD = '\x1b[1m';
-const DIM = '\x1b[2m';
-const CYAN = '\x1b[36m';
-const MAGENTA = '\x1b[35m';
+export const RESET = '\x1b[0m';
+export const BOLD = '\x1b[1m';
+export const DIM = '\x1b[2m';
+export const CYAN = '\x1b[36m';
+export const GREEN = '\x1b[32m';
+export const YELLOW = '\x1b[33m';
+export const RED = '\x1b[31m';
+export const MAGENTA = '\x1b[35m';
+/** 合成预览同款青绿 #2dd4bf */
+export const TEAL = '\x1b[38;2;45;212;191m';
+export const BRIGHT_CYAN = '\x1b[96m';
 
 /** @deprecated 用 getUiWidth()；保留常量以免外部硬依赖断裂 */
 export const REPL_UI_WIDTH = 120;
@@ -60,43 +66,63 @@ export function truncateVisible(text: string, maxWidth: number): string {
   return `${out}…`;
 }
 
+export type BoxStyle = 'rounded' | 'ascii';
+
 /**
- * 绘制对齐方框。content 为框内可见行（可含 ANSI）。
- * 右边界 | 与上下 +---+ 必须对齐：内宽一律用 visibleWidth 垫平。
+ * 绘制对齐方框。默认圆角 Unicode（╭─╮│╰─╯），对齐按 visibleWidth。
  */
 export function formatBox(
   contentLines: string[],
-  options: { width?: number; indent?: number; padding?: number } = {}
+  options: {
+    width?: number;
+    indent?: number;
+    padding?: number;
+    style?: BoxStyle;
+    /** 边框颜色 ANSI（不含 RESET） */
+    borderColor?: string;
+  } = {}
 ): string {
   const indent = ' '.repeat(options.indent ?? 0);
   const padding = options.padding ?? 2;
   const outer = options.width ?? getUiWidth(options.indent ?? 0);
   const inner = Math.max(4, outer - 2);
-  const dash = '-'.repeat(inner);
+  const style = options.style ?? 'rounded';
+  const bc = options.borderColor ?? DIM;
+  const h = style === 'ascii' ? '-' : '─';
+  const v = style === 'ascii' ? '|' : '│';
+  const tl = style === 'ascii' ? '+' : '╭';
+  const tr = style === 'ascii' ? '+' : '╮';
+  const bl = style === 'ascii' ? '+' : '╰';
+  const br = style === 'ascii' ? '+' : '╯';
+  const dash = h.repeat(inner);
 
   const rows = contentLines.map((line) => {
     const body = `${' '.repeat(padding)}${line}`;
     const cell = padEndVisible(body, inner);
-    return `${indent}|${cell}|`;
+    return `${indent}${bc}${v}${RESET}${cell}${bc}${v}${RESET}`;
   });
 
-  return [`${indent}+${dash}+`, ...rows, `${indent}+${dash}+`].join('\n');
+  return [
+    `${indent}${bc}${tl}${dash}${tr}${RESET}`,
+    ...rows,
+    `${indent}${bc}${bl}${dash}${br}${RESET}`,
+  ].join('\n');
 }
 
 export function formatReplBorder(width = getUiWidth()): string {
   return `${DIM}${'─'.repeat(width)}${RESET}`;
 }
 
-/** 对话区用户消息（无输入框边框） */
+/** 对话区用户消息 */
 export function formatUserMessage(message: string): string {
   const firstLine = message.split('\n')[0] ?? message;
   const suffix = message.includes('\n') ? `${DIM}...${RESET}` : '';
-  return `${BOLD}>${RESET} ${firstLine}${suffix}`;
+  return `${TEAL}${BOLD}›${RESET} ${firstLine}${suffix}`;
 }
 
-/** 输入行提示符：亮绿 ❯（CC 风格） */
+/** 输入行提示符：青绿 ›（与合成预览一致） */
 export function formatInputPrompt(): string {
-  return `\x1b[32m❯\x1b[0m `;
+  return `${TEAL}${BOLD}›${RESET} `;
 }
 
 /** Claude Code 风格权限模式文案 */
@@ -135,14 +161,14 @@ export function formatTokenDisplay(tokens: number): string {
 export function formatStatusBarLeft(mode: PermissionMode): string {
   const label = formatModeStatusLabel(mode);
   return (
-    `${MAGENTA}>>${RESET} ${MAGENTA}${label}${RESET}` +
+    `${TEAL}››${RESET} ${TEAL}${label}${RESET}` +
     `${DIM} (shift+tab to cycle) · ctrl+c to interrupt · ctrl+o to expand${RESET}`
   );
 }
 
 export function formatStatusBarRight(tokens: number): string {
   const tokenStr = formatTokenDisplay(tokens);
-  return `${DIM}new task? /clear to save ${RESET}${CYAN}${tokenStr}${RESET}`;
+  return `${DIM}new task? /clear to save ${RESET}${TEAL}${tokenStr}${RESET}`;
 }
 
 /** 左对齐模式 + 右对齐 token，中间空格填充；可选 statusline 钩子追加 */
@@ -169,10 +195,10 @@ export function formatStatusBar(
   // 窄终端：缩短左侧提示，保证整体 ≤ width
   if (visibleWidth(left) + rightW + 1 > width) {
     const label = formatModeStatusLabel(mode);
-    left = `${MAGENTA}>>${RESET} ${MAGENTA}${label}${RESET}${DIM} · esc${RESET}`;
+    left = `${TEAL}››${RESET} ${TEAL}${label}${RESET}${DIM} · esc${RESET}`;
   }
   if (visibleWidth(left) + rightW + 1 > width) {
-    left = `${MAGENTA}>>${RESET} ${MAGENTA}${formatModeStatusLabel(mode)}${RESET}`;
+    left = `${TEAL}››${RESET} ${TEAL}${formatModeStatusLabel(mode)}${RESET}`;
   }
 
   const pad = Math.max(1, width - visibleWidth(left) - rightW);

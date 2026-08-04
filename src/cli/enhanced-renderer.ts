@@ -18,6 +18,7 @@ const YELLOW = '\x1b[33m';
 const ORANGE = '\x1b[38;5;208m';
 const WHITE = '\x1b[97m';
 const RED = '\x1b[31m';
+const TEAL = '\x1b[38;2;45;212;191m';
 
 export class EnhancedRenderer {
   /** Skill 加载 */
@@ -155,7 +156,9 @@ export class EnhancedRenderer {
   renderToolUse(tool: ToolCall, options?: { leadingNewline?: boolean }): void {
     const argsStr = this.formatToolArgs(tool);
     const prefix = options?.leadingNewline === false ? '' : '\n';
-    process.stdout.write(`${prefix}${DIM}⏺${RESET} ${tool.name}(${argsStr})\n`);
+    process.stdout.write(
+      `${prefix}${YELLOW}*${RESET} ${TEAL}${tool.name}${RESET}${DIM}(${argsStr})${RESET}\n`
+    );
   }
 
   /** 预取完成 — 紧凑摘要 */

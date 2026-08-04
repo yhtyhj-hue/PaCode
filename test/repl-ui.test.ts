@@ -44,14 +44,14 @@ describe('repl-ui', () => {
     expect(visibleWidth(lines[3]!)).toBe(80);
   });
 
-  it('uses simple > prompt', () => {
-    expect(formatInputPrompt()).toContain('❯');
+  it('uses teal › prompt', () => {
+    expect(formatInputPrompt()).toContain('›');
   });
 
   it('formats user turn without input box borders', () => {
     const line = formatUserMessage('hello');
     expect(line).toContain('hello');
-    expect(line.replace(/\x1b\[[0-9;]*m/g, '')).toContain('> hello');
+    expect(line.replace(/\x1b\[[0-9;]*m/g, '')).toContain('› hello');
     expect(line).not.toContain('─');
   });
 
@@ -59,7 +59,7 @@ describe('repl-ui', () => {
     const block = formatInputAreaBlock(PermissionMode.DEFAULT, 0);
     const lines = block.split('\n');
     expect(lines).toHaveLength(4);
-    expect(lines[1]).toContain('❯');
+    expect(lines[1]).toContain('›');
     expect(lines[3]).toContain('0 tokens');
   });
 

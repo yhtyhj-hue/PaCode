@@ -85,9 +85,9 @@ describe('ReplLineEditor.handlePaste', () => {
   });
 });
 
-describe('formatInputPrompt CC style', () => {
-  it('uses green chevron', () => {
-    expect(formatInputPrompt()).toContain('❯');
+describe('formatInputPrompt teal style', () => {
+  it('uses teal chevron', () => {
+    expect(formatInputPrompt()).toContain('›');
     expect(visibleWidth(formatInputPrompt())).toBeGreaterThanOrEqual(2);
   });
 });
