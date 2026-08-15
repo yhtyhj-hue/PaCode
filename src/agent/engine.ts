@@ -115,6 +115,8 @@ export class QueryEngine {
   /** 工具执行根目录（Subagent worktree 隔离时覆盖 process.cwd） */
   private workingDirectory: string;
   private readLine?: (prompt: string) => Promise<string>;
+  /** 结构化 AskUser 通道(TUI 注入,CC 同款选项列表) */
+  private askUser?: (input: unknown) => Promise<string>;
   private disableReflection: boolean;
   private apiKey?: string;
   private baseUrl?: string;
@@ -152,6 +154,7 @@ export class QueryEngine {
     this.prefetchConfig = options.prefetch ?? appConfig.prefetch;
     this.workingDirectory = options.workingDirectory ?? process.cwd();
     this.readLine = options.readLine;
+    this.askUser = options.askUser;
     this.disableReflection =
       Boolean(options.disableReflection) || process.env['PACODE_REFLECTION'] === '0';
     this.contextAssembler = options.contextAssembler ?? new ContextAssembler();
@@ -1133,6 +1136,7 @@ export class QueryEngine {
       hooks: this.hookRegistry,
       currentTool: toolCall,
       readLine: this.readLine,
+      askUser: this.askUser,
     };
   }
 
@@ -1364,6 +1368,8 @@ export interface QueryEngineOptions {
   workingDirectory?: string;
   /** AskUser 等交互工具用的读行（REPL 在 pause editor 后注入） */
   readLine?: (prompt: string) => Promise<string>;
+  /** 结构化 AskUser 通道（TUI 注入，CC 同款选项列表） */
+  askUser?: (input: unknown) => Promise<string>;
   /** 关闭 I3 reflection（M5 live 等） */
   disableReflection?: boolean;
 }

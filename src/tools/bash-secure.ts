@@ -311,7 +311,8 @@ export function checkBashSecurity(command: string): SecurityCheck {
   if (hasBareBackgroundAmpersand(trimmed)) {
     return {
       safe: false,
-      reason: 'Background execution (&) not allowed',
+      reason:
+        'Shell & (background fork) is blocked. Pass run_in_background: true on the Bash tool instead, then poll with BashOutput.',
       category: 'destructive',
     };
   }

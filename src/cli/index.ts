@@ -20,7 +20,10 @@ import {
 import { parseCliArgs } from './args.js';
 import { loadImageFromFile } from '../services/image-attach/index.js';
 import type { ImageSource } from '../pkg/types.js';
-import { shouldEnableTui, startInkRepl } from './tui/index.js';
+import {
+  shouldEnableTui,
+  startInkRepl,
+} from './tui/index.js';
 import { runAgent } from '../sdk/run-agent.js';
 import { formatPacodeVersion } from '../pkg/version.js';
 import { formatSetupGuide } from './setup-guide.js';
@@ -144,6 +147,7 @@ async function main() {
       process.exit(1);
     }
     const useTui = shouldEnableTui({
+      legacyFlag: Boolean((values as Record<string, unknown>)['legacy-repl']),
       tuiFlag: Boolean(values.tui),
       env: process.env,
     });

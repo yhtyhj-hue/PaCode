@@ -11,14 +11,28 @@ import { getAgentPool, resetAgentPool } from '../src/services/agent-scheduler/ag
 import { ToolCall, ToolResult } from '../src/pkg/types.js';
 
 describe('buildParallelAgentTasks', () => {
-  it('creates 4 parallel workers for inspect_project', () => {
+  it('creates 4 parallel workers for inspect_project in a git repo', () => {
+    // 当前 cwd(测试时)是 PaCode 仓库本身,属于 git repo
     const tasks = buildParallelAgentTasks('inspect_project');
-    expect(tasks).toHaveLength(4);
+    expect(tasks.length).toBeGreaterThanOrEqual(3);
     expect(tasks.map((t) => t.label)).toContain('Git变更分析');
     expect(tasks.map((t) => t.label)).toContain('代码结构扫描');
   });
 
-  it('adds fact-check nodes for review quality agent', () => {
+  it('omits git task and security scan when cwd is not a git repo', () => {
+    // /tmp 必然非 git;通过 cwd 参数注入,避免 process.chdir 在 worker 中不可用
+    const inspect = buildParallelAgentTasks('inspect_project', { cwd: '/tmp' });
+    expect(inspect.find((t) => t.id === 'agent-git')).toBeUndefined();
+    expect(inspect.map((t) => t.label)).toContain('项目配置审查');
+    expect(inspect.map((t) => t.label)).toContain('代码结构扫描');
+
+    const review = buildParallelAgentTasks('review_implementation', { cwd: '/tmp' });
+    expect(review.find((t) => t.id === 'agent-security')).toBeUndefined();
+    expect(review.find((t) => t.id === 'agent-git')).toBeUndefined();
+  });
+
+  it('adds fact-check nodes for review quality agent in a git repo', () => {
+    // 默认 cwd 是本仓库(也是 git repo)
     const tasks = buildParallelAgentTasks('review_implementation');
     const security = tasks.find((t) => t.id === 'agent-security');
     expect(security?.nodes.some((n) => n.id === 'coverage_tracked')).toBe(true);

@@ -73,12 +73,19 @@ export function buildBootChecks(input: BootStatusInput): BootCheck[] {
   ];
 }
 
-export class BootAnimation {
-  async show(input: string | BootStatusInput = {}): Promise<void> {
-    const status: BootStatusInput =
-      typeof input === 'string' ? { model: input } : input;
+export interface BootShowOptions extends BootStatusInput {
+  /** TUI 模式:Ink 自己会 enter alt-screen,跳过这里的 clearScreen 避免双重清屏 */
+  skipClearScreen?: boolean;
+}
 
-    this.clearScreen();
+export class BootAnimation {
+  async show(input: string | BootStatusInput | BootShowOptions = {}): Promise<void> {
+    const opts: BootShowOptions =
+      typeof input === 'string' ? { model: input } : input;
+    const status: BootStatusInput = opts;
+    const skipClear = opts.skipClearScreen === true;
+
+    if (!skipClear) this.clearScreen();
     await this.delay(60);
     await this.printLogo();
     await this.delay(120);

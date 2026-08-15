@@ -119,7 +119,43 @@ export function registerAskUserTool(registry: ToolRegistry): void {
     async execute(input: unknown, ctx: ToolContext) {
       const parsed = coerceInput((input ?? {}) as Record<string, unknown>);
 
-      // 优先用 REPL 注入的 reader（cooked stdin）；否则自建 readline（测试/非 REPL）
+      // 优先用 REPL/TUI 注入的结构化通道（CC 同款 UI）
+      if (ctx?.askUser) {
+        try {
+          const raw = await ctx.askUser(parsed);
+          // 后端用 parseAnswer 解 raw 字符串 → 友好归一化
+          const { parseAnswer } = await import('./parse.js');
+          const result = parseAnswer(raw, parsed.options, Boolean(parsed.multiSelect));
+          if (result.ok) {
+            const answer: AskUserAnswer = {
+              selection: result.selection,
+              rawInput: raw,
+              aborted: false,
+            };
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `selection=${formatSelection(answer)} raw=${JSON.stringify(raw)}`,
+                },
+              ],
+            };
+          }
+          // TUI 没解析成功(罕见):把原始 raw 当 abort 处理
+          return {
+            content: [
+              { type: 'text', text: `selection= raw=${JSON.stringify(raw)}` },
+            ],
+          };
+        } catch (e) {
+          if (e instanceof AskUserAbortedError) {
+            return { content: [{ type: 'text', text: 'aborted' }], isError: false };
+          }
+          throw e;
+        }
+      }
+
+      // Fallback:REPL 注入的 cooked reader 或自建 readline（测试/非 REPL）
       const readLine =
         ctx?.readLine ??
         ((prompt: string): Promise<string> =>

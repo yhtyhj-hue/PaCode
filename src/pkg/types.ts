@@ -47,8 +47,15 @@ export interface ToolContext {
   sessionState: SessionState;
   hooks: HookRegistry;
   currentTool?: ToolCall;
-  /** REPL 注入的 cooked stdin 读行（AskUser）；调用前须 pause line editor */
+  /** REPL 注入的 cooked stdin 读行(AskUser);调用前须 pause line editor */
   readLine?: (prompt: string) => Promise<string>;
+  /**
+   * 可选的结构化 AskUser 通道 — 由 TUI 注入,优先级高于 readLine。
+   * 接收完整 AskUserInput(question + options + multiSelect + default_id),返回 raw 字符串(数字/标签/逗号分隔),
+   * 由 askUser() 后端用 parseAnswer 解析。
+   * 避免 pkg/types 循环 import,这里用 unknown 占位,AskUser tool 内部强转。
+   */
+  askUser?: (input: unknown) => Promise<string>;
 }
 
 export interface ToolResult {

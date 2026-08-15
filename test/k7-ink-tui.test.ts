@@ -34,13 +34,18 @@ function mockCtl(): TuiController & { lines: string[] } {
 }
 
 describe('K7 shouldEnableTui', () => {
-  it('requires flag or PACODE_TUI=1 and TTY', () => {
-    expect(shouldEnableTui({ tuiFlag: false, env: {}, isTTY: true })).toBe(false);
+  it('defaults to TUI when TTY; opt-out via --legacy-repl / PACODE_LEGACY_REPL=1', () => {
+    // TTY + 无 opt-out:走 TUI(默认)
+    expect(shouldEnableTui({ env: {}, isTTY: true })).toBe(true);
+    // 非 TTY:回退 scrollback
+    expect(shouldEnableTui({ env: {}, isTTY: false })).toBe(false);
+    // 显式 --legacy-repl:回退 scrollback
+    expect(shouldEnableTui({ legacyFlag: true, env: {}, isTTY: true })).toBe(false);
+    // env opt-out
+    expect(shouldEnableTui({ env: { PACODE_LEGACY_REPL: '1' }, isTTY: true })).toBe(false);
+    // 显式 --tui 仍开启
     expect(shouldEnableTui({ tuiFlag: true, env: {}, isTTY: false })).toBe(false);
     expect(shouldEnableTui({ tuiFlag: true, env: {}, isTTY: true })).toBe(true);
-    expect(shouldEnableTui({ tuiFlag: false, env: { PACODE_TUI: '1' }, isTTY: true })).toBe(
-      true
-    );
   });
 });
 

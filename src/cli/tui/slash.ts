@@ -78,6 +78,8 @@ export interface TuiSlashContext {
   onSessionCompacted?: (session: SessionState) => void;
   /** 测试注入 MCP connections */
   mcpConnections?: MCPServerConnection[];
+  /** 后台 turn 入口(由 run.tsx 注入);不抢焦点 */
+  bgTurnFn?: (prompt: string) => Promise<void>;
   setModel?: (model: string) => void;
   /** 热切换 provider（更新 engine 凭证） */
   applyProvider?: (provider: Provider) => void;
@@ -401,6 +403,27 @@ export async function handleTuiSlash(
     case 'exit':
     case 'quit':
       return false; // 留给 App 层 exit
+    case 'btw': {
+      // /btw <prompt> — 后台 turn (不抢焦点;只追加系统消息)
+      const prompt = args.join(' ').trim();
+      if (!prompt) {
+        ctl.appendSystem('Usage: /btw <prompt> — run agent turn in background');
+        return true;
+      }
+      // 真正的后台执行由 run.tsx 通过 TuiSlashContext.bgTurnFn 注入;
+      // 测试用可手动 mock;默认给提示并由用户在尾部加 & 触发
+      if (ctx.bgTurnFn) {
+        void ctx.bgTurnFn(prompt);
+      } else {
+        ctl.appendSystem(
+          '[bg] no background runner wired; end your message with & to run in background'
+        );
+      }
+      return true;
+    }
+    case 'tui':
+      ctl.appendSystem('TUI is the default; pass --legacy-repl or PACODE_LEGACY_REPL=1 to revert');
+      return true;
     default:
       ctl.appendSystem(`Unknown slash: /${cmd}. Try /help`);
       return true;

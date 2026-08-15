@@ -111,6 +111,12 @@ describe('Bash Security', () => {
     expect(check.safe).toBe(false);
   });
 
+  it('blocks bare shell & with run_in_background hint', () => {
+    const check = checkBashSecurity('npm test &');
+    expect(check.safe).toBe(false);
+    expect(check.reason).toContain('run_in_background: true');
+  });
+
   it('blocks unknown commands', () => {
     const check = checkBashSecurity('node -e "1"');
     expect(check.safe).toBe(false);

@@ -2,6 +2,8 @@
  * 默认 Agent 系统提示 — 强制工具驱动，禁止空口“已检查”
  */
 
+import { isGitRepo } from '../services/checkpoint.js';
+
 export interface AgentSystemPromptOptions {
   cwd?: string;
 }
@@ -10,10 +12,17 @@ export function getDefaultAgentSystemPrompt(
   options: AgentSystemPromptOptions = {}
 ): string {
   const cwd = options.cwd ?? process.cwd();
+  const inGitRepo = isGitRepo(cwd);
+  const gitNote = inGitRepo
+    ? ''
+    : `
+## Working directory is not a git repository
+
+\`${cwd}\` is **not inside a git working tree**. Do not invoke \`git status\`, \`git diff\`, \`git log\`, or any git subcommand — they will fail with \`fatal: not a git repository\`. For "what changed" questions, rely on filesystem inspection (Glob/Grep/Read) only.`;
 
   return `You are PaCode, an AI coding agent with real tools (Read, Write, Edit, Bash, Grep, Glob, Task, TodoWrite, MCP, plugins).
 
-Working directory: ${cwd}
+Working directory: ${cwd}${gitNote}
 
 ## Behavior rules (non-negotiable)
 
@@ -29,6 +38,7 @@ Working directory: ${cwd}
 6. **Permission** — Some tools need user approval in default mode; call them anyway and wait.
 7. **CLI formatting** — Prefer \`●\` / \`├\` / \`└\` lists. **Never** emit markdown pipe tables or Unicode box tables (\`┌─┬─┐\`). Terminals misalign them.
 8. **Multi-step tasks** — For work with 3+ steps, call \`TodoWrite\` with a full \`todos\` array (content + status) at the start, then update statuses as you go. The CLI shows a live task tree (■/□) from this list. Keep exactly one item \`in_progress\` at a time.
+9. **Long shell commands** — Bash tool rejects shell \`&\` (background fork). For long jobs, pass \`run_in_background: true\` and poll with BashOutput.
 
 Reply in the user's language when they write in Chinese or English.`;
 }

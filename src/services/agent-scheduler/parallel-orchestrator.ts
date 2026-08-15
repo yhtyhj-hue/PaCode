@@ -20,6 +20,7 @@ import {
   ARCH_WIRE_CMD,
 } from './git-context.js';
 import { getAgentPool } from './agent-pool.js';
+import { isGitRepo } from '../checkpoint.js';
 
 export type PrefetchRun = { tool: ToolCall; result: ToolResult };
 
@@ -41,7 +42,10 @@ export function isParallelAgentsEnabled(): boolean {
   return process.env['PACODE_PARALLEL_AGENTS'] !== '0';
 }
 
-export function buildParallelAgentTasks(intent: ToolIntent): ParallelAgentTask[] {
+export function buildParallelAgentTasks(
+  intent: ToolIntent,
+  options: { cwd?: string } = {}
+): ParallelAgentTask[] {
   if (intent === 'run_tests') return [];
 
   if (intent === 'code_audit') {
@@ -154,13 +158,19 @@ export function buildParallelAgentTasks(intent: ToolIntent): ParallelAgentTask[]
     },
   ];
 
-  const tasks: ParallelAgentTask[] = [
-    {
+  const tasks: ParallelAgentTask[] = [];
+
+  // cwd 非 git 仓库时:跳过 git 节点 + security 扫描(diff 也没有意义)
+  const inGitRepo = isGitRepo(options.cwd ?? process.cwd());
+  if (inGitRepo) {
+    tasks.push({
       id: 'agent-git',
       label: 'Git变更分析',
       agentType: 'explore',
       nodes: gitNodes,
-    },
+    });
+  }
+  tasks.push(
     {
       id: 'agent-docs',
       label: '项目配置审查',
@@ -172,10 +182,10 @@ export function buildParallelAgentTasks(intent: ToolIntent): ParallelAgentTask[]
       label: '代码结构扫描',
       agentType: 'explore',
       nodes: structureNodes,
-    },
-  ];
+    }
+  );
 
-  if (intent === 'review_implementation') {
+  if (intent === 'review_implementation' && inGitRepo) {
     tasks.push({
       id: 'agent-security',
       label: '安全风险扫描',

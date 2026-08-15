@@ -21,6 +21,8 @@ export const CLI_OPTIONS = {
   resume: { type: 'boolean', default: false },
   'session-id': { type: 'string' },
   tui: { type: 'boolean', default: false },
+  /** opt-out: 退回老 scrollback REPL(默认走 Ink TUI) */
+  'legacy-repl': { type: 'boolean', default: false },
   /** Headless 打印（对标 claude -p）；跳过 REPL / boot 动画 */
   print: { type: 'boolean', short: 'p', default: false },
   /** G4：附加图片路径（可重复），如 --image shot.png */
