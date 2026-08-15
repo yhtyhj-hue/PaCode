@@ -15,7 +15,7 @@ import {
 import { PermissionMode } from '../../pkg/types.js';
 import { TuiLine } from './controller.js';
 import { colorForLineKind, toolIcon, formatStats, type ToolLine, type ToolStats } from './controller.js';
-import { DIM, RESET } from '../repl-ui.js';
+import { DIM, RESET, TEAL } from '../repl-ui.js';
 
 export interface InputBoxProps {
   buffer: string;
@@ -28,22 +28,24 @@ export interface InputBoxProps {
 }
 
 /**
- * 输入区(对齐 Claude Code):上横线 + prompt + 下横线 + 右侧状态
+ * 输入区(对齐 Claude Code):上横线 + prompt + 下横线 + status 行
  *
- * 不在框内嵌入完整 status bar(mode + tokens),因为 mode badge 已经在顶层。
- * 右侧一行简短的状态提示即可。
+ * status 行**总是显示**(对齐 CC):左侧 mode,右侧 token 数;busy 时中间多一个 `running…`。
+ * 即便用户空闲,也保留视觉锚点 — 知道当前 mode 和已消耗 token。
  */
 export function InputBox(props: InputBoxProps): React.ReactElement {
   const prompt = formatInputPrompt();
   const border = formatReplBorder(props.width ?? 80);
+  const modeLabel = `${TEAL}››${RESET} ${TEAL}${formatModeStatusLabel(props.mode)}${RESET}`;
   const rightHint = props.statusOverride
     ? `${DIM}${props.statusOverride}${RESET}`
     : props.busy
     ? `${DIM}running…${RESET}`
     : '';
+  const tokensRight = `${TEAL}${formatTokenCountForBox(props.tokens)} tokens${RESET}`;
   const display = props.colorizeBuffer(props.buffer);
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexShrink={0}>
       <Text>{border}</Text>
       <Box>
         <Text>{prompt}</Text>
@@ -51,9 +53,21 @@ export function InputBox(props: InputBoxProps): React.ReactElement {
         {!props.busy && <Text inverse>{' '}</Text>}
       </Box>
       <Text>{border}</Text>
-      {rightHint && <Text>{rightHint}</Text>}
+      <Box>
+        <Text>{modeLabel}</Text>
+        {rightHint && <Text>{`  ${rightHint}`}</Text>}
+        <Box flexGrow={1} />
+        <Text>{tokensRight}</Text>
+      </Box>
     </Box>
   );
+}
+
+/** 局部 helper:InputBox 用的 token 数渲染(避免外部依赖) */
+function formatTokenCountForBox(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
 }
 
 export interface TranscriptProps {
@@ -87,10 +101,10 @@ export interface ModeBadgeProps {
 export function ModeBadge(props: ModeBadgeProps): React.ReactElement {
   const label = formatModeStatusLabel(props.mode);
   return (
-    <Box>
+    <Box flexShrink={0}>
       <Text color="green">❯❯</Text>
       <Text> </Text>
-      <Text color="green">{label}</Text>
+      <Text color="green" bold>{label}</Text>
     </Box>
   );
 }
