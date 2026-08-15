@@ -40,7 +40,8 @@
     "eval:periodic": "vitest run evals/periodic",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test:all": "vitest run"
+    "test:all": "vitest run",
+    "sync:global": "node scripts/sync-global.js"
   },
   "keywords": [
     "claude",
