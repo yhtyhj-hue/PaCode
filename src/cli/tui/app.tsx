@@ -14,12 +14,11 @@ import {
   createInitialState,
   reduceTuiState,
   colorForLineKind,
-  formatTokenCount,
   type TuiLine,
 } from './controller.js';
 import { ConfirmInk } from './confirm.js';
 import { AskUserAbortedError } from '../../services/ask-user/index.js';
-import { StatusBar, InputBox, SlashMenu, AskUserInputBox, AskUserChoicePrompt } from './regions.js';
+import { InputBox, SlashMenu, AskUserInputBox, AskUserChoicePrompt, ModeBadge } from './regions.js';
 import {
   LiveWidgetsRow,
   type LiveTaskWidgetProps,
@@ -394,20 +393,20 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
 
   return (
     <Box flexDirection="column" width="100%">
-      {/* 顶 status bar(占位一行,具体内容由 regions StatusBar 控制) */}
-      <StatusBar
-        mode={state.live.mode}
-        tokens={totalTokens}
-        status={state.live.status}
-      />
+      {/* 顶部:mode badge(一行,跟 Claude Code 一致) */}
+      <ModeBadge mode={state.live.mode} />
 
       {/* Live widgets 区块:仅在 busy 时显示 */}
       {state.live.busy && (
         <LiveWidgetsRow progress={progressProps} task={taskProps} tool={toolProps} />
       )}
 
-      {/* Transcript(固定高度,可滚动) */}
-      <Box flexDirection="column" marginY={1} height={16}>
+      {/*
+        Transcript:flexGrow=1 占据除输入框外的所有剩余空间,overflow=hidden 把
+        溢出行裁掉而不是向下推输入框(否则长 transcript 会盖住输入区)。
+        flexShrink=0 让它不被挤掉。
+      */}
+      <Box flexDirection="column" marginY={1} flexGrow={1} flexShrink={0} overflow="hidden">
         {state.lines.map((line, i) => (
           <Text key={i} color={colorForLineKind(line.kind)} wrap="truncate">
             {line.text.replace(/\n/g, ' ')}
@@ -456,11 +455,6 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
             paste.hasCollapsed(input) ? 'paste again to expand' : undefined
           }
         />
-      )}
-
-      {/* 调试:token 计数(仅 busy 时折叠到状态栏) */}
-      {state.live.outputTokens > 0 && !state.live.busy && (
-        <Text dimColor>{`tokens: in=${formatTokenCount(state.live.inputTokens)} out=${formatTokenCount(state.live.outputTokens)}`}</Text>
       )}
     </Box>
   );

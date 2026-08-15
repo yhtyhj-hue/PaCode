@@ -8,39 +8,14 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import {
-  formatStatusBar,
   formatInputPrompt,
   formatModeStatusLabel,
   formatReplBorder,
 } from '../repl-ui.js';
-import type { StatuslineContext } from '../statusline.js';
 import { PermissionMode } from '../../pkg/types.js';
 import type { TuiLine } from './controller.js';
 import { colorForLineKind } from './controller.js';
-
-export interface StatusBarProps {
-  mode: PermissionMode;
-  tokens: number;
-  status: string;
-  width?: number;
-  statuslineCtx?: Omit<StatuslineContext, 'mode' | 'tokens'>;
-}
-
-export function StatusBar(props: StatusBarProps): React.ReactElement {
-  const line = formatStatusBar(
-    props.mode,
-    props.tokens,
-    props.width ?? 80,
-    props.statuslineCtx
-  );
-  // 拆 ANSI 序列:Ink 会自动重渲染颜色,但 status 字段被嵌在右侧 token 之前。
-  // 这里直接当纯文本渲染(颜色由 formatStatusBar 内置 ANSI 完成)。
-  return (
-    <Box>
-      <Text>{line}</Text>
-    </Box>
-  );
-}
+import { DIM, RESET } from '../repl-ui.js';
 
 export interface InputBoxProps {
   buffer: string;
@@ -52,12 +27,20 @@ export interface InputBoxProps {
   width?: number;
 }
 
+/**
+ * 输入区(对齐 Claude Code):上横线 + prompt + 下横线 + 右侧状态
+ *
+ * 不在框内嵌入完整 status bar(mode + tokens),因为 mode badge 已经在顶层。
+ * 右侧一行简短的状态提示即可。
+ */
 export function InputBox(props: InputBoxProps): React.ReactElement {
   const prompt = formatInputPrompt();
   const border = formatReplBorder(props.width ?? 80);
-  const status =
-    props.statusOverride ??
-    formatStatusBar(props.mode, props.tokens, props.width ?? 80);
+  const rightHint = props.statusOverride
+    ? `${DIM}${props.statusOverride}${RESET}`
+    : props.busy
+    ? `${DIM}running…${RESET}`
+    : '';
   const display = props.colorizeBuffer(props.buffer);
   return (
     <Box flexDirection="column">
@@ -65,10 +48,10 @@ export function InputBox(props: InputBoxProps): React.ReactElement {
       <Box>
         <Text>{prompt}</Text>
         <Text>{display}</Text>
-        {!props.busy && <Text dimColor>█</Text>}
+        {!props.busy && <Text inverse>{' '}</Text>}
       </Box>
       <Text>{border}</Text>
-      <Text>{status}</Text>
+      {rightHint && <Text>{rightHint}</Text>}
     </Box>
   );
 }
