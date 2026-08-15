@@ -15,9 +15,15 @@ import type { TaskPanelItem } from '../live-task-panel.js';
 
 export type TuiLineKind = 'user' | 'assistant' | 'tool' | 'system' | 'error';
 
+/** Who produced this transcript line — drives avatar + color in UI */
+export type TuiLineWho = 'user' | 'assistant' | 'tool' | 'system' | 'error';
+
 export interface TuiLine {
   kind: TuiLineKind;
+  who: TuiLineWho;
   text: string;
+  /** 结构化工具行(用于 ToolEntryRow 渲染);仅 kind==='tool' 时存在 */
+  tool?: ToolLine;
 }
 
 export interface TuiLiveState {
@@ -67,7 +73,7 @@ function pushLine(state: TuiState, line: TuiLine): TuiState {
   return {
     ...state,
     lines: [
-      { kind: 'system', text: `… ${dropped} earlier lines hidden` },
+      { kind: 'system', who: 'system', text: `… ${dropped} earlier lines hidden` },
       ...next.slice(-MAX_TRANSCRIPT_LINES),
     ],
   };
@@ -77,17 +83,32 @@ function appendAssistant(state: TuiState, delta: string): TuiState {
   if (!delta) return state;
   const last = state.lines[state.lines.length - 1];
   if (last?.kind === 'assistant') {
-    const updated: TuiLine = { kind: 'assistant', text: last.text + delta };
+    const updated: TuiLine = { kind: 'assistant', who: 'assistant', text: last.text + delta };
     return { ...state, lines: [...state.lines.slice(0, -1), updated] };
   }
-  return pushLine(state, { kind: 'assistant', text: delta });
+  return pushLine(state, { kind: 'assistant', who: 'assistant', text: delta });
+}
+
+export type ToolStats =
+  | { kind: 'lines'; count: number }
+  | { kind: 'matches'; count: number }
+  | { kind: 'paths'; count: number }
+  | { kind: 'diff'; added: number; removed: number }
+  | { kind: 'elapsed'; ms: number }
+  | { kind: 'note'; text: string };
+
+export interface ToolLine {
+  name: string;
+  path?: string;
+  args?: string;
+  stats?: ToolStats;
 }
 
 export type TuiAction =
   | { type: 'appendUser'; text: string }
   | { type: 'appendSystem'; text: string }
   | { type: 'appendError'; text: string }
-  | { type: 'appendTool'; name: string; detail?: string }
+  | { type: 'appendTool'; tool: ToolLine }
   | { type: 'appendAssistantDelta'; delta: string }
   | { type: 'setBusy'; busy: boolean }
   | { type: 'setStatus'; status: string }
@@ -101,15 +122,17 @@ export type TuiAction =
 export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
   switch (action.type) {
     case 'appendUser':
-      return pushLine(state, { kind: 'user', text: `❯ ${action.text}` });
+      return pushLine(state, { kind: 'user', who: 'user', text: `❯ ${action.text}` });
     case 'appendSystem':
-      return pushLine(state, { kind: 'system', text: action.text });
+      return pushLine(state, { kind: 'system', who: 'system', text: action.text });
     case 'appendError':
-      return pushLine(state, { kind: 'error', text: action.text });
+      return pushLine(state, { kind: 'error', who: 'error', text: action.text });
     case 'appendTool':
       return pushLine(state, {
         kind: 'tool',
-        text: action.detail ? `▸ ${action.name} ${action.detail}` : `▸ ${action.name}`,
+        who: 'tool',
+        text: formatToolLineText(action.tool),
+        tool: action.tool,
       });
     case 'appendAssistantDelta':
       return appendAssistant(state, action.delta);
@@ -158,6 +181,123 @@ export function colorForLineKind(kind: TuiLineKind): string | undefined {
   return undefined;
 }
 
+/**
+ * 从 ToolCall + 文本输出里抽出"显示用"的路径/参数(中间列)
+ */
+export function pickToolPath(tool: { name: string; input: Record<string, unknown> }): string | undefined {
+  const input = tool.input;
+  if (tool.name === 'Read' || tool.name === 'Write' || tool.name === 'Edit' || tool.name === 'Glob') {
+    const p = input['path'] ?? input['pattern'];
+    if (typeof p === 'string') return p;
+  }
+  if (tool.name === 'Grep') {
+    const pattern = input['pattern'];
+    const path = input['path'];
+    if (typeof pattern === 'string' && typeof path === 'string') return `"${pattern}" in ${path}`;
+    if (typeof pattern === 'string') return `"${pattern}"`;
+  }
+  if (tool.name === 'Bash') {
+    const cmd = input['command'];
+    if (typeof cmd === 'string') return cmd.length > 60 ? `${cmd.slice(0, 57)}…` : cmd;
+  }
+  return undefined;
+}
+
+/**
+ * 从 ToolCall + 输出文本 + 可选 elapsedMs 算 ToolStats。
+ * 这是纯函数,方便单测。
+ */
+export function computeToolStats(
+  tool: { name: string; input: Record<string, unknown> },
+  outputText: string,
+  elapsedMs?: number
+): ToolStats | undefined {
+  if (tool.name === 'Read') {
+    const lines = outputText.split('\n').filter(Boolean).length;
+    return { kind: 'lines', count: lines };
+  }
+  if (tool.name === 'Glob') {
+    const count = outputText.split('\n').filter(Boolean).length;
+    return { kind: 'paths', count };
+  }
+  if (tool.name === 'Grep') {
+    const count = outputText.split('\n').filter(Boolean).length;
+    return { kind: 'matches', count };
+  }
+  if (tool.name === 'Edit') {
+    // Edit tool 把 + / - 数放在 ToolResultContent metadata 或能从 diff 解析;
+    // 简化版:从 outputText 第一行匹配 "+N -M" / "+N/-M"。
+    const m = /^\+(\d+)\s*-(\d+)/m.exec(outputText) ?? /^\+(\d+)\/-(\d+)/m.exec(outputText);
+    if (m) {
+      return { kind: 'diff', added: Number(m[1]), removed: Number(m[2]) };
+    }
+    return { kind: 'note', text: 'applied' };
+  }
+  if (tool.name === 'Bash') {
+    if (typeof elapsedMs === 'number') {
+      return { kind: 'elapsed', ms: elapsedMs };
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * 工具行 emoji 图标(对齐 Claude Code)
+ */
+export function toolIcon(name: string): string {
+  switch (name) {
+    case 'Read':
+      return '📄';
+    case 'Edit':
+      return '✏️';
+    case 'Write':
+      return '📝';
+    case 'Bash':
+      return '⌨️';
+    case 'Grep':
+      return '🔍';
+    case 'Glob':
+      return '📁';
+    case 'Task':
+    case 'TodoWrite':
+      return '📋';
+    case 'WebFetch':
+      return '🌐';
+    default:
+      return '▸';
+  }
+}
+
+/**
+ * 把 ToolStats 渲染成右对齐的简短标签
+ */
+export function formatStats(stats: ToolStats | undefined): string {
+  if (!stats) return '';
+  if (stats.kind === 'lines') return `${stats.count} lines`;
+  if (stats.kind === 'matches') return `${stats.count} matches`;
+  if (stats.kind === 'paths') return `${stats.count} paths`;
+  if (stats.kind === 'diff') {
+    return `+${stats.added} -${stats.removed}`;
+  }
+  if (stats.kind === 'elapsed') {
+    return stats.ms < 1000 ? `${stats.ms}ms` : `${(stats.ms / 1000).toFixed(1)}s`;
+  }
+  return stats.text;
+}
+
+/**
+ * 把 ToolLine 渲染成单行字符串(TUI 内部使用 — Ink 实际渲染走 ToolEntryRow)
+ */
+export function formatToolLineText(tool: ToolLine): string {
+  const parts = [toolIcon(tool.name), tool.name];
+  if (tool.path) parts.push(tool.path);
+  if (tool.args) parts.push(tool.args);
+  const head = parts.join(' ');
+  const stats = formatStats(tool.stats);
+  return stats ? `${head}  ${stats}` : head;
+}
+
 /** 把 token 数渲染成简短字符串 */
 export function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -170,11 +310,7 @@ export const Actions = {
   appendUser: (text: string): TuiAction => ({ type: 'appendUser', text }),
   appendSystem: (text: string): TuiAction => ({ type: 'appendSystem', text }),
   appendError: (text: string): TuiAction => ({ type: 'appendError', text }),
-  appendTool: (name: string, detail?: string): TuiAction => ({
-    type: 'appendTool',
-    name,
-    detail,
-  }),
+  appendTool: (tool: ToolLine): TuiAction => ({ type: 'appendTool', tool }),
   appendAssistantDelta: (delta: string): TuiAction => ({
     type: 'appendAssistantDelta',
     delta,

@@ -13,8 +13,8 @@ import {
   formatReplBorder,
 } from '../repl-ui.js';
 import { PermissionMode } from '../../pkg/types.js';
-import type { TuiLine } from './controller.js';
-import { colorForLineKind } from './controller.js';
+import { TuiLine } from './controller.js';
+import { colorForLineKind, toolIcon, formatStats, type ToolLine, type ToolStats } from './controller.js';
 import { DIM, RESET } from '../repl-ui.js';
 
 export interface InputBoxProps {
@@ -211,5 +211,111 @@ export function AskUserChoicePrompt(props: AskUserChoicePromptProps): React.Reac
           : '↑/↓ to move · enter to confirm · 1-9 shortcut · esc to abort'}
       </Text>
     </Box>
+  );
+}
+
+export interface AvatarBadgeProps {
+  who: 'user' | 'assistant' | 'tool' | 'system' | 'error';
+}
+
+/** 行首头像/角色徽章(对齐 Claude Code 的 You / PaCode AI 区分) */
+export function AvatarBadge(props: AvatarBadgeProps): React.ReactElement {
+  if (props.who === 'user') {
+    return (
+      <Box>
+        <Text color="cyan">👤 You</Text>
+      </Box>
+    );
+  }
+  if (props.who === 'assistant') {
+    return (
+      <Box>
+        <Text color="green">🤖 PaCode AI</Text>
+      </Box>
+    );
+  }
+  if (props.who === 'error') {
+    return (
+      <Box>
+        <Text color="red">⚠ error</Text>
+      </Box>
+    );
+  }
+  // tool / system 不显示头像 — 已经是结构化组件
+  return <Box />;
+}
+
+export interface ToolEntryRowProps {
+  tool: ToolLine;
+}
+
+/**
+ * 工具调用行(对齐 Claude Code):
+ *   📄 Read      src/auth/session.ts                120 lines
+ *   🔍 Grep      "isExpired" in src/auth            8 matches
+ *   ✏️  Edit      src/auth/session.ts                +6 -2
+ *   ⌨️  Bash      npm test                          1.2s · 4 passed
+ *
+ * 三列布局:左 icon+name | 中 path/args | 右 stats
+ * 用 Box 弹性填充中间列;右对齐 stats
+ */
+export function ToolEntryRow(props: ToolEntryRowProps): React.ReactElement {
+  const { tool } = props;
+  const stats = formatStats(tool.stats);
+  return (
+    <Box flexDirection="row">
+      <Box>
+        <Text color="magenta">{`${toolIcon(tool.name)} ${tool.name}`}</Text>
+      </Box>
+      <Box flexGrow={1} marginLeft={1} marginRight={1}>
+        <Text color="white">{tool.path ?? tool.args ?? ''}</Text>
+      </Box>
+      <Box>
+        {stats && <Text color={statsColor(tool.stats)}>{stats}</Text>}
+      </Box>
+    </Box>
+  );
+}
+
+/** stats 颜色:diff +/-, elapsed, lines 暗色;matches/paths 灰色 */
+function statsColor(stats: ToolStats | undefined): string | undefined {
+  if (!stats) return undefined;
+  if (stats.kind === 'diff') return 'green';
+  return 'gray';
+}
+
+/** 渲染一行 transcript:根据 kind/who 路由到合适的 region 组件 */
+export function TranscriptLine({ line }: { line: TuiLine }): React.ReactElement {
+  if (line.kind === 'tool' && line.tool) {
+    return <ToolEntryRow tool={line.tool} />;
+  }
+  if (line.kind === 'user') {
+    return (
+      <Box flexDirection="column">
+        <AvatarBadge who="user" />
+        <Text color="cyan" wrap="wrap">{line.text}</Text>
+      </Box>
+    );
+  }
+  if (line.kind === 'assistant') {
+    return (
+      <Box flexDirection="column">
+        <AvatarBadge who="assistant" />
+        <Text wrap="wrap">{line.text}</Text>
+      </Box>
+    );
+  }
+  if (line.kind === 'error') {
+    return (
+      <Box flexDirection="column">
+        <AvatarBadge who="error" />
+        <Text color="red" wrap="wrap">{line.text}</Text>
+      </Box>
+    );
+  }
+  return (
+    <Text color={colorForLineKind(line.kind)} wrap="wrap">
+      {line.text}
+    </Text>
   );
 }

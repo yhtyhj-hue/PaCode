@@ -8,17 +8,16 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, useApp, useInput } from 'ink';
 import type { PermissionMode } from '../../pkg/types.js';
 import {
   createInitialState,
   reduceTuiState,
-  colorForLineKind,
   type TuiLine,
 } from './controller.js';
 import { ConfirmInk } from './confirm.js';
 import { AskUserAbortedError } from '../../services/ask-user/index.js';
-import { InputBox, SlashMenu, AskUserInputBox, AskUserChoicePrompt, ModeBadge } from './regions.js';
+import { InputBox, SlashMenu, AskUserInputBox, AskUserChoicePrompt, ModeBadge, TranscriptLine } from './regions.js';
 import {
   LiveWidgetsRow,
   type LiveTaskWidgetProps,
@@ -46,7 +45,7 @@ export interface TuiController {
   appendUser: (text: string) => void;
   appendSystem: (text: string) => void;
   appendError: (text: string) => void;
-  appendTool: (name: string, detail?: string) => void;
+  appendTool: (tool: import('./controller.js').ToolLine) => void;
   appendAssistantDelta: (delta: string) => void;
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
@@ -134,7 +133,7 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
       appendUser: (text) => dispatch({ type: 'appendUser', text }),
       appendSystem: (text) => dispatch({ type: 'appendSystem', text }),
       appendError: (text) => dispatch({ type: 'appendError', text }),
-      appendTool: (name, detail) => dispatch({ type: 'appendTool', name, detail }),
+      appendTool: (tool) => dispatch({ type: 'appendTool', tool }),
       appendAssistantDelta: (delta) => dispatch({ type: 'appendAssistantDelta', delta }),
       setBusy: (busy) => {
         dispatch({ type: 'setBusy', busy });
@@ -408,9 +407,9 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
       */}
       <Box flexDirection="column" marginY={1} flexGrow={1} flexShrink={0} overflow="hidden">
         {state.lines.map((line, i) => (
-          <Text key={i} color={colorForLineKind(line.kind)} wrap="truncate">
-            {line.text.replace(/\n/g, ' ')}
-          </Text>
+          <Box key={i} marginBottom={1}>
+            <TranscriptLine line={line} />
+          </Box>
         ))}
       </Box>
 

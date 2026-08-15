@@ -20,6 +20,11 @@ import { TuiApp, type TuiController } from './app.js';
 import { handleTuiSlash } from './slash.js';
 import { getTodoStore } from '../../context/todo-store.js';
 import { todosToPanelItems } from '../live-task-panel.js';
+import {
+  computeToolStats,
+  pickToolPath,
+  type ToolLine,
+} from './controller.js';
 
 export interface InkReplOptions {
   apiKey: string;
@@ -36,6 +41,9 @@ function summarizeTool(tool: ToolCall): string {
   const cmd = input['command'] ?? input['path'] ?? input['pattern'];
   return typeof cmd === 'string' ? cmd.slice(0, 60) : '';
 }
+
+/** 缓存 tool_use,等 tool_result 拿到输出 + elapsed 后再 dispatch appendTool */
+const pendingTools = new Map<string, { tool: ToolCall; startedAt: number }>();
 
 /**
  * TUI 模式:把任何对 process.stdout.write 的直写(hook / 第三方代码)路由到
@@ -192,15 +200,30 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
         if (event.type === 'content_block_delta' && event.delta?.text) {
           ctl.appendAssistantDelta(event.delta.text);
         } else if (event.type === 'tool_use' && event.tool) {
-          ctl.appendTool(event.tool.name, summarizeTool(event.tool));
+          // 缓存,等 tool_result 拿到输出后再 dispatch(带 stats)
+          pendingTools.set(event.tool.id, { tool: event.tool, startedAt: Date.now() });
           if (event.tool.name === 'TodoWrite') {
-            // TodoWrite 写完后,把 store 里的 todo 列表作为 live task panel 内容推给 controller
             const items = todosToPanelItems(getTodoStore().list(session.sessionId));
             ctl.setLiveTasks(items);
           }
           ctl.setToolRunning({ name: event.tool.name });
-        } else if (event.type === 'tool_result') {
+        } else if (event.type === 'tool_result' && event.tool && event.result) {
+          // 配对:用 tool_use 时存的 tool + 现在拿到的 result 算 stats
+          const pending = pendingTools.get(event.tool.id);
+          const elapsedMs = pending ? Date.now() - pending.startedAt : undefined;
+          const outputText = event.result.content
+            .filter((c) => c.type === 'text')
+            .map((c) => (c as { text: string }).text)
+            .join('\n');
+          const stats = computeToolStats(event.tool, outputText, elapsedMs);
+          const line: ToolLine = {
+            name: event.tool.name,
+            path: pickToolPath(event.tool),
+            stats,
+          };
+          ctl.appendTool(line);
           ctl.setToolRunning(null);
+          pendingTools.delete(event.tool.id);
         } else if (event.type === 'message_stop' && event.usage) {
           const inTok = event.usage.inputTokens ?? 0;
           const outTok = event.usage.outputTokens ?? 0;
