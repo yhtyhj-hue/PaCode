@@ -17,9 +17,10 @@ const targetDir =
     ? args[targetArgIdx + 1]
     : join(process.env.HOME ?? '', '.nvm/versions/node', 'v' + process.version.slice(1), 'lib/node_modules/@sallon/pacode');
 
-const srcDir = join(process.cwd(), 'dist', 'cli');
+const srcDir = join(process.cwd(), 'dist');
+const targetDistDir = join(targetDir, 'dist');
 if (!existsSync(srcDir)) {
-  console.error('dist/cli not found — run `npm run build` first.');
+  console.error('dist not found — run `npm run build` first.');
   process.exit(1);
 }
 if (!existsSync(targetDir)) {
@@ -27,9 +28,6 @@ if (!existsSync(targetDir)) {
   console.error('Pass --target <dir> to specify a custom global install location.');
   process.exit(1);
 }
-
-const targetCliDir = join(targetDir, 'dist', 'cli');
-mkdirSync(targetCliDir, { recursive: true });
 
 function walkAndCopy(fromDir, toDir) {
   for (const entry of readdirSync(fromDir)) {
@@ -59,8 +57,8 @@ function pruneExtras(fromDir, toDir) {
   }
 }
 
-walkAndCopy(srcDir, targetCliDir);
-pruneExtras(srcDir, targetCliDir);
+walkAndCopy(srcDir, targetDistDir);
+pruneExtras(srcDir, targetDistDir);
 
 // Also copy bin/pacode.js entry (root bin shim)
 const srcBin = join(process.cwd(), 'bin', 'pacode.js');
@@ -73,5 +71,5 @@ if (existsSync(srcBin) && existsSync(dirname(targetBin))) {
   } catch {}
 }
 
-const fileCount = readdirSync(targetCliDir).length;
+const fileCount = readdirSync(targetDistDir).length;
 console.log(`synced ${fileCount} entries → ${targetDir}`);
