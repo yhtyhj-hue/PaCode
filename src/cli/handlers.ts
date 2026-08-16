@@ -20,6 +20,7 @@ import { REPL } from './repl.js';
 import { getWorktreeManager, WorktreeManager } from './worktree.js';
 import { DEFAULT_MODEL } from '../pkg/defaults.js';
 import { getPackageVersion } from '../pkg/version.js';
+import { spawn, spawnSync } from 'node:child_process';
 
 const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
@@ -41,6 +42,7 @@ Usage:
   pacode resume list               List saved sessions
   pacode worktree <command>        Manage git worktrees for parallel work
   pacode bridge serve              Start local WebSocket session relay
+  pacode update                    Self-update to latest npm version
 
 Options:
   -h, --help              Show this help
@@ -793,4 +795,72 @@ Default bind: 127.0.0.1. Non-loopback requires --allow-lan and a token.
 In REPL: /bridge session list|attach <id>
 `);
   return sub === 'help';
+}
+
+/**
+ * pacode update — self-update via npm install -g @sallon/pacode@latest.
+ *
+ * 流程:
+ *  1. `npm view @sallon/pacode version` 拿最新版本
+ *  2. 比对当前 getPackageVersion();已是最新就退出
+ *  3. spawn `npm install -g @sallon/pacode@latest`,透传 stdout/stderr
+ *
+ * 注意: npm 把当前 binary 在 exec 期替换,symlink 更新后进程持有旧文件
+ * 仍能跑完。提示用户重启 shell。
+ */
+export async function handleUpdate(): Promise<boolean> {
+  const currentVersion = getPackageVersion();
+  const exe = process.execPath;
+  console.log(`${CYAN}Current:${RESET} ${currentVersion}`);
+  console.log(`${DIM}Checking npm for latest version…${RESET}`);
+
+  let latest: string | undefined;
+  try {
+    const result = spawnSync('npm', ['view', '@sallon/pacode', 'version'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 30_000,
+    });
+    if (result.status !== 0) {
+      console.error(`${YELLOW}Failed to query npm registry:${RESET}`);
+      console.error(result.stderr || result.stdout || `npm exited ${result.status}`);
+      return false;
+    }
+    latest = (result.stdout || '').trim();
+  } catch (e) {
+    console.error(`${YELLOW}Cannot reach npm registry:${RESET} ${e instanceof Error ? e.message : String(e)}`);
+    return false;
+  }
+
+  console.log(`${CYAN}Latest:${RESET}  ${latest}`);
+
+  if (latest === currentVersion) {
+    console.log(`${GREEN}✓ Already up to date.${RESET}`);
+    return true;
+  }
+
+  console.log(`${DIM}Running: npm install -g @sallon/pacode@${latest}${RESET}`);
+  const child = spawn('npm', ['install', '-g', `@sallon/pacode@${latest}`], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  return new Promise<boolean>((resolve) => {
+    child.on('error', (e) => {
+      console.error(`${YELLOW}npm install failed to start:${RESET} ${e.message}`);
+      resolve(false);
+    });
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log('');
+        console.log(`${GREEN}✓ Updated to ${latest}.${RESET}`);
+        console.log(`${DIM}Restart your shell to load the new binary at:${RESET}`);
+        console.log(`  ${exe}`);
+        resolve(true);
+      } else {
+        console.error(`${YELLOW}npm install exited ${String(code)}${RESET}`);
+        resolve(false);
+      }
+    });
+  });
 }

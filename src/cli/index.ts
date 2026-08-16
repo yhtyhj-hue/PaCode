@@ -15,6 +15,7 @@ import {
   handleWorktree,
   handleCCSwitch,
   handleBridge,
+  handleUpdate,
   showHelp,
 } from './handlers.js';
 import { parseCliArgs } from './args.js';
@@ -67,6 +68,11 @@ async function main() {
   if (positionals[0] === 'worktree' || positionals[0] === 'wt') {
     await handleWorktree(positionals.slice(1));
     process.exit(0);
+  }
+
+  if (positionals[0] === 'update') {
+    const ok = await handleUpdate();
+    process.exit(ok ? 0 : 1);
   }
 
   if (positionals[0] === 'bridge') {
