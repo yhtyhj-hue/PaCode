@@ -81,6 +81,22 @@ function envBaseUrl(): string | undefined {
   );
 }
 
+/**
+ * 从 baseUrl 推断默认 model。
+ *
+ * 当 import 进来的 provider 没显式 model 时,resolveAppConfig 不能落到通用
+ * DEFAULT_MODEL(MiniMax-M3),否则 DeepSeek URL 用 MiniMax 模型会报
+ * `invalid_request_error`。规则:任何"看起来像"的 baseUrl 都有专属默认值。
+ */
+function inferModelFromBaseUrl(baseUrl: string | undefined): string | undefined {
+  if (!baseUrl) return undefined;
+  const u = baseUrl.toLowerCase();
+  if (u.includes('api.deepseek.com')) return 'deepseek-v4-flash';
+  if (u.includes('api.minimaxi.com')) return 'MiniMax-M3';
+  if (u.includes('openrouter.ai')) return undefined; // OpenRouter 路由不绑 model
+  return undefined;
+}
+
 /** 合并三层配置，CLI flags 优先级最高 */
 export function resolveAppConfig(
   cli: AppConfigCliOverrides = {},
@@ -103,23 +119,26 @@ export function resolveAppConfig(
     paude.prefetch.intents as string[] | undefined
   ) as ToolIntent[] | undefined;
 
+  const resolvedBaseUrl =
+    cli.baseUrl ??
+    settings.baseUrl ??
+    paude.model.baseUrl ??
+    creds.baseUrl ??
+    envBaseUrl() ??
+    DEFAULT_BASE_URL;
+
   return {
     model:
       cli.model ??
       settings.model ??
       paude.model.model ??
       creds.model ??
+      inferModelFromBaseUrl(resolvedBaseUrl) ??
       envModel() ??
       DEFAULT_MODEL,
     apiKey:
       cli.apiKey ?? settings.apiKey ?? paude.model.apiKey ?? creds.apiKey ?? envApiKey(),
-    baseUrl:
-      cli.baseUrl ??
-      settings.baseUrl ??
-      paude.model.baseUrl ??
-      creds.baseUrl ??
-      envBaseUrl() ??
-      DEFAULT_BASE_URL,
+    baseUrl: resolvedBaseUrl,
     authStyle: cli.authStyle ?? creds.authStyle,
     apiProtocol: cli.apiProtocol ?? creds.apiProtocol,
     maxTokens: cli.maxTokens ?? settings.maxTokens ?? paude.model.maxTokens ?? DEFAULT_MAX_TOKENS,
