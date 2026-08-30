@@ -25,6 +25,7 @@ import {
   type ToolRunningWidgetProps,
 } from './live-widget.js';
 import { usePasteChips } from './paste-chips.js';
+import { getBashJobStore } from '../../services/bash-jobs/index.js';
 import {
   filterSlashCommands,
   completeSlashCommand,
@@ -126,6 +127,39 @@ export function TuiApp(props: TuiAppProps): React.ReactElement {
     }, 1000);
     return () => clearInterval(id);
   }, [state.live.busy, busyStartedAt]);
+
+  // 1Hz bg-job tick:扫所有带 bgJobId 的 tool 行,查 BashJobStore 更新 status
+  useEffect(() => {
+    const bgJobs: Array<{ lineId: number; bgJobId: string; lastStatus: string | undefined }> = [];
+    state.lines.forEach((line, idx) => {
+      if (line.kind === 'tool' && line.tool?.bgJobId) {
+        bgJobs.push({
+          lineId: idx,
+          bgJobId: line.tool.bgJobId,
+          lastStatus: line.tool.bgStatus,
+        });
+      }
+    });
+    if (bgJobs.length === 0) return;
+    const id = setInterval(() => {
+      for (const job of bgJobs) {
+        try {
+          const status = getBashJobStore().get(job.bgJobId)?.status;
+          if (status && status !== job.lastStatus) {
+            dispatch({
+              type: 'updateBgJob',
+              lineId: job.lineId,
+              bgJobId: job.bgJobId,
+              bgStatus: status,
+            });
+          }
+        } catch {
+          // store 没准备好或 job 不存在 — 跳过
+        }
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state.lines]);
 
   // bindController
   useEffect(() => {

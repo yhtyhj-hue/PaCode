@@ -62,6 +62,12 @@ export interface ToolResult {
   content: ToolResultContent[];
   isError?: boolean;
   preserve?: boolean;
+  /**
+   * 结构化 side data 通道(for TUI/UI 增强;不进入 LLM context)。
+   * 已知 kind:
+   *   - 'edit_diff' { path, oldText, newText, lineStart, added, removed }
+   */
+  data?: { kind: string; [key: string]: unknown };
 }
 
 export type ToolResultContent =

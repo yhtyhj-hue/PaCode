@@ -287,6 +287,77 @@ export function ToolEntryRow(props: ToolEntryRowProps): React.ReactElement {
       <Box>
         {stats && <Text color={statsColor(tool.stats)}>{stats}</Text>}
       </Box>
+      {tool.bgJobId && (
+        <Box marginLeft={1}>
+          <BgStatusIcon status={tool.bgStatus ?? 'running'} />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/** 后台 Bash job 状态图标(对齐 CC) */
+function BgStatusIcon({
+  status,
+}: {
+  status: 'running' | 'done' | 'error' | 'stopped';
+}): React.ReactElement {
+  if (status === 'running') return <Text color="yellow">⏳</Text>;
+  if (status === 'done') return <Text color="green">✓</Text>;
+  if (status === 'error') return <Text color="red">✗</Text>;
+  return <Text dimColor>■ stopped</Text>;
+}
+
+/**
+ * Edit 工具的结构化 diff 块 — `+` 绿 / `-` 红 / `@@` hunk header 灰。
+ * 与老 REPL 的 ANSI 输出不同,这里依赖 Ink color prop 渲染。
+ */
+export interface DiffBlockProps {
+  diff: import('./controller.js').ToolLineDiff;
+  /** 最多渲染多少行;默认 20 防止超出可视区 */
+  maxLines?: number;
+}
+
+export function DiffBlock(props: DiffBlockProps): React.ReactElement {
+  const max = props.maxLines ?? 20;
+  const oldLines = props.diff.oldText.split('\n');
+  const newLines = props.diff.newText.split('\n');
+  const lines = [
+    { kind: 'header' as const, text: `@@ -${props.diff.lineStart},${oldLines.length} +${props.diff.lineStart},${newLines.length} @@` },
+    ...oldLines.map((text) => ({ kind: 'del' as const, text })),
+    ...newLines.map((text) => ({ kind: 'add' as const, text })),
+  ];
+  const truncated = lines.length > max;
+  const shown = truncated ? lines.slice(0, max) : lines;
+
+  return (
+    <Box flexDirection="column" marginLeft={1} borderStyle="single" borderColor="gray" paddingX={1} flexShrink={0}>
+      {shown.map((line, i) => {
+        if (line.kind === 'header') {
+          return (
+            <Text key={i} dimColor>
+              {line.text}
+            </Text>
+          );
+        }
+        if (line.kind === 'del') {
+          return (
+            <Text key={i} color="red">
+              {`- ${line.text}`}
+            </Text>
+          );
+        }
+        return (
+          <Text key={i} color="green">
+            {`+ ${line.text}`}
+          </Text>
+        );
+      })}
+      {truncated && (
+        <Text dimColor>
+          {`… ${lines.length - max} more lines (use ctrl+o to expand)`}
+        </Text>
+      )}
     </Box>
   );
 }
@@ -301,7 +372,12 @@ function statsColor(stats: ToolStats | undefined): string | undefined {
 /** 渲染一行 transcript:根据 kind/who 路由到合适的 region 组件 */
 export function TranscriptLine({ line }: { line: TuiLine }): React.ReactElement {
   if (line.kind === 'tool' && line.tool) {
-    return <ToolEntryRow tool={line.tool} />;
+    return (
+      <Box flexDirection="column">
+        <ToolEntryRow tool={line.tool} />
+        {line.tool.diff && <DiffBlock diff={line.tool.diff} />}
+      </Box>
+    );
   }
   if (line.kind === 'user') {
     return (

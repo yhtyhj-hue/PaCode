@@ -78,8 +78,22 @@ export function registerEditTool(registry: { register: (t: ToolDefinition) => vo
           : content.replace(oldText, newText);
         writeFileSync(resolved.resolved, next, 'utf-8');
         const n = replaceAll ? occurrences : 1;
+        // 计算 diff 元数据(行级 +/- 数 + 起始行号),供 TUI 高亮
+        const oldLines = oldText.split('\n');
+        const newLines = newText.split('\n');
+        const beforeIdx = content.lastIndexOf(oldText);
+        const lineStart = beforeIdx === -1 ? 1 : content.slice(0, beforeIdx).split('\n').length;
         return {
           content: [{ type: 'text', text: `Edited ${path} (${n} replacement${n === 1 ? '' : 's'})` }],
+          data: {
+            kind: 'edit_diff',
+            path,
+            oldText,
+            newText,
+            lineStart: lineStart + 1, // 1-based 首行
+            added: newLines.length,
+            removed: oldLines.length,
+          },
         };
       } catch (e) {
         return { content: [{ type: 'text', text: String(e) }], isError: true };

@@ -57,6 +57,7 @@ export function registerBashTool(registry: { register: (t: ToolDefinition) => vo
               ),
             },
           ],
+          data: { kind: 'bash_bg_job', bashId: started.job.id, command },
         };
       }
 

@@ -97,11 +97,27 @@ export type ToolStats =
   | { kind: 'elapsed'; ms: number }
   | { kind: 'note'; text: string };
 
+export interface ToolLineDiff {
+  path: string;
+  oldText: string;
+  newText: string;
+  /** 1-based 首行号,hunk header 用 */
+  lineStart: number;
+  added: number;
+  removed: number;
+}
+
 export interface ToolLine {
   name: string;
   path?: string;
   args?: string;
   stats?: ToolStats;
+  /** Edit 工具的结构化 diff(TUI 渲染红/绿高亮) */
+  diff?: ToolLineDiff;
+  /** 后台 Bash job ID;若跑:progress 区域显示 ⏳/✅;run_in_background=true 时填 */
+  bgJobId?: string;
+  /** 后台 job 实时状态(由 1Hz tick 写入) */
+  bgStatus?: 'running' | 'done' | 'error' | 'stopped';
 }
 
 export type TuiAction =
@@ -117,7 +133,8 @@ export type TuiAction =
   | { type: 'setLiveTaskLines'; lines: TaskPanelItem[] }
   | { type: 'setToolRunning'; running: { name: string; timeoutMs?: number } | null }
   | { type: 'addTokens'; input: number; output: number }
-  | { type: 'clear' };
+  | { type: 'clear' }
+  | { type: 'updateBgJob'; lineId: number; bgJobId: string; bgStatus: 'running' | 'done' | 'error' | 'stopped' };
 
 export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
   switch (action.type) {
@@ -160,6 +177,8 @@ export function reduceTuiState(state: TuiState, action: TuiAction): TuiState {
           outputTokens: state.live.outputTokens + action.output,
         },
       };
+    case 'updateBgJob':
+      return updateBgJob(state, action.lineId, action.bgJobId, action.bgStatus);
     case 'clear':
       return { ...state, lines: [] };
   }
@@ -170,6 +189,26 @@ export function dispatchActions(state: TuiState, actions: TuiAction[]): TuiState
   let next = state;
   for (const action of actions) next = reduceTuiState(next, action);
   return next;
+}
+
+/** 把 bgStatus 写入指定 lineId 的 tool 行(lineId = push 顺序) */
+function updateBgJob(
+  state: TuiState,
+  lineId: number,
+  bgJobId: string,
+  bgStatus: 'running' | 'done' | 'error' | 'stopped'
+): TuiState {
+  let toolCount = 0;
+  const lines = state.lines.map((line) => {
+    if (line.kind !== 'tool' || !line.tool) return line;
+    if (toolCount === lineId && line.tool.bgJobId === bgJobId) {
+      toolCount += 1;
+      return { ...line, tool: { ...line.tool, bgStatus } };
+    }
+    if (line.tool) toolCount += 1;
+    return line;
+  });
+  return { ...state, lines };
 }
 
 /** 行颜色映射 —— app.tsx 复用 */
@@ -335,6 +374,11 @@ export const Actions = {
     output,
   }),
   clear: (): TuiAction => ({ type: 'clear' }),
+  updateBgJob: (
+    lineId: number,
+    bgJobId: string,
+    bgStatus: 'running' | 'done' | 'error' | 'stopped'
+  ): TuiAction => ({ type: 'updateBgJob', lineId, bgJobId, bgStatus }),
 };
 
 /**

@@ -216,10 +216,31 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
             .map((c) => (c as { text: string }).text)
             .join('\n');
           const stats = computeToolStats(event.tool, outputText, elapsedMs);
+          // 从 result.data 提取 TUI side data(Edit diff / Bash bg job id)
+          let diff: ToolLine['diff'];
+          let bgJobId: string | undefined;
+          const data = event.result.data;
+          if (data && typeof data === 'object') {
+            if (data.kind === 'edit_diff') {
+              diff = {
+                path: String(data.path ?? ''),
+                oldText: String(data.oldText ?? ''),
+                newText: String(data.newText ?? ''),
+                lineStart: Number(data.lineStart ?? 1),
+                added: Number(data.added ?? 0),
+                removed: Number(data.removed ?? 0),
+              };
+            } else if (data.kind === 'bash_bg_job') {
+              bgJobId = typeof data.bashId === 'string' ? data.bashId : undefined;
+            }
+          }
           const line: ToolLine = {
             name: event.tool.name,
             path: pickToolPath(event.tool),
             stats,
+            diff,
+            bgJobId,
+            bgStatus: bgJobId ? 'running' : undefined,
           };
           ctl.appendTool(line);
           ctl.setToolRunning(null);
