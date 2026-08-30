@@ -15,6 +15,7 @@ import {
   QueryEvent,
   ContentBlock,
   ImageSource,
+  ModelContext,
 } from '../pkg/types.js';
 import { Logger } from '../pkg/logger/index.js';
 import { createAnthropicClient, type ProviderAuthStyle } from '../pkg/anthropic-client.js';
@@ -493,7 +494,13 @@ export class QueryEngine {
           this.log.debug('Prefetch disabled; model-driven tool loop');
         }
 
-        const context = await this.assembleContext(state, effectiveOptions, mode);
+        const { context, compacted } = await this.assembleContext(state, effectiveOptions, mode);
+        if (compacted) {
+          yield {
+            type: 'compaction_done',
+            summary: `compaction applied (was ${context.tokenCount} tokens)`,
+          };
+        }
 
         let response: Extract<ModelStreamEvent, { type: 'model_complete' }> | undefined;
         for await (const event of this.streamModel(context, effectiveOptions, mode)) {
@@ -1011,18 +1018,20 @@ export class QueryEngine {
     state: SessionState,
     options: QueryOptions,
     mode: PermissionMode
-  ) {
+  ): Promise<{ context: import('../pkg/types.js').ModelContext; compacted: boolean }> {
     const tools = this.toolsForMode(mode);
     const context = await this.contextAssembler.assemble(state, {
       systemPrompt: options.systemPrompt,
       tools,
     });
     context.maxTokens = this.contextMaxTokens;
-    return this.compactionPipeline.run(context);
+    const before = context.tokenCount;
+    const compacted = await this.compactionPipeline.run(context);
+    return { context: compacted, compacted: compacted.tokenCount < before };
   }
 
   private async *streamModel(
-    context: Awaited<ReturnType<typeof this.assembleContext>>,
+    context: ModelContext,
     options: QueryOptions,
     mode: PermissionMode
   ) {

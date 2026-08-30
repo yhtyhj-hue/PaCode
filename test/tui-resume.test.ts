@@ -135,7 +135,7 @@ describe('TUI /resume', () => {
     expect(session.sessionId).toBe('sid1');
     expect(session.messages).toHaveLength(1);
     expect(ctl.setMode).toHaveBeenCalledWith(PermissionMode.ACCEPT_EDITS);
-    expect(lines.some((l) => /Resumed session sid1/.test(l))).toBe(true);
+    expect(lines.some((l) => /Resumed sid1/.test(l))).toBe(true);
 
     confirm = false;
     session.sessionId = 'live2';

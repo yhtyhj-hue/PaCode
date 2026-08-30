@@ -3,7 +3,7 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve, join, dirname } from 'node:path';
 import { SessionState, ModelContext, ToolDefinition } from '../pkg/types.js';
 import { MemoryStore } from '../memory/store.js';
 import { getTodoStore } from './todo-store.js';
@@ -100,7 +100,10 @@ export class ContextAssembler {
   }
 
   private async loadFile(name: string): Promise<string | null> {
-    const paths = [name, `.claude/${name}`, resolve(process.cwd(), name)];
+    // 优先读 cwd 子树最近的 CLAUDE.md(monorepo 子包场景),再回退项目根
+    const walkUp = this.findNearestFile(name);
+    const projectRoot = [name, `.claude/${name}`, resolve(process.cwd(), name)];
+    const paths = walkUp ? [walkUp, ...projectRoot] : projectRoot;
     for (const p of paths) {
       if (existsSync(p)) {
         try {
@@ -111,6 +114,22 @@ export class ContextAssembler {
       }
     }
     return null;
+  }
+
+  /**
+   * 从 cwd 向上走,找最近的 name 文件;找不到返回 null。
+   * 例如 cwd=/repo/packages/foo,会在 foo/CLAUDE.md、/repo/packages/CLAUDE.md、
+   * /repo/CLAUDE.md 顺序匹配。
+   */
+  private findNearestFile(name: string): string | null {
+    let dir = process.cwd();
+    while (true) {
+      const candidate = resolve(dir, name);
+      if (existsSync(candidate)) return candidate;
+      const parent = dirname(dir);
+      if (parent === dir) return null; // 抵达根目录
+      dir = parent;
+    }
   }
 
   private async loadSkillsContext(options: AssembleOptions): Promise<string | null> {
@@ -151,8 +170,29 @@ export class ContextAssembler {
   }
 
   private async loadDirectory(dir: string): Promise<string | null> {
-    const path = resolve(process.cwd(), dir);
-    if (!existsSync(path)) return null;
+    // 向上找最近的 dir(monorepo 子包场景);若全无匹配则回退 cwd
+    const dirs = this.walkUpDirectories(dir);
+    for (const candidate of dirs) {
+      if (existsSync(candidate)) {
+        return await this.readDirMd(candidate);
+      }
+    }
+    return null;
+  }
+
+  private walkUpDirectories(dir: string): string[] {
+    const out: string[] = [];
+    let cur = process.cwd();
+    while (true) {
+      out.push(resolve(cur, dir));
+      const parent = dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
+    return out;
+  }
+
+  private async readDirMd(path: string): Promise<string | null> {
     try {
       const { readdirSync } = await import('node:fs');
       const files = readdirSync(path).filter((f) => f.endsWith('.md'));

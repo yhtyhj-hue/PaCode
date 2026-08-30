@@ -245,6 +245,8 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
           ctl.appendTool(line);
           ctl.setToolRunning(null);
           pendingTools.delete(event.tool.id);
+        } else if (event.type === 'compaction_done' && event.summary) {
+          ctl.appendSystem(`◐ ${event.summary}`);
         } else if (event.type === 'message_stop' && event.usage) {
           const inTok = event.usage.inputTokens ?? 0;
           const outTok = event.usage.outputTokens ?? 0;

@@ -61,5 +61,9 @@ export function applySessionState(target: SessionState, source: SessionState): v
 }
 
 export function formatResumeSuccess(state: SessionState): string {
-  return `Resumed session ${state.sessionId} (${state.messages.length} messages, mode=${state.mode})`;
+  const toolCalls = state.toolCallHistory?.length ?? 0;
+  const compactCount = state.compactionHistory?.length ?? 0;
+  const toolSummary = toolCalls > 0 ? ` · ${toolCalls} tool calls` : '';
+  const compactSummary = compactCount > 0 ? ` · ${compactCount} compactions` : '';
+  return `Resumed ${state.sessionId} (${state.messages.length} messages${toolSummary}${compactSummary}, mode=${state.mode})`;
 }

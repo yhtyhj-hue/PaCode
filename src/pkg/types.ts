@@ -173,7 +173,8 @@ export interface QueryEvent {
     | 'agents_complete'
     | 'content_block_stop'
     | 'message_stop'
-    | 'error';
+    | 'error'
+    | 'compaction_done';
   delta?: { index: number; text: string };
   tool?: ToolCall;
   result?: ToolResult;
@@ -199,6 +200,8 @@ export interface QueryEvent {
   stopReason?: StopReason;
   usage?: TokenUsage;
   error?: { code: string; message: string };
+  /** 主循环开头 emit 一次:本轮已触发主动 compaction */
+  summary?: string;
 }
 
 // Compaction
